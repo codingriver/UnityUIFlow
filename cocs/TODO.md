@@ -18,16 +18,16 @@
 
 - **来源**：`cocs/M02-YAML解析与执行计划-需求文档.md §8`
 - **问题**：当前仅确认需要支持手写 YAML 用例，但 `YamlDotNet` 与 `VYaml` 的错误定位能力、性能、AOT 兼容性尚未在仓库原型中验证。
-- **当前处理**：文档保持两者皆可的选型状态，不把具体库名写成已确定实现。
-- **需要决策**：首版实现是否确定使用 `YamlDotNet` 作为唯一 YAML 解析库？
+- **当前处理**：文档推荐使用 `YamlDotNet`（Unity AOT 兼容性更成熟），但未经实际验证。
+- **需要决策**：是否确认以 `YamlDotNet` 作为首版唯一 YAML 解析库？
 - **优先级**：P1
 
-### TODO-004：确认 EditMode 协程调度与等待策略
+### TODO-004：确认 EditMode 执行驱动方式
 
 - **来源**：`cocs/M03-执行引擎与运行控制-需求文档.md §8`
-- **问题**：需求文档假设 V1 运行于 EditMode，且动作与等待步骤以协程方式推进，但当前仓库中没有 `UnityUIFlow` 原型验证 EditMode 下暂停、恢复、等待的精确行为。
-- **当前处理**：文档保守要求“每帧轮询一次，禁止 busy wait”，不写更细的调度实现。
-- **需要决策**：首版执行引擎是否以 EditMode 协程驱动为唯一实现路径？
+- **问题**：需求文档新增推荐方案”使用 `EditorApplication.update` 注册每帧回调替代协程”，原方案为 `EditorCoroutineUtility.StartCoroutineOwnerless`（需要额外包 `com.unity.editorcoroutines`）。两种方案的暂停/恢复/超时行为需原型验证对比。
+- **当前处理**：文档推荐 `EditorApplication.update` 状态机方案（无额外依赖），但标记为待验证。
+- **需要决策**：是否确认首版执行引擎使用 `EditorApplication.update` 状态机驱动，而不是 `EditorCoroutineUtility`？
 - **优先级**：P1
 
 ### TODO-005：确认 PanelSimulator 与输入能力边界
@@ -41,9 +41,9 @@
 ### TODO-006：确认 Headed 高亮叠加实现方式
 
 - **来源**：`cocs/M06-Headed可视化执行-需求文档.md §8`
-- **问题**：需求文档示例使用 `GUIClip.Unclip` 做坐标转换，但当前仓库未验证该 API 在目标 Unity 版本下的可访问性、替代方案和绘制稳定性。
-- **当前处理**：文档只固定“高亮效果”和“失败暂停行为”，不固定最终绘制 API。
-- **需要决策**：Headed 高亮是否确认采用 IMGUI 叠加绘制，而不是修改被测窗口样式或使用其他绘制层？
+- **问题**：需求文档新增推荐方案”VisualElement 透明覆盖层 + `element.worldBound` 坐标”替代原方案”IMGUI 叠加绘制 + `GUIClip.Unclip` 坐标转换”。新方案需在 M2 开始前验证 `worldBound` 在 UIToolkit 中的坐标系可靠性，以及 `picking-mode: Ignore` 是否完全屏蔽鼠标事件。
+- **当前处理**：文档采用 VisualElement 覆盖层方案，标注为待 PoC 验证。
+- **需要决策**：是否确认采用 VisualElement 覆盖层方案，放弃 IMGUI 方案？
 - **优先级**：P1
 
 ### TODO-007：确认异步截图完成判定机制
@@ -65,7 +65,23 @@
 ### TODO-009：确认 Fixture 基座与官方测试宿主的生命周期兼容性
 
 - **来源**：`cocs/M09-测试基座与Fixture基类-需求文档.md §8`
-- **问题**：当前仓库还未验证 `EditorWindowUITestFixture<TWindow>` 在目标 Unity 版本和目标 UI Test Framework 版本下的窗口创建、销毁、SetUp/TearDown 钩子是否与文档设想完全一致。
-- **当前处理**：文档把 `UnityUIFlowFixture<TWindow>` 作为设计提案保留，并要求实现前先做 PoC 验证。
-- **需要决策**：是否确认首版测试基座必须继承 `EditorWindowUITestFixture<TWindow>`，而不是自建窗口宿主？
+- **问题**：当前仓库还未验证 `EditorWindowUITestFixture<TWindow>` 在目标 Unity 版本和目标 UI Test Framework 版本下的窗口创建、销毁、`[UnitySetUp]`/`[UnityTearDown]` 钩子是否与文档设想完全一致。需要确认使用 `[UnitySetUp]`（`IEnumerator`）还是 `[SetUp]`（同步）。
+- **当前处理**：文档推荐优先使用 `[UnitySetUp]`/`[UnityTearDown]`（IEnumerator 异步），以支持窗口就绪等待，标注为待 PoC 验证。
+- **需要决策**：是否确认首版测试基座使用 `[UnitySetUp]` 异步生命周期，而不是同步 `[SetUp]`？
 - **优先级**：P1
+
+### TODO-010：确认 CSV 数据源编码兼容范围
+
+- **来源**：`cocs/M01-用例编排与数据驱动-需求文档.md §8`
+- **问题**：文档确定支持 UTF-8 编码 CSV，但带 BOM 的 UTF-8 和 GB18030 是否需要支持尚未确认。
+- **当前处理**：仅支持 UTF-8（无 BOM），读取时使用 `StreamReader` 默认编码。
+- **需要决策**：是否需要同时支持带 BOM 的 UTF-8 和 GB18030 编码的 CSV 文件？
+- **优先级**：P2
+
+### TODO-011：确认 UIToolkit 元素可见性判定标准
+
+- **来源**：`cocs/M04-元素定位与等待-需求文档.md §8`
+- **问题**：文档定义可见性需满足 `display != None`、`visibility != Hidden`、`opacity > 0`、`panel != null`，但 `pickingMode`、`enabledInHierarchy`、裁剪区域是否也影响"可见"定义尚未在目标 Unity 版本上验证。
+- **当前处理**：仅检查上述 4 个属性，额外属性暂不检查。
+- **需要决策**：是否需要在可见性判定中同时检查 `pickingMode != Ignore` 和 `enabledInHierarchy`？
+- **优先级**：P2
