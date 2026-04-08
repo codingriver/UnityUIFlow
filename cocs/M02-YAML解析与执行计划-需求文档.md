@@ -137,7 +137,7 @@
 ## 8. 技术实现要点
 
 - 关键类与职责：
-  - `YamlTestCaseParser` `(设计提案，实现时确认)`：负责 YAML 文本到 `TestCaseDefinition` 的解析，推荐使用 `YamlDotNet` 库（理由：Unity 环境下 AOT 兼容性更成熟，社区支持更完善，见 `TODO-003`）。
+  - `YamlTestCaseParser` `(设计提案，实现时确认)`：负责 YAML 文本到 `TestCaseDefinition` 的解析，解析库选型为 `YamlDotNet`（设计提案，实现时确认，见 `TODO-003`）。
   - `ExecutionPlanBuilder` `(设计提案，实现时确认)`：负责将 `TestCaseDefinition` 转换为扁平执行计划，处理条件步骤和循环步骤的结构转换（不展开循环）。
   - `SelectorCompiler` `(设计提案，实现时确认)`：负责把字符串选择器编译成 `SelectorExpression`，供 `ElementFinder` 消费。
   - `DurationParser` `(设计提案，实现时确认)`：负责把 `5s`、`500ms` 转为毫秒整数；`s` 乘以 1000，`ms` 直接取整数值。
@@ -158,7 +158,7 @@ YamlTestCaseParser.Parse(yamlText, sourcePath)
   - `SelectorExpression` 编译结果必须缓存到 `ExecutionPlan`，禁止执行阶段重复解析字符串。
   - 禁止在编译阶段访问 `VisualElement` 实例或 Editor UI 状态。
   - 编译诊断列表按源文件顺序输出，禁止无序聚合导致日志不稳定。
-- TODO(待确认)：YAML 解析库最终选型需在 `TODO-003` 中决策，推荐优先验证 `YamlDotNet`。
+- TODO(待确认)：YAML 解析库最终选型需在 `TODO-003` 中决策。
 
 ---
 
@@ -179,7 +179,7 @@ YamlTestCaseParser.Parse(yamlText, sourcePath)
 - 空数据：`diagnostics` 为空时必须返回空列表，不允许返回 `null`。
 - 单元素：只有 1 个步骤的用例也必须生成合法 `ExecutionPlan`，且 `steps.Count` 为 `1`。
 - 上下限临界值：`100ms` 与 `600000ms` 合法；`99ms` 与 `600001ms` 必须报 `DURATION_LITERAL_INVALID`。
-- 异常数据恢复：任何编译阶段错误都不得返回部分构建的 `ExecutionPlan`；调用方只能收到失败异常。
+- 异常数据恢复：任何编译阶段错误都不得返回部分构建的 `ExecutionPlan`；若编译至第 N 步失败，必须返回空计划 + 完整诊断列表，不得返回包含前 N-1 步的部分计划；调用方只能收到失败异常。
 
 ---
 

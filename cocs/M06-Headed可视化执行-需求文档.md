@@ -24,6 +24,22 @@
 | selectedYamlPath | string | 可选 | 当前选中的 YAML 路径 | `null` 表示未选择文件 | `null` |
 | runMode | string | 必填 | 执行模式 | 仅允许 `Continuous`、`Step` | `Continuous` |
 | runnerState | string | 必填 | 面板运行状态 | 仅允许 `Idle`、`Running`、`Paused`、`Failed`、`Stopped` | `Idle` |
+
+合法状态转移：
+
+| 当前状态 | 允许转移到 | 触发条件 |
+| --- | --- | --- |
+| `Idle` | `Running` | 用户点击“运行” |
+| `Running` | `Paused` | 用户点击“暂停”或步进模式完成一步或 `failurePolicy=Pause` 触发 |
+| `Running` | `Failed` | 步骤失败且 `failurePolicy=Continue` |
+| `Running` | `Stopped` | 用户点击“停止” |
+| `Running` | `Idle` | 所有步骤执行完成且无失败 |
+| `Paused` | `Running` | 用户点击“继续”或“下一步” |
+| `Paused` | `Stopped` | 用户点击“停止” |
+| `Failed` | `Idle` | 用户点击“停止”或用例运行完成后自动回到空闲 |
+| `Stopped` | `Idle` | 停止完成后自动回到空闲 |
+
+禁止的转移：`Failed` 不得直接转为 `Running`（必须先回到 `Idle`）；`Idle` 不得转为 `Paused`、`Failed`、`Stopped`。
 | currentStepName | string | 可选 | 当前步骤名称 | `null` 表示当前无活动步骤 | `null` |
 | currentSelector | string | 可选 | 当前步骤选择器 | `null` 表示当前步骤无选择器 | `null` |
 | lastErrorMessage | string | 可选 | 最近错误消息 | `null` 表示当前无错误；显示区截断到 `500` 字 | `null` |
@@ -61,7 +77,7 @@
 - 数据提交时机：步骤开始事件到达时立即刷新当前步骤名与高亮目标；步骤完成事件到达时刷新状态与日志；失败事件到达时按 `failurePolicy` 进入 `Paused` 或 `Running`。
 - 取消/回退：点击"停止"后，面板立即禁用"下一步"和"暂停"；当前高亮在收到停止完成事件后清空。
 - 步进模式：`runMode=Step` 时，每完成 1 步都自动进入 `Paused`；只有用户点击"下一步"才继续下 1 步。
-- 失败策略：`failurePolicy=Pause` 时，失败后立即暂停并保留高亮目标；`Continue` 时记录错误但面板不切换为暂停。
+- 失败策略：`failurePolicy=Pause` 时，失败后立即暂停面板并持续显示失败元素的高亮覆盖层，直到用户手动点击“停止”或“继续”；此时测试执行流程也同步暂停（通过 `RuntimeController.Pause` 挂起执行引擎）。`Continue` 时，面板记录错误但不切换为暂停，测试执行流程继续推进后续步骤，面板状态转为 `Failed`。
 
 ---
 
@@ -74,6 +90,7 @@
 | Selected | `#2C4F7C` | `1px solid #7AB0FF` | `#FFFFFF` | 当前选中文件或当前模式 |
 | Disabled | `#2B2B2B` | `1px solid #404040` | `#7A7A7A` | 禁用按钮 |
 | 错误 | `#4A1F1F` | `1px solid #FF5A5A` | `#FFEAEA` | 失败消息区域与失败暂停状态 |
+| 高亮 | `rgba(255,0,0,0.20)` | `2px solid #FF0000` | N/A | 当前步骤命中元素的高亮覆盖层 |
 
 ---
 
@@ -120,7 +137,7 @@
   - `HighlightOverlayRenderer` `(设计提案，实现时确认)`：管理覆盖层 `VisualElement` 的显示与位置同步。
   - `RuntimeController` `(设计提案，实现时确认)`：处理面板控制命令，持有 `CancellationTokenSource`。
 
-- 高亮实现方案（更优方案）：
+- 高亮实现方案（设计提案，实现时确认，见 TODO-006）：
 
   推荐使用 **VisualElement 透明覆盖层**方案替代 IMGUI 绘制，原因：
   1. 在被测 `EditorWindow.rootVisualElement` 上追加一个全屏 `VisualElement` 覆盖层（`position: absolute; left:0; top:0; width:100%; height:100%; picking-mode: Ignore`）。
@@ -147,12 +164,12 @@ Open HeadedTestWindow
 - 性能约束：
   - 面板重绘频率不超过 Editor 正常重绘频率，禁止额外 `while` 轮询。
   - 高亮绘制只更新当前元素的 `VisualElement` 位置，禁止遍历整棵 UI 树做全量重建。
-  - 失败日志区最多保留最近 `200` 行文本。
+  - 失败日志区最多保留最近 `200` 条日志条目（一条日志条目 = 一次步骤事件输出），超出时截断最旧条目。
   - Headed 关闭（`TestOptions.Headed=false`）时不得订阅 `HeadedRunEventBus` 事件，避免无头模式产生额外开销。
 
 - 禁止项：
   - 禁止直接修改被测 `VisualElement` 的样式来实现高亮。
-  - 禁止把运行控制状态存为未清理的静态全局单例。
+  - 禁止把运行控制状态存为静态全局单例，必须通过实例字段或依赖注入管理。
   - 禁止在覆盖层 `VisualElement` 上启用 pointer 事件捕获，必须设置 `pickingMode=Ignore`。
 
 - TODO(待确认)：VisualElement 覆盖层方案需在 M2 开始前通过 PoC 验证，对比 IMGUI 方案的稳定性与兼容性（见 `TODO-006`）。
@@ -162,9 +179,9 @@ Open HeadedTestWindow
 ## 9. 验收标准
 
 1. [Editor 环境已打开项目] -> [执行菜单 `UnityUIFlow > Headed Test Runner`] -> [成功打开 Headed 面板]
-2. [已选择合法 YAML，模式为连续] -> [点击"运行"] -> [用例自动连续执行到结束，面板状态从 `Running` 变为 `Idle`]
+2. [已选择合法 YAML，模式为连续] -> [点击“运行”] -> [用例自动连续执行到结束；若全部步骤通过，面板状态从 `Running` 变为 `Idle`；若存在失败步骤且 `failurePolicy=Continue`，状态从 `Running` 变为 `Failed` 再自动变为 `Idle`]
 3. [已选择合法 YAML，模式为步进] -> [点击"运行"] -> [第 1 步执行后自动暂停，点击"下一步"后继续第 2 步]
-4. [当前步骤命中某个元素] -> [面板收到步骤事件] -> [目标元素区域显示半透明红色填充和红色描边高亮覆盖层]
+4. [当前步骤命中某个元素] -> [面板收到步骤事件] -> [目标元素区域显示半透明红色填充（`rgba(255,0,0,0.20)`）和红色描边（`#FF0000 2px`）高亮覆盖层]
 5. [步骤失败且 `failurePolicy=Pause`] -> [执行用例] -> [面板进入 `Paused`，保留失败元素高亮和错误信息]
 6. [Headed 模式关闭] -> [执行无头运行] -> [不创建窗口、不创建覆盖层、不绘制高亮]
 
@@ -174,7 +191,7 @@ Open HeadedTestWindow
 
 - 空数据：未选择文件时面板允许打开和切换模式，但不允许启动运行。
 - 单元素：只有 1 个步骤的用例在步进模式下仍必须先执行该步，再进入暂停或完成态。
-- 上下限临界值：错误消息显示区最大展示 `500` 字；日志列表保留上限 `200` 行；超出时截断最旧条目。
+- 上下限临界值：错误消息显示区最大展示 `500` 字；日志列表保留上限 `200` 条日志条目；超出时截断最旧条目。
 - 异常数据恢复：高亮元素在重绘前失效（`panel==null`）时，必须自动清空高亮覆盖层并保持面板可继续操作。
 
 ---

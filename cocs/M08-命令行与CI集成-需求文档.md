@@ -32,11 +32,15 @@
 
 ### ExitCode（退出码规格）
 
-| 退出码 | 含义 | 触发条件 |
-| --- | --- | --- |
-| `0` | 全部通过 | 套件所有用例 `status=Passed` 或 `status=Skipped` |
-| `1` | 存在测试失败 | 至少 1 个用例 `status=Failed` |
-| `2` | 框架级错误 | 参数非法、报告目录不可写、YAML 解析/执行异常 |
+| 字段名 | 类型 | 必填/可选 | 语义 | 合法范围 | 默认值 |
+| --- | --- | --- | --- | --- | --- |
+| exitCode | int | 必填 | 进程退出码 | 仅允许 `0`、`1`、`2` | 无 |
+
+退出码语义：
+
+- `0`：全部通过——套件所有用例 `status=Passed` 或 `status=Skipped`。
+- `1`：存在测试失败——至少 1 个用例 `status=Failed`。
+- `2`：框架级错误——参数非法、报告目录不可写、YAML 解析/执行异常。
 
 ---
 
@@ -73,20 +77,6 @@
 ---
 
 ## 6. 校验规则
-
-### 完整 CLI 参数表
-
-| 参数名 | CLI 格式 | 类型 | 说明 | 默认值 |
-| --- | --- | --- | --- | --- |
-| `unityUIFlow.headed` | `-unityUIFlow.headed true` | bool | 启用或关闭 Headed 模式 | `true` |
-| `unityUIFlow.reportPath` | `-unityUIFlow.reportPath ./Reports` | string | 报告输出目录 | `Reports` |
-| `unityUIFlow.testFilter` | `-unityUIFlow.testFilter Login*` | string | YAML 文件名或用例名通配过滤 | 无过滤 |
-| `unityUIFlow.screenshotOnFailure` | `-unityUIFlow.screenshotOnFailure true` | bool | 失败时是否自动截图 | `true` |
-| `unityUIFlow.screenshotPath` | `-unityUIFlow.screenshotPath ./Reports/Screenshots` | string | 截图输出目录 | `{reportPath}/Screenshots` |
-| `unityUIFlow.stopOnFirstFailure` | `-unityUIFlow.stopOnFirstFailure false` | bool | 首次失败后是否停止套件 | `false` |
-| `unityUIFlow.continueOnStepFailure` | `-unityUIFlow.continueOnStepFailure false` | bool | 步骤失败后是否继续用例 | `false` |
-| `unityUIFlow.defaultTimeoutMs` | `-unityUIFlow.defaultTimeoutMs 10000` | int | 默认步骤超时（ms） | `10000` |
-| `unityUIFlow.configFile` | `-unityUIFlow.configFile ./uiflow.json` | string | 指定配置文件路径 | 无 |
 
 ### 输入校验
 
@@ -132,7 +122,7 @@
   - `ExitCodeResolver` `(设计提案，实现时确认)`：把 `TestSuiteResult` 映射为 `0/1/2`，规则见数据模型中的 ExitCode 表。
   - `CiArtifactManifestWriter` `(设计提案，实现时确认)`：写出 `artifacts.json`，内容为报告目录下所有 `.md`、`.json`、`.png` 文件的相对路径列表。
 
-- 配置文件 `.unityuiflow.json` 示例（更优方案）：
+- 配置文件 `.unityuiflow.json` 示例：
 
 ```json
 {
@@ -144,6 +134,20 @@
 ```
 
   此方案与 CLI 参数互补：CI 场景只需维护配置文件，无需在每条 CI 命令中堆砌参数。CLI 参数始终高于配置文件。
+
+### CLI 参数完整参考
+
+| 参数名 | CLI 格式 | 类型 | 说明 | 默认值 |
+| --- | --- | --- | --- | --- |
+| `unityUIFlow.headed` | `-unityUIFlow.headed true` | bool | 启用或关闭 Headed 模式 | `true` |
+| `unityUIFlow.reportPath` | `-unityUIFlow.reportPath ./Reports` | string | 报告输出目录 | `Reports` |
+| `unityUIFlow.testFilter` | `-unityUIFlow.testFilter Login*` | string | YAML 文件名或用例名通配过滤 | 无过滤 |
+| `unityUIFlow.screenshotOnFailure` | `-unityUIFlow.screenshotOnFailure true` | bool | 失败时是否自动截图 | `true` |
+| `unityUIFlow.screenshotPath` | `-unityUIFlow.screenshotPath ./Reports/Screenshots` | string | 截图输出目录 | `{reportPath}/Screenshots` |
+| `unityUIFlow.stopOnFirstFailure` | `-unityUIFlow.stopOnFirstFailure false` | bool | 首次失败后是否停止套件 | `false` |
+| `unityUIFlow.continueOnStepFailure` | `-unityUIFlow.continueOnStepFailure false` | bool | 步骤失败后是否继续用例 | `false` |
+| `unityUIFlow.defaultTimeoutMs` | `-unityUIFlow.defaultTimeoutMs 10000` | int | 默认步骤超时（ms） | `10000` |
+| `unityUIFlow.configFile` | `-unityUIFlow.configFile ./uiflow.json` | string | 指定配置文件路径 | 无 |
 
 - 核心流程：
 
