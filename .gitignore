@@ -1,0 +1,60 @@
+# Unity generated folders
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Addressables and cache artifacts
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+
+# Visual Studio / VS Code / JetBrains
+/.vs/
+/.idea/
+/.fleet/
+/.vscode/
+
+# Generated project files
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity and MonoDevelop
+*.bak
+*.apk
+*.aab
+*.gradle
+*.fls
+*.fla
+*.append.db
+*.append.db-wal
+*.append.db-shm
+*.stacktrace
+
+# Crash reports
+sysinfo.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Ignore all other root-level dotfiles and dotfolders
+/.?*
+!/.gitignore
