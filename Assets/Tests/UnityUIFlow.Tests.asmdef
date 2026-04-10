@@ -1,0 +1,22 @@
+{
+    "name": "UnityUIFlow.Tests",
+    "rootNamespace": "",
+    "references": [
+        "UnityUIFlow",
+        "UnityUIFlow.Examples"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,14 @@
+name: Assertions And Selectors
+steps:
+  - name: First menu item is Dashboard
+    action: assert_text
+    selector: ".item:first-child"
+    expected: "Dashboard"
+  - name: Login button tooltip check
+    action: assert_property
+    selector: "#login-button"
+    property: "tooltip"
+    expected: "Login"
+  - name: Save button visible
+    action: assert_visible
+    selector: "[tooltip=Save]"

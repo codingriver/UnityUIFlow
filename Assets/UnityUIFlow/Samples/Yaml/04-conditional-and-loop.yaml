@@ -1,0 +1,25 @@
+name: Conditional And Loop
+steps:
+  - name: Maybe click reset when present
+    action: click
+    selector: "#reset-button"
+    if:
+      exists: "#reset-button"
+  - name: Click save
+    action: click
+    selector: "#save-button"
+  - name: Toast becomes visible
+    action: assert_visible
+    selector: "#toast-message"
+    timeout: "1s"
+  - name: Wait until toast disappears
+    repeat_while:
+      condition:
+        exists: "#toast-message"
+      steps:
+        - action: wait
+          duration: "50ms"
+  - name: Toast hidden
+    action: assert_not_visible
+    selector: "#toast-message"
+    timeout: "2s"
