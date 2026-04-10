@@ -24,8 +24,13 @@
 | selectedYamlPath | string | 可选 | 当前选中的 YAML 路径 | `null` 表示未选择文件 | `null` |
 | runMode | string | 必填 | 执行模式 | 仅允许 `Continuous`、`Step` | `Continuous` |
 | runnerState | string | 必填 | 面板运行状态 | 仅允许 `Idle`、`Running`、`Paused`、`Failed`、`Stopped` | `Idle` |
+| currentStepName | string | 可选 | 当前步骤名称 | `null` 表示当前无活动步骤 | `null` |
+| currentSelector | string | 可选 | 当前步骤选择器 | `null` 表示当前步骤无选择器 | `null` |
+| lastErrorMessage | string | 可选 | 最近错误消息 | `null` 表示当前无错误；显示区截断到 `500` 字 | `null` |
+| failurePolicy | string | 必填 | 失败后的面板行为 | 仅允许 `Pause`、`Continue` | `Pause` |
+| retainSceneOnFailure | bool | 必填 | 失败时是否保留现场 | `true` 或 `false` | `true` |
 
-合法状态转移：
+`runnerState` 合法状态转移：
 
 | 当前状态 | 允许转移到 | 触发条件 |
 | --- | --- | --- |
@@ -40,11 +45,8 @@
 | `Stopped` | `Idle` | 停止完成后自动回到空闲 |
 
 禁止的转移：`Failed` 不得直接转为 `Running`（必须先回到 `Idle`）；`Idle` 不得转为 `Paused`、`Failed`、`Stopped`。
-| currentStepName | string | 可选 | 当前步骤名称 | `null` 表示当前无活动步骤 | `null` |
-| currentSelector | string | 可选 | 当前步骤选择器 | `null` 表示当前步骤无选择器 | `null` |
-| lastErrorMessage | string | 可选 | 最近错误消息 | `null` 表示当前无错误；显示区截断到 `500` 字 | `null` |
-| failurePolicy | string | 必填 | 失败后的面板行为 | 仅允许 `Pause`、`Continue` | `Pause` |
-| retainSceneOnFailure | bool | 必填 | 失败时是否保留现场 | `true` 或 `false` | `true` |
+
+`Failed` 状态说明：`Failed` 是信息性视觉状态，表示已有步骤失败但执行流程可能仍在继续（当 `ContinueOnStepFailure=true` 时）。面板在 `Failed` 状态下仍会更新 `currentStepName` 和 `currentSelector`，直到用例运行完成后自动回到 `Idle`。
 
 ### HighlightState（高亮绘制状态）
 
@@ -77,8 +79,7 @@
 - 数据提交时机：步骤开始事件到达时立即刷新当前步骤名与高亮目标；步骤完成事件到达时刷新状态与日志；失败事件到达时按 `failurePolicy` 进入 `Paused` 或 `Running`。
 - 取消/回退：点击"停止"后，面板立即禁用"下一步"和"暂停"；当前高亮在收到停止完成事件后清空。
 - 步进模式：`runMode=Step` 时，每完成 1 步都自动进入 `Paused`；只有用户点击"下一步"才继续下 1 步。
-- 失败策略：`failurePolicy=Pause` 时，失败后立即暂停面板并持续显示失败元素的高亮覆盖层，直到用户手动点击“停止”或“继续”；此时测试执行流程也同步暂停（通过 `RuntimeController.Pause` 挂起执行引擎）。`Continue` 时，面板记录错误但不切换为暂停，测试执行流程继续推进后续步骤，面板状态转为 `Failed`。
-
+- 失败策略：`failurePolicy=Pause` 时，失败后立即暂停面板并持续显示失败元素的高亮覆盖层，直到用户手动点击“停止”或“继续”；此时测试执行流程也同步暂停（通过 `RuntimeController.Pause` 挂起执行引擎）。`Continue` 时，面板记录错误但不切换为暂停，测试执行流程继续推进后续步骤，面板状态转为 `Failed`。- Headed 模式下失败控制优先级：`failurePolicy` 控制 Headed 面板行为并与执行引擎联动。`failurePolicy=Pause` 时，无论 `TestOptions.ContinueOnStepFailure` 值如何，执行引擎均暂停，等待用户手动恢复。`failurePolicy=Continue` 时，执行引擎是否继续后续步骤由 `TestOptions.ContinueOnStepFailure` 决定：`true` 时继续后续步骤，`false` 时停止当前用例并进入 `teardown`。非 Headed 模式下 `failurePolicy` 不生效，仅由 `TestOptions.ContinueOnStepFailure` 控制。
 ---
 
 ## 5. 视觉规格

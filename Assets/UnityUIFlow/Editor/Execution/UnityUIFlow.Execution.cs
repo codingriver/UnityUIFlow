@@ -392,7 +392,7 @@ namespace UnityUIFlow
         /// <summary>
         /// Runs a single YAML test file.
         /// </summary>
-        public Task<TestResult> RunFileAsync(string yamlPath, TestOptions options = null, VisualElement rootOverride = null)
+        public Task<TestResult> RunFileAsync(string yamlPath, TestOptions options = null, VisualElement rootOverride = null, Action<ExecutionContext> onContextReady = null)
         {
             if (string.IsNullOrWhiteSpace(yamlPath))
             {
@@ -400,7 +400,7 @@ namespace UnityUIFlow
             }
 
             TestCaseDefinition definition = _parser.ParseFile(yamlPath);
-            return RunDefinitionAsync(definition, options ?? new TestOptions(), rootOverride);
+            return RunDefinitionAsync(definition, options ?? new TestOptions(), rootOverride, onContextReady);
         }
         public Task<TestResult> RunAsync(string yamlContent, TestOptions options = null, VisualElement rootOverride = null)
         {

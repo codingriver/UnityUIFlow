@@ -80,6 +80,8 @@ namespace UnityUIFlow
             Dictionary<string, object> config = _configFileLoader.Load(configFile);
             var options = new CliOptions
             {
+                YamlPath = ReadString(raw, config, "unityUIFlow.yamlPath", "yamlPath", null),
+                YamlDirectory = ReadString(raw, config, "unityUIFlow.yamlDirectory", "yamlDirectory", null),
                 Headed = ReadBool(raw, config, "unityUIFlow.headed", "headed", true),
                 ReportPath = ReadString(raw, config, "unityUIFlow.reportPath", "reportPath", "Reports"),
                 ScreenshotOnFailure = ReadBool(raw, config, "unityUIFlow.screenshotOnFailure", "screenshotOnFailure", true),
@@ -108,6 +110,11 @@ namespace UnityUIFlow
             if (!string.IsNullOrWhiteSpace(options.TestFilter) && options.TestFilter.Length > 256)
             {
                 throw new UnityUIFlowException(ErrorCodes.CliFilterInvalid, "测试过滤表达式过长");
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.YamlPath) && !string.IsNullOrWhiteSpace(options.YamlDirectory))
+            {
+                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, "yamlPath 与 yamlDirectory 不能同时指定");
             }
 
             if (options.DefaultTimeoutMs < 100 || options.DefaultTimeoutMs > 600000)
@@ -322,12 +329,28 @@ namespace UnityUIFlow
                 CliOptions cliOptions = parser.Parse();
                 TestOptions testOptions = parser.ToTestOptions(cliOptions);
                 var runner = new TestRunner();
-                TestSuiteResult result = await runner.RunSuiteAsync(
-                    "Assets",
-                    testOptions,
-                    (path, caseName) => YamlTestCaseFilter.Match(cliOptions.TestFilter, path, caseName));
-                new CiArtifactManifestWriter().Write(testOptions.ReportOutputPath);
-                exitCode = result.ExitCode;
+                if (!string.IsNullOrWhiteSpace(cliOptions.YamlPath))
+                {
+                    TestResult result = await runner.RunFileAsync(cliOptions.YamlPath, testOptions);
+                    new CiArtifactManifestWriter().Write(testOptions.ReportOutputPath);
+                    exitCode = result.Status == TestStatus.Error
+                        ? 2
+                        : result.Status == TestStatus.Failed
+                            ? 1
+                            : 0;
+                }
+                else
+                {
+                    string suiteDirectory = string.IsNullOrWhiteSpace(cliOptions.YamlDirectory)
+                        ? "Assets"
+                        : cliOptions.YamlDirectory;
+                    TestSuiteResult result = await runner.RunSuiteAsync(
+                        suiteDirectory,
+                        testOptions,
+                        (path, caseName) => YamlTestCaseFilter.Match(cliOptions.TestFilter, path, caseName));
+                    new CiArtifactManifestWriter().Write(testOptions.ReportOutputPath);
+                    exitCode = result.ExitCode;
+                }
             }
             catch (UnityUIFlowException ex)
             {

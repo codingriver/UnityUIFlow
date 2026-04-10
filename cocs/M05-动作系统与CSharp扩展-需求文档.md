@@ -1,75 +1,105 @@
-# M05 动作系统与CSharp扩展 需求文档
+﻿# M05 动作系统与CSharp扩展 需求文档
 
-版本：1.1.0
-日期：2026-04-08
-状态：补充版
-
----
+版本：1.2.0  
+日期：2026-04-10  
+状态：更新基线
 
 ## 1. 模块职责
 
-- 负责：注册内置动作、自定义动作、动作参数映射、动作执行上下文与扩展发现机制。
-- 负责：提供 `IAction` 契约与 `ActionName` 标记能力，支持 Page Object 场景复用。
-- 不负责：YAML 解析、不负责元素定位规则细节、不负责生成最终测试报告。
-- 输入/输出：输入为动作名、参数字典、`ActionContext`、根 `VisualElement`；输出为动作执行结果、失败异常、扩展注册表状态。
-
----
+- 负责：注册内置动作、自定义动作，解析动作名并创建 `IAction` 实例。
+- 负责：为动作执行绑定 `ActionContext`，统一提供 `Finder`、`ScreenshotManager`、`RuntimeController`、取消令牌与共享数据。
+- 负责：明确当前 fallback 动作实现与目标官方动作驱动之间的边界。
+- 负责：支持 Page Object 与 C# 测试直接复用动作系统。
+- 不负责：不负责 YAML 解析，不负责最终测试报告格式，不负责被测窗口业务逻辑。
+- 输入/输出：输入为动作名、参数字典、`VisualElement` 根节点与 `ActionContext`；输出为动作执行结果、附件、异常与状态写回。
 
 ## 2. 数据模型
 
-### ActionRegistryEntry（注册表条目）
+### ActionContext
 
 | 字段名 | 类型 | 必填/可选 | 语义 | 合法范围 | 默认值 |
 | --- | --- | --- | --- | --- | --- |
-| actionName | string | 必填 | 动作注册名 | 非空字符串，长度范围 `[1, 64]` | 无 |
-| actionType | Type | 必填 | 动作实现类型 | 必须实现 `IAction` | 无 |
-| isBuiltIn | bool | 必填 | 是否内置动作 | `true` 或 `false` | `false` |
-
-### ActionContext（动作执行上下文）
-
-| 字段名 | 类型 | 必填/可选 | 语义 | 合法范围 | 默认值 |
-| --- | --- | --- | --- | --- | --- |
-| Root | VisualElement | 必填 | 当前根元素 | 非空 | 无 |
-| Finder | ElementFinder | 必填 | 元素查找器 | 非空 | 无 |
+| Root | VisualElement | 必填 | 当前测试根节点 | 非空 | 无 |
+| Finder | ElementFinder | 必填 | 当前元素查找器 | 非空 | 无 |
 | Options | TestOptions | 必填 | 当前运行选项 | 非空 | 无 |
-| Reporter | IExecutionReporter | 可选 | 执行期事件写入器 | `null` 表示仅内存收集 | `null` |
-| Simulator | object | 可选 | 官方 UI 测试模拟器封装（具体类型为 `InputEventSimulator` 或 `PanelSimulator`，设计提案，实现时确认，见 TODO-005） | `null` 表示当前动作不能使用底层模拟器 | `null` |
+| Reporter | IExecutionReporter | 可选 | 动作执行期日志接收器 | `null` 或实现对象 | `null` |
+| Simulator | object | 可选 | 动作底层驱动绑定点；当前为保留字段，目标用于官方 UI / InputSystem 驱动包装 | `null` 或包装对象 | `null` |
 | CurrentStepId | string | 必填 | 当前步骤 ID | 非空字符串 | 无 |
-| SharedBag | Dictionary\<string, object\> | 可选 | 用例内共享对象 | 空字典表示无共享数据 | 空字典 |
-| CancellationToken | CancellationToken | 必填 | 运行取消令牌 | 运行停止时置为 Cancelled | 无 |
+| CurrentCaseName | string | 必填 | 当前用例名 | 非空字符串 | 无 |
+| CurrentStepIndex | int | 必填 | 当前步骤序号 | `>= 0` | `0` |
+| SharedBag | Dictionary<string, object> | 必填 | 当前用例共享数据 | 非空字典 | 空字典 |
+| CancellationToken | CancellationToken | 必填 | 取消令牌 | 有效令牌 | 无 |
+| ScreenshotManager | ScreenshotManager | 可选 | 当前步骤截图管理器 | `null` 或实现对象 | `null` |
+| RuntimeController | RuntimeController | 可选 | Headed 运行控制器 | `null` 或实现对象 | `null` |
+| CurrentAttachments | List<string> | 必填 | 当前步骤附件列表 | 长度范围 `[0,10]` | 空列表 |
 
----
+### ActionRegistryEntry（设计提案，实现时确认）
+
+| 字段名 | 类型 | 必填/可选 | 语义 | 合法范围 | 默认值 |
+| --- | --- | --- | --- | --- | --- |
+| actionName | string | 必填 | 动作注册名 | 非空字符串，长度范围 `[1,64]` | 无 |
+| actionType | Type | 必填 | 动作实现类型 | 必须实现 `IAction` | 无 |
+| source | string | 必填 | 动作来源 | `built_in`、`custom` | `custom` |
+| currentDriver | string | 必填 | 当前代码实际驱动 | `fallback_event_dispatch`、`direct_value_write`、`engine_only` | 无 |
+| targetDriver | string | 必填 | 目标基线驱动 | `official_ui_test_framework`、`inputsystem_test`、`direct_value_write`、`engine_only` | 无 |
+| fallbackAllowed | bool | 必填 | 正式验收模式下是否允许 fallback | `true`、`false` | `false` |
+
+### BuiltInActionCapability（设计提案，实现时确认）
+
+| 字段名 | 类型 | 必填/可选 | 语义 | 合法范围 | 默认值 |
+| --- | --- | --- | --- | --- | --- |
+| actionName | string | 必填 | 内置动作名 | 现有 16 个内置动作之一 | 无 |
+| currentImplementation | string | 必填 | 当前代码路径 | `ActionHelpers.DispatchClick`、`TryAssignFieldValue`、`ElementFinder.WaitForElementAsync` 等 | 无 |
+| targetCapability | string | 必填 | 接入后目标语义 | `official_pointer`、`official_keyboard`、`fast_write`、`engine_assertion` | 无 |
+| supportLevel | string | 必填 | 当前支持等级 | `full`、`partial`、`transition_only` | 无 |
+| acceptanceLevel | string | 必填 | 接入后验收等级 | `full`、`partial` | 无 |
+| notes | string | 可选 | 备注 | 非空字符串或 `null` | `null` |
 
 ## 3. CRUD 操作
 
 | 操作 | 入口 | 禁用条件 | 实现标识 | Undo语义 |
 | --- | --- | --- | --- | --- |
-| 注册内置动作 | 引擎初始化时自动触发 | 动作名重复；实现类型未实现 `IAction` | `ActionRegistry.RegisterBuiltIns` `(设计提案，实现时确认)` | 不涉及；注册表构建完成后只读 |
-| 注册自定义动作 | 扫描程序集或显式调用注册 API | 动作名重复；缺少 `ActionName`；构造失败 | `ActionRegistry.RegisterCustom` `(设计提案，实现时确认)` | 不涉及；注册表级别不支持撤销 |
-| 解析动作实例 | 步骤执行前 | 动作未注册；实例创建失败 | `ActionRegistry.Resolve` `(设计提案，实现时确认)` | 不涉及；只读操作 |
-| 执行动作 | `StepExecutor` 进入单步执行 | 当前步骤已终止；动作解析失败 | `IAction.Execute` | 不涉及；动作对 UI 的影响由目标系统承担，不做通用 Undo |
-| 执行 Page Object 流程 | C# 测试代码直接调用 | `PageObject` 构造参数为空 | `LoginPage.Login` 等扩展方法 `(设计提案，实现时确认)` | 不涉及；由测试作者自行控制 |
-
----
+| 注册内置动作 | `ActionRegistry` 构造时自动触发 | 动作名重复；动作类型未实现 `IAction` | `ActionRegistry.RegisterBuiltIns`、`ActionRegistry.Register` | 不涉及；注册表只增不撤销 |
+| 注册自定义动作 | `ActionRegistry` 构造时自动扫描 | `[ActionName]` 缺失；动作名冲突；类型未实现 `IAction` | `ActionRegistry.RegisterCustomActions`、`ActionRegistry.Register` | 不涉及 |
+| 解析动作实例 | 执行步骤前 | 动作未注册；实例创建失败 | `ActionRegistry.Resolve` | 不涉及；只读解析 |
+| 执行动作 | `StepExecutor`、`UnityUIFlowFixture<TWindow>.ExecuteActionAsync` | 上下文未就绪；参数无效；目标元素无效 | `IAction.ExecuteAsync` | 不涉及；动作对 UI 的影响由被测系统承担 |
+| 追加动作附件 | 动作内部 | 附件路径为空；附件数已达 10 个 | `ActionContext.AddAttachment` | 不涉及；仅追加当前步骤附件 |
 
 ## 4. 交互规格
 
-- 触发事件：执行引擎根据步骤的 `actionName` 调用动作注册表解析动作。
-- 状态变化：`Lookup action -> Create action instance -> Bind ActionContext -> Execute -> Return success/failure`。
-- 数据提交时机：动作参数在执行前一次性绑定；执行结果在返回或抛异常时提交给 `StepResult`。
-- 取消/回退：运行中止时，动作实现应在每次等待点检查 `CancellationToken.IsCancellationRequested`，发现取消后立即抛出 `OperationCanceledException`；动作本身不提供通用回滚。
-- 自定义动作发现：V1 支持特性扫描与显式注册两种方式；发生名称冲突时，显式注册优先，且必须报 `ACTION_NAME_CONFLICT`。
-- 参数映射：所有 YAML 字段统一映射到 `Dictionary<string, string>`；动作实现者自行读取并做类型转换。
-- 参数验证时机：动作执行前（`IAction.Execute` 调用前），`StepExecutor` 先检查必填参数是否存在；动作内部对参数值做类型转换时，若转换失败则抛出 `ACTION_PARAMETER_INVALID`。
-- 参数默认值优先级：动作参数显式声明的值 > 动作内置默认值 > 步骤级 `TestOptions` 默认值。如 `wait_for_element.timeout` 未声明时沿用 `ExecutableStep.timeoutMs`；`drag.duration` 未声明时使用动作内置默认 `100ms`。
+- 触发事件：执行器进入动作步骤时，根据步骤 `action` 调用 `ActionRegistry.Resolve` 创建动作实例。
+- 中间状态：`Resolve -> Build ActionContext -> ExecuteAsync -> Record attachments/log -> Return StepResult`。
+- 数据提交时机：动作执行结束后统一返回执行器；中途产生的附件通过 `ActionContext.AddAttachment` 挂到当前步骤。
+- 取消/回退行为：每个动作在等待点必须检查 `CancellationToken`；取消后立即抛出 `OperationCanceledException`；动作系统不做通用 Undo。
 
----
+### 当前实现与目标基线
+
+| 动作 | 当前实现 | 目标基线 | 当前结论 | 目标结论 |
+| --- | --- | --- | --- | --- |
+| `click` | `ActionHelpers.DispatchClick` | `com.unity.test-framework` UI 测试子系统指针点击 | 已实现，过渡态 | 全面支持 |
+| `double_click` | `DispatchClick(..., 2)` | `com.unity.test-framework` UI 测试子系统双击 | 已实现，过渡态 | 全面支持 |
+| `hover` | `DispatchMouseEvent(MouseMove)` | `com.unity.test-framework` UI 测试子系统悬停 | 已实现，过渡态 | 全面支持 |
+| `drag` | `DispatchMouseEvent(MouseDown/Move/Up)` | `com.unity.test-framework` UI 测试子系统拖拽 | 已实现，过渡态 | 全面支持 |
+| `scroll` | `DispatchWheelEvent` | `com.unity.test-framework` UI 测试子系统滚动 | 已实现，过渡态 | 局部到全面支持 |
+| `press_key` | `DispatchKeyboardEvent(KeyDown/KeyUp)` | InputSystem 测试键盘输入 | 已实现，过渡态 | 全面支持 |
+| `type_text` | 逐帧调用 `TryAssignFieldValue` | InputSystem 测试文本输入 | 已实现，过渡态 | 局部到全面支持 |
+| `type_text_fast` | 直接调用 `TryAssignFieldValue` | 保持直接写值 | 已实现 | 局部支持，长期保留 |
+| `wait` | `Task.Delay` / 帧等待链路 | 保持当前实现 | 已实现 | 全面支持 |
+| `wait_for_element` | `ElementFinder.WaitForElementAsync` | 保持当前实现 | 已实现 | 全面支持 |
+| `assert_*` | Finder + 反射 / 文本读取 | 保持当前实现 | 已实现 | 全面支持 |
+| `screenshot` | `ScreenshotManager.CaptureAsync` | 保持 API，不在本模块内决定真实截图方案 | 已实现，过渡态 | 局部支持 |
+
+### 驱动选择规则
+
+1. `click`、`double_click`、`hover`、`drag`、`scroll` 目标驱动是 `com.unity.test-framework` UI 测试子系统（含原 `com.unity.ui.test-framework` 能力）。
+2. `press_key`、`type_text` 目标驱动是基于 `com.unity.inputsystem` 的测试输入能力。
+3. `type_text_fast` 永远不升级为真实输入链路，只负责快速写值。
+4. 当前 `SendEvent` / `Event.GetPooled` / 直接赋值版行为必须在文档中标记为“当前实现”或“迁移兼容模式”。
+5. 正式验收模式下，动作系统不得把 fallback 执行结果记为“真实用户输入通过”。
 
 ## 5. 视觉规格
 
 不涉及
-
----
 
 ## 6. 校验规则
 
@@ -77,12 +107,12 @@
 
 | 规则 | 检查时机 | 级别 | 提示文案 |
 | --- | --- | --- | --- |
-| 动作实现类型必须实现 `IAction` | 注册动作时 | Error | `动作 {actionName} 未实现 IAction` |
+| 动作类型必须实现 `IAction` | 注册动作时 | Error | `动作 {actionName} 未实现 IAction` |
 | 动作名必须唯一 | 注册动作时 | Error | `动作名冲突：{actionName}` |
-| 内置动作必填参数必须存在 | 执行动作前 | Error | `步骤 {stepName} 缺少参数 {parameter}` |
-| `selector` 依赖型动作必须先成功定位元素 | 动作执行前 | Error | `步骤 {stepName} 未找到目标元素` |
-| `type_text_fast` 仅允许目标元素为 `TextField`、`IntegerField`、`FloatField`、`LongField`、`DoubleField`、`Hash128Field` 或其他继承 `TextInputBaseField` 的控件 | 动作执行前 | Error | `步骤 {stepName} 的目标元素不支持快速输入` |
-| 自定义动作构造失败必须透出原始异常消息 | 创建实例时 | Warning | `动作 {actionName} 初始化失败：{detail}` |
+| 依赖 `selector` 的动作必须成功定位元素 | 执行动作前 | Error | `动作 {actionName} 未找到目标元素` |
+| `type_text_fast` 目标元素必须可写入 `value` | 执行 `type_text_fast` 前 | Error | `动作 type_text_fast 的目标元素不可写入 value` |
+| 正式验收模式下，`type_text` 不得继续走逐帧写值 fallback | 执行 `type_text` 前 | Error | `动作 type_text 在正式验收模式下禁止使用逐帧写值 fallback` |
+| 正式验收模式下，指针类动作必须绑定官方 UI 驱动 | 执行 `click`、`double_click`、`hover`、`drag`、`scroll` 前 | Error | `动作 {actionName} 未绑定官方 UI 驱动` |
 
 ### 错误响应
 
@@ -91,102 +121,83 @@
 | 动作名重复注册 | ACTION_NAME_CONFLICT | `动作名冲突：{actionName}` | 抛异常并阻断初始化 |
 | 动作未注册 | ACTION_NOT_FOUND | `未找到动作：{actionName}` | 抛异常并终止当前步骤 |
 | 动作参数缺失 | ACTION_PARAMETER_MISSING | `动作 {actionName} 缺少参数 {parameter}` | 抛异常并终止当前步骤 |
-| 动作参数类型错误 | ACTION_PARAMETER_INVALID | `动作 {actionName} 的参数 {parameter} 非法` | 抛异常并终止当前步骤 |
-| 动作执行异常 | ACTION_EXECUTION_FAILED | `动作 {actionName} 执行失败：{detail}` | 抛异常并标记当前步骤失败 |
+| 动作参数非法 | ACTION_PARAMETER_INVALID | `动作 {actionName} 的参数 {parameter} 非法` | 抛异常并终止当前步骤 |
+| 动作执行失败或驱动未就绪 | ACTION_EXECUTION_FAILED | `动作 {actionName} 执行失败：{detail}` | 抛异常并标记当前步骤失败 |
 | 目标元素类型不兼容 | ACTION_TARGET_TYPE_INVALID | `动作 {actionName} 的目标类型不兼容：{targetType}` | 抛异常并终止当前步骤 |
-
----
 
 ## 7. 跨模块联动
 
 | 模块 | 方向 | 说明 | 代码依赖点 |
 | --- | --- | --- | --- |
-| M03 执行引擎与运行控制 | 被动接收 | 接收步骤执行请求并返回动作结果 | `StepExecutor.ExecuteStep`、`ActionRegistry.Resolve` `(设计提案)` |
-| M04 元素定位与等待 | 被动接收 | 通过 `ActionContext.Finder` 查找动作目标元素 | `ElementFinder.Find`、`ElementFinder.WaitForElement` `(设计提案)` |
-| M06 Headed可视化执行 | 主动通知 | 动作开始前发布当前动作名与当前目标元素用于高亮 | `HeadedRunEventBus.PublishCurrentAction` `(设计提案)` |
-| M07 报告与截图 | 主动通知 | 记录动作执行耗时、异常、截图请求与自定义日志 | `IExecutionReporter.RecordAction` `(设计提案)` |
-
----
+| M03 执行引擎与运行控制 | 被动接收 | 接收执行器构建的步骤参数与运行上下文 | `StepExecutor`、`TestRunner` |
+| M04 元素定位与等待 | 被动接收 | 通过 `ActionContext.Finder` 完成定位与等待 | `ElementFinder.WaitForElementAsync` |
+| M06 Headed可视化执行 | 主动通知 | 动作执行时向 Headed 状态与日志系统暴露当前步骤信息 | `RuntimeController`、`ActionContext.Log` |
+| M07 报告与截图 | 主动通知 | 动作日志、截图附件、失败信息统一写入报告链路 | `IExecutionReporter.RecordAction`、`ScreenshotManager.CaptureAsync` |
+| M09 测试基座与Fixture基类 | 被动接收 | Fixture 负责为动作系统提供稳定 `Root`、`Finder`、`ScreenshotManager` 和后续官方宿主能力 | `UnityUIFlowFixture<TWindow>` |
+| M12 官方UI测试框架与输入系统测试接入 | 被动接收 | 动作系统按 M12 规定切换到官方 UI 驱动与 InputSystem 驱动 | `ActionContext.Simulator`、`ClickAction`、`PressKeyAction` |
 
 ## 8. 技术实现要点
 
 - 关键类与职责：
-  - `IAction` `(设计提案，实现时确认)`：统一动作执行契约，方法签名为 `void Execute(VisualElement root, ActionContext context, Dictionary<string, string> parameters)`，不返回值，异常即失败。
-  - `ActionNameAttribute` `(设计提案，实现时确认)`：为自定义动作声明 YAML 动作名，用法：`[ActionName("custom_login")]`。
-  - `ActionRegistry` `(设计提案，实现时确认)`：管理动作注册、解析与实例创建；初始化时注册全部内置动作，之后扫描自定义动作。
-  - `ActionContext` `(设计提案，实现时确认)`：向动作提供 Finder、Options、Reporter、Simulator、SharedBag、CancellationToken。
-
-- 内置动作参数规格：
-
-| 动作名 | 必填参数 | 可选参数 | 说明 |
-| --- | --- | --- | --- |
-| `click` | `selector: string` | — | 单击元素；`selector` 通过 `Finder` 定位 |
-| `double_click` | `selector: string` | — | 双击元素 |
-| `type_text` | `selector: string`, `value: string` | — | 逐字符键盘模拟输入 |
-| `type_text_fast` | `selector: string`, `value: string` | — | 直接写入文本值，目标必须是 `TextField` 或兼容控件 |
-| `press_key` | `key: string` | — | 发送键盘按键；`key` 格式为 Unity `KeyCode` 名称，如 `Return`、`Tab` |
-| `drag` | `from: string`, `to: string` | `duration: string` | `from`/`to` 均为选择器或 `x,y` 坐标字符串（坐标格式为 `"{x},{y}"`，如 `"120,300"`，仅允许非负整数）；`duration` 为拖拽时长字面量，默认 `100ms` |
-| `scroll` | `selector: string`, `delta: string` | — | `delta` 格式为 `dx,dy`，如 `0,-100` |
-| `hover` | `selector: string` | `duration: string` | 悬停到目标元素；`duration` 为悬停时长，默认 `0ms` |
-| `wait` | `duration: string` | — | 固定等待，`duration` 为时长字面量，格式必须匹配 `^\d+(\.\d+)?(ms|s)$`，如 `1s`、`500ms`、`1.5s`；不匹配时报 `ACTION_PARAMETER_INVALID` |
-| `wait_for_element` | `selector: string` | `timeout: string` | 等待目标元素出现；`timeout` 未声明时沿用步骤默认超时 |
-| `assert_visible` | `selector: string` | `timeout: string` | 断言元素可见；可等待到可见 |
-| `assert_not_visible` | `selector: string` | `timeout: string` | 断言元素不可见或不存在 |
-| `assert_text` | `selector: string`, `expected: string` | — | 断言元素文本完全等于 `expected` |
-| `assert_text_contains` | `selector: string`, `expected: string` | — | 断言元素文本包含 `expected` 片段 |
-| `assert_property` | `selector: string`, `property: string`, `expected: string` | — | 断言指定属性值；`property` 为 UIToolkit 样式/绑定属性名 |
-| `screenshot` | `name: string` | — | 生成截图附件；`name` 作为截图文件 tag，长度范围 `[1, 64]` |
+  - `IAction`：动作统一契约，实际方法签名为 `Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)`。
+  - `ActionRegistry`：维护动作名到类型的映射，构造时注册内置动作并扫描自定义动作。
+  - `ActionHelpers`：承载当前 fallback 交互能力，如 `DispatchClick`、`DispatchKeyboardEvent`、`DispatchMouseEvent`、`DispatchWheelEvent`、`TryAssignFieldValue`。
+  - `IUiInteractionDriver` `(设计提案，实现时确认)`：接入 `com.unity.test-framework` UI 测试子系统后承载指针类动作。
+  - `IKeyboardInputDriver` `(设计提案，实现时确认)`：接入 InputSystem 测试输入能力后承载 `press_key` 与 `type_text`。
 
 - 核心流程：
 
 ```text
-Initialize ActionRegistry
--> Register built-in actions (16 built-in actions)
--> Scan custom actions by [ActionName] attribute in whitelist assemblies
--> On step execution:
-   -> ActionRegistry.Resolve(actionName)
-   -> Build ActionContext (Root, Finder, Options, Reporter, Simulator, SharedBag, CancellationToken)
-   -> action.Execute(root, context, parameters)
-   -> Convert result/exception to StepResult
+Build ActionRegistry
+-> Resolve action by name
+-> Build ActionContext
+-> Determine driver
+   -> pointer action => official UI driver
+   -> keyboard/text action => InputSystem test driver
+   -> fast write/assert/wait => current local implementation
+-> ExecuteAsync
+-> Attach logs / screenshots / attachments
 ```
 
 - 性能约束：
-  - 注册表初始化只执行一次，禁止每步重新扫描程序集。
-  - 动作实例默认按步骤创建，禁止跨用例复用带状态实例。
-  - 内置动作参数读取必须使用字典访问，禁止反射逐字段绑定。
-  - 自定义动作扫描范围固定为配置程序集白名单，避免全域扫描。白名单默认包含 `Assembly-CSharp`、`Assembly-CSharp-Editor` 和 `Assembly-CSharp-firstpass`；可通过配置扩展。`TODO(需原型验证)：程序集白名单的配置方式（硬编码 vs 配置文件）需在 PoC 中确认，见 TODO-013。`
+  - `ActionRegistry` 只允许在测试上下文初始化时扫描一次动作类型。
+  - `ActionContext` 必须在单个测试内复用 `Finder`、`ScreenshotManager`、`RuntimeController`。
+  - 拖拽与滚动的官方驱动绑定必须复用单个宿主上下文，不允许每个步骤重建驱动对象。
 
 - 禁止项：
-  - 禁止在 `IAction.Execute` 中直接写 Markdown 报告文件。
-  - 禁止自定义动作绕过 `ActionContext` 直接访问全局单例状态。
-  - 禁止动作实现忽略 `CancellationToken`；必须在每个主要等待点检查取消状态。
-
-- TODO(待确认)：`PanelSimulator` 在目标包版本下支撑的动作集合、方法签名与键盘输入限制需原型验证（见 `TODO-005`）。
-
----
+  - 禁止在动作内部直接写 Markdown 报告文件。
+  - 禁止在正式验收模式下静默回退到当前 `SendEvent` fallback。
+  - 禁止把 `type_text_fast` 的通过结果表述为“真实键盘输入”。
 
 ## 9. 验收标准
 
-1. [注册表完成初始化] -> [执行 `click` 动作] -> [能解析到内置动作实例并完成执行]
-2. [存在带 `[ActionName("custom_login")]` 的自定义动作] -> [启动动作扫描] -> [注册表中可通过 `custom_login` 解析到该动作]
-3. [步骤缺少 `selector` 参数但动作依赖元素] -> [执行动作] -> [返回 `ACTION_PARAMETER_MISSING`]
-4. [自定义动作在 `Execute` 中抛异常] -> [执行步骤] -> [步骤失败并记录 `ACTION_EXECUTION_FAILED`]
-5. [C# 测试直接构造 `LoginPage`] -> [调用 `Login(username, password)`] -> [Page Object 内部按顺序执行：用户名输入框被填充为 `username`、密码输入框被填充为 `password`、登录按钮被点击]
-6. [运行停止，动作正在等待] -> [动作检查 `CancellationToken`] -> [立即抛出 `OperationCanceledException`，步骤结束]
-
----
+1. [创建 `ActionRegistry`] -> [检查内置动作注册表] -> [16 个内置动作均可被 `Resolve` 正确解析]
+2. [存在带 `[ActionName("custom_login")]` 的自定义动作类型] -> [创建 `ActionRegistry`] -> [可通过 `custom_login` 解析到该动作类型]
+3. [正式验收模式开启且 `com.unity.test-framework` UI 测试子系统已接入] -> [执行 `click`、`double_click`、`hover`、`drag`、`scroll` 回归用例] -> [动作全部通过官方指针链路执行]
+4. [正式验收模式开启且 InputSystem 测试输入已接入] -> [执行 `press_key`、`type_text` 回归用例] -> [动作全部通过高保真键盘链路执行]
+5. [目标元素是 `TextField`] -> [执行 `type_text_fast`] -> [元素值被直接写入，且用例结果标记为快速路径而非真实输入]
+6. [动作执行过程中收到取消信号] -> [动作命中下一等待点] -> [立即抛出 `OperationCanceledException`，步骤终止]
 
 ## 10. 边界规范
 
-- 空数据：不需要参数的动作（无此类内置动作，但自定义动作可能出现）在 `parameterMap` 为空字典时仍必须能执行。
-- 单元素：对单个目标元素的 `click`、`hover`、`assert_visible` 必须在找到第一个元素后立即执行，不再继续查找其他候选。
-- 上下限临界值：动作名长度 `1` 与 `64` 合法；超界注册时报 `ACTION_NAME_CONFLICT`。时长字面量格式不匹配 `^\d+(\.\d+)?(ms|s)$` 时报 `ACTION_PARAMETER_INVALID`。
-- 异常数据恢复：动作执行异常后不得污染注册表；后续步骤仍可解析其他动作实例。
+- 空数据：
+  - 不依赖参数的动作在参数字典为空时仍必须能执行。
+  - 依赖 `selector`、`value`、`key` 的动作在参数缺失时必须返回 `ACTION_PARAMETER_MISSING`。
 
----
+- 单元素：
+  - 当选择器只命中一个元素时，动作必须直接作用于该元素，不继续扫描其他候选。
+
+- 上下限临界值：
+  - 动作名长度范围固定为 `[1,64]`。
+  - 单步附件数量上限固定为 `10`。
+  - `drag.duration` 缺省值固定为 `100ms`；`hover.duration` 缺省值固定为 `0ms`。
+
+- 异常数据恢复：
+  - 单个动作执行失败后，不得污染 `ActionRegistry`。
+  - InputSystem 或官方 UI 驱动初始化失败后，不得静默降级为正式基线通过。
 
 ## 11. 周边可选功能
 
-- P1：支持动作级参数 schema 声明；当前预留 `IActionDescriptor` 接口（`string ActionName`、`ActionParameterSchema[] Parameters` 属性），不进入 V1 主流程。
-- P1：支持 DI 容器创建自定义动作；当前预留 `IActionFactory` 扩展点，默认实现使用 `Activator.CreateInstance`。
-- P2：支持动作市场与包发现；当前不预留远程加载能力。
+- P1：支持动作级驱动显式声明，例如在报告中记录“本步使用 official_ui_test_framework”。
+- P1：支持自定义动作通过依赖注入获取官方 UI 驱动或 InputSystem 驱动。
+- P2：支持更细粒度的组合键、剪贴板、IME、手势轨迹回放。

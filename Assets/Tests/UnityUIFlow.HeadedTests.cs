@@ -133,5 +133,30 @@ namespace UnityUIFlow
                 HeadedYamlPathPreferences.GetInitialDirectory(normalized).Replace('\\', '/'),
                 Is.EqualTo(Path.GetFullPath("Assets/Examples/Yaml").Replace('\\', '/')));
         }
+
+        [Test]
+        public void BatchRunnerPathUtility_NormalizesProjectRelativePaths()
+        {
+            string absolutePath = Path.GetFullPath("Assets/UnityUIFlow/Samples/Yaml/01-basic-login.yaml");
+
+            string normalized = BatchRunnerPathUtility.NormalizePath(absolutePath);
+
+            Assert.That(normalized, Is.EqualTo("Assets/UnityUIFlow/Samples/Yaml/01-basic-login.yaml"));
+        }
+
+        [Test]
+        public void BatchRunnerPathUtility_ResolvesDirectoryYamlFilesInSortedOrder()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "UnityUIFlowBatchRunner", System.Guid.NewGuid().ToString("N"));
+            string nested = Path.Combine(root, "nested");
+            Directory.CreateDirectory(nested);
+            File.WriteAllText(Path.Combine(root, "b-case.yaml"), "name: B");
+            File.WriteAllText(Path.Combine(nested, "a-case.yaml"), "name: A");
+
+            var paths = BatchRunnerPathUtility.ResolveYamlPaths(BatchRunTargetMode.Directory, root);
+
+            Assert.That(paths, Has.Count.EqualTo(2));
+            Assert.That(string.Compare(paths[0], paths[1], System.StringComparison.OrdinalIgnoreCase), Is.LessThanOrEqualTo(0));
+        }
     }
 }

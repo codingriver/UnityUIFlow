@@ -184,6 +184,36 @@ defaultTimeoutMs: 1500
         }
 
         [Test]
+        public void CommandLineParser_RejectsExplicitYamlPathAndDirectoryTogether()
+        {
+            string[] args =
+            {
+                "Unity.exe",
+                "-unityUIFlow.yamlPath", "Assets/Examples/Yaml/01-basic-login.yaml",
+                "-unityUIFlow.yamlDirectory", "Assets/Examples/Yaml",
+            };
+
+            UnityUIFlowException ex = Assert.Throws<UnityUIFlowException>(() => new CommandLineOptionsParser().Parse(args));
+
+            Assert.That(ex.ErrorCode, Is.EqualTo(ErrorCodes.CliArgumentInvalid));
+        }
+
+        [Test]
+        public void CommandLineParser_ReadsExplicitYamlPath()
+        {
+            string[] args =
+            {
+                "Unity.exe",
+                "-unityUIFlow.yamlPath", "Assets/Examples/Yaml/01-basic-login.yaml",
+            };
+
+            CliOptions options = new CommandLineOptionsParser().Parse(args);
+
+            Assert.That(options.YamlPath, Is.EqualTo("Assets/Examples/Yaml/01-basic-login.yaml"));
+            Assert.That(options.YamlDirectory, Is.Null);
+        }
+
+        [Test]
         public void ProjectSettings_AlwaysEnableVerboseLog_OverridesRuntimeFlags()
         {
             UnityUIFlowProjectSettings settings = UnityUIFlowProjectSettings.instance;

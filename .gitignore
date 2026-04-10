@@ -58,3 +58,8 @@ Desktop.ini
 # Ignore all other root-level dotfiles and dotfolders
 /.?*
 !/.gitignore
+!/.github/
+!/.github/**
+!/.unityuiflow.json
+/Assets/unitypilot-editor
+/Reports

@@ -586,6 +586,8 @@ namespace UnityUIFlow
     public sealed class CliOptions
     {
         public string TestFilter;
+        public string YamlPath;
+        public string YamlDirectory;
         public bool Headed = true;
         public string ReportPath = "Reports";
         public bool ScreenshotOnFailure = true;
