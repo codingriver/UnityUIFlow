@@ -15,6 +15,8 @@ namespace UnityUIFlow
         public const string ActionNotRegistered = "ACTION_NOT_REGISTERED";
         public const string ActionParameterInvalid = "ACTION_PARAMETER_INVALID";
         public const string ActionParameterMissing = "ACTION_PARAMETER_MISSING";
+        public const string ActionIndexOutOfRange = "ACTION_INDEX_OUT_OF_RANGE";
+        public const string ActionOptionNotFound = "ACTION_OPTION_NOT_FOUND";
         public const string ActionTargetTypeInvalid = "ACTION_TARGET_TYPE_INVALID";
         public const string AttachmentLimitExceeded = "ATTACHMENT_LIMIT_EXCEEDED";
         public const string CliArgumentInvalid = "CLI_ARGUMENT_INVALID";
@@ -40,6 +42,8 @@ namespace UnityUIFlow
         public const string HeadedInvalidTransition = "HEADED_INVALID_TRANSITION";
         public const string HeadedStateOutOfSync = "HEADED_STATE_OUT_OF_SYNC";
         public const string HeadedTargetInvalid = "HEADED_TARGET_INVALID";
+        public const string InputSystemTestFrameworkUnavailable = "INPUT_SYSTEM_TEST_FRAMEWORK_UNAVAILABLE";
+        public const string OfficialUiTestFrameworkUnavailable = "OFFICIAL_UI_TEST_FRAMEWORK_UNAVAILABLE";
         public const string ReportOutputUnavailable = "REPORT_OUTPUT_UNAVAILABLE";
         public const string ReportWriteFailed = "REPORT_WRITE_FAILED";
         public const string RootElementMissing = "ROOT_ELEMENT_MISSING";
@@ -192,6 +196,9 @@ namespace UnityUIFlow
         public bool ContinueOnStepFailure;
         public bool ScreenshotOnFailure = true;
         public int? RetryCount;
+        public bool RequireOfficialHost = false;
+        public bool RequireOfficialPointerDriver = false;
+        public bool RequireInputSystemKeyboardDriver = false;
 
         /// <summary>
         /// Enables verbose per-step and per-action logging to the Unity Console.
@@ -220,6 +227,9 @@ namespace UnityUIFlow
                 ContinueOnStepFailure = ContinueOnStepFailure,
                 ScreenshotOnFailure = ScreenshotOnFailure,
                 RetryCount = RetryCount,
+                RequireOfficialHost = RequireOfficialHost,
+                RequireOfficialPointerDriver = RequireOfficialPointerDriver,
+                RequireInputSystemKeyboardDriver = RequireInputSystemKeyboardDriver,
                 EnableVerboseLog = EnableVerboseLog,
                 PreStepDelayMs = PreStepDelayMs,
             };
@@ -513,6 +523,11 @@ namespace UnityUIFlow
         public string ErrorCode;
         public string ErrorMessage;
         public string ScreenshotPath;
+        public string ScreenshotSource;
+        public string HostDriver;
+        public string PointerDriver;
+        public string KeyboardDriver;
+        public string DriverDetails;
         public List<string> Attachments = new List<string>();
     }
 
@@ -574,8 +589,13 @@ namespace UnityUIFlow
         public string EndedAtUtc;
         public int DurationMs;
         public string ScreenshotPath;
+        public string ScreenshotSource;
         public string ErrorCode;
         public string ErrorMessage;
+        public string HostDriver;
+        public string PointerDriver;
+        public string KeyboardDriver;
+        public string DriverDetails;
         public List<string> Attachments = new List<string>();
     }
 
@@ -597,6 +617,9 @@ namespace UnityUIFlow
         public int DefaultTimeoutMs = 3000;
         public bool StopOnFirstFailure;
         public bool ContinueOnStepFailure;
+        public bool RequireOfficialHost;
+        public bool RequireOfficialPointerDriver;
+        public bool RequireInputSystemKeyboardDriver;
         public bool EnableVerboseLog = false;
         public int PreStepDelayMs;
         public string ConfigFile;
@@ -612,8 +635,16 @@ namespace UnityUIFlow
         public string SelectedYamlPath;
         public HeadedRunMode RunMode = HeadedRunMode.Continuous;
         public HeadedRunnerState RunnerState = HeadedRunnerState.Idle;
+        public bool ContinueOnStepFailure;
+        public bool RequireOfficialHost;
+        public bool RequireOfficialPointerDriver;
+        public bool RequireInputSystemKeyboardDriver;
         public string CurrentStepName;
         public string CurrentSelector;
+        public string CurrentHostDriver;
+        public string CurrentPointerDriver;
+        public string CurrentKeyboardDriver;
+        public string CurrentDriverDetails;
         public string LastErrorMessage;
         public HeadedFailurePolicy FailurePolicy = HeadedFailurePolicy.Pause;
         public bool RetainSceneOnFailure = true;

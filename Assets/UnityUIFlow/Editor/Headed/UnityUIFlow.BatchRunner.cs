@@ -41,6 +41,9 @@ namespace UnityUIFlow
         public bool ContinueOnStepFailure;
         public bool ScreenshotOnFailure = true;
         public bool EnableVerboseLog;
+        public bool RequireOfficialHost;
+        public bool RequireOfficialPointerDriver;
+        public bool RequireInputSystemKeyboardDriver;
         public int DefaultTimeoutMs = 3000;
         public bool IsRunning;
         public string StatusText = "Idle";
@@ -71,6 +74,9 @@ namespace UnityUIFlow
         private Toggle _continueOnStepFailureToggle;
         private Toggle _screenshotOnFailureToggle;
         private Toggle _verboseLogToggle;
+        private Toggle _requireOfficialHostToggle;
+        private Toggle _requireOfficialPointerDriverToggle;
+        private Toggle _requireInputSystemKeyboardDriverToggle;
         private IntegerField _defaultTimeoutField;
         private Button _runButton;
         private Button _cancelButton;
@@ -197,12 +203,18 @@ namespace UnityUIFlow
             _continueOnStepFailureToggle = CreateToggle("Continue On Step Failure", _state.ContinueOnStepFailure, value => _state.ContinueOnStepFailure = value);
             _screenshotOnFailureToggle = CreateToggle("Screenshot On Failure", _state.ScreenshotOnFailure, value => _state.ScreenshotOnFailure = value);
             _verboseLogToggle = CreateToggle("Verbose Log", _state.EnableVerboseLog, value => _state.EnableVerboseLog = value);
+            _requireOfficialHostToggle = CreateToggle("Require Official Host", _state.RequireOfficialHost, value => _state.RequireOfficialHost = value);
+            _requireOfficialPointerDriverToggle = CreateToggle("Require Official Pointer Driver", _state.RequireOfficialPointerDriver, value => _state.RequireOfficialPointerDriver = value);
+            _requireInputSystemKeyboardDriverToggle = CreateToggle("Require InputSystem Keyboard Driver", _state.RequireInputSystemKeyboardDriver, value => _state.RequireInputSystemKeyboardDriver = value);
 
             optionsGrid.Add(_headedToggle);
             optionsGrid.Add(_stopOnFirstFailureToggle);
             optionsGrid.Add(_continueOnStepFailureToggle);
             optionsGrid.Add(_screenshotOnFailureToggle);
             optionsGrid.Add(_verboseLogToggle);
+            optionsGrid.Add(_requireOfficialHostToggle);
+            optionsGrid.Add(_requireOfficialPointerDriverToggle);
+            optionsGrid.Add(_requireInputSystemKeyboardDriverToggle);
 
             _defaultTimeoutField = new IntegerField("Default Timeout (ms)")
             {
@@ -366,12 +378,16 @@ namespace UnityUIFlow
                             new TestOptions
                             {
                                 Headed = _state.Headed,
+                                DebugOnFailure = false,
                                 ReportOutputPath = reportRoot,
                                 ScreenshotPath = screenshotRoot,
                                 ScreenshotOnFailure = _state.ScreenshotOnFailure,
                                 StopOnFirstFailure = _state.StopOnFirstFailure,
                                 ContinueOnStepFailure = _state.ContinueOnStepFailure,
                                 DefaultTimeoutMs = _state.DefaultTimeoutMs,
+                                RequireOfficialHost = _state.RequireOfficialHost,
+                                RequireOfficialPointerDriver = _state.RequireOfficialPointerDriver,
+                                RequireInputSystemKeyboardDriver = _state.RequireInputSystemKeyboardDriver,
                                 EnableVerboseLog = _state.EnableVerboseLog,
                             },
                             null,
@@ -755,6 +771,9 @@ namespace UnityUIFlow
             state.ContinueOnStepFailure = EditorPrefs.GetBool(Prefix + nameof(BatchRunnerViewState.ContinueOnStepFailure), false);
             state.ScreenshotOnFailure = EditorPrefs.GetBool(Prefix + nameof(BatchRunnerViewState.ScreenshotOnFailure), true);
             state.EnableVerboseLog = EditorPrefs.GetBool(Prefix + nameof(BatchRunnerViewState.EnableVerboseLog), UnityUIFlowMenuItems.IsVerboseLogEnabled);
+            state.RequireOfficialHost = EditorPrefs.GetBool(Prefix + nameof(BatchRunnerViewState.RequireOfficialHost), UnityUIFlowProjectSettings.instance.RequireOfficialHostByDefault);
+            state.RequireOfficialPointerDriver = EditorPrefs.GetBool(Prefix + nameof(BatchRunnerViewState.RequireOfficialPointerDriver), UnityUIFlowProjectSettings.instance.RequireOfficialPointerDriverByDefault);
+            state.RequireInputSystemKeyboardDriver = EditorPrefs.GetBool(Prefix + nameof(BatchRunnerViewState.RequireInputSystemKeyboardDriver), UnityUIFlowProjectSettings.instance.RequireInputSystemKeyboardDriverByDefault);
             state.DefaultTimeoutMs = EditorPrefs.GetInt(Prefix + nameof(BatchRunnerViewState.DefaultTimeoutMs), 3000);
         }
 
@@ -768,6 +787,9 @@ namespace UnityUIFlow
             EditorPrefs.SetBool(Prefix + nameof(BatchRunnerViewState.ContinueOnStepFailure), state.ContinueOnStepFailure);
             EditorPrefs.SetBool(Prefix + nameof(BatchRunnerViewState.ScreenshotOnFailure), state.ScreenshotOnFailure);
             EditorPrefs.SetBool(Prefix + nameof(BatchRunnerViewState.EnableVerboseLog), state.EnableVerboseLog);
+            EditorPrefs.SetBool(Prefix + nameof(BatchRunnerViewState.RequireOfficialHost), state.RequireOfficialHost);
+            EditorPrefs.SetBool(Prefix + nameof(BatchRunnerViewState.RequireOfficialPointerDriver), state.RequireOfficialPointerDriver);
+            EditorPrefs.SetBool(Prefix + nameof(BatchRunnerViewState.RequireInputSystemKeyboardDriver), state.RequireInputSystemKeyboardDriver);
             EditorPrefs.SetInt(Prefix + nameof(BatchRunnerViewState.DefaultTimeoutMs), state.DefaultTimeoutMs);
         }
     }

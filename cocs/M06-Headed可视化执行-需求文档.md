@@ -82,6 +82,12 @@
 - 失败策略：`failurePolicy=Pause` 时，失败后立即暂停面板并持续显示失败元素的高亮覆盖层，直到用户手动点击“停止”或“继续”；此时测试执行流程也同步暂停（通过 `RuntimeController.Pause` 挂起执行引擎）。`Continue` 时，面板记录错误但不切换为暂停，测试执行流程继续推进后续步骤，面板状态转为 `Failed`。- Headed 模式下失败控制优先级：`failurePolicy` 控制 Headed 面板行为并与执行引擎联动。`failurePolicy=Pause` 时，无论 `TestOptions.ContinueOnStepFailure` 值如何，执行引擎均暂停，等待用户手动恢复。`failurePolicy=Continue` 时，执行引擎是否继续后续步骤由 `TestOptions.ContinueOnStepFailure` 决定：`true` 时继续后续步骤，`false` 时停止当前用例并进入 `teardown`。非 Headed 模式下 `failurePolicy` 不生效，仅由 `TestOptions.ContinueOnStepFailure` 控制。
 ---
 
+当前实现补充（2026-04-11）：
+
+- 面板已新增 `Require Official Host`、`Require Official Pointer Driver`、`Require InputSystem Keyboard Driver` 三个 strict 开关。
+- 面板已显示 `Driver Details`，用于区分当前步骤到底走的是 fallback、InputSystem 桥接还是未来官方驱动。
+- strict 开关状态已通过 `EditorPrefs` 持久化，重新打开 Headed 面板后会保留上次选择；首次打开时以 Project Settings 默认值为初始值。
+
 ## 5. 视觉规格
 
 | 状态 | 背景色 | 边框 | 文字颜色 | 备注 |

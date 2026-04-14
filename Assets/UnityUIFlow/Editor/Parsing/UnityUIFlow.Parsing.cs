@@ -441,7 +441,18 @@ namespace UnityUIFlow
                 throw new UnityUIFlowException(ErrorCodes.TestDataFileNotFound, $"鏁版嵁鏂囦欢涓嶅瓨鍦細{path}");
             }
 
-            string[] lines = File.ReadAllLines(path);
+            string[] lines;
+            using (var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true))
+            {
+                var allLines = new List<string>();
+                while (!reader.EndOfStream)
+                {
+                    allLines.Add(reader.ReadLine());
+                }
+
+                lines = allLines.ToArray();
+            }
+
             if (lines.Length == 0)
             {
                 return new List<Dictionary<string, string>>();

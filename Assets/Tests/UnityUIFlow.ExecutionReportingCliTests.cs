@@ -106,6 +106,11 @@ steps:
                 EndedAtUtc = "2026-04-09T00:00:01.0000000Z",
                 DurationMs = 1000,
                 ScreenshotPath = "Screenshots/case-001.png",
+                ScreenshotSource = ScreenshotManager.SourceWindowReadScreenPixel,
+                HostDriver = "OfficialEditorWindowPanelSimulator",
+                PointerDriver = "PanelSimulator",
+                KeyboardDriver = "PanelSimulator",
+                DriverDetails = "host=OfficialEditorWindowPanelSimulator; pointer=PanelSimulator; keyboard=PanelSimulator; official=UnityEditor.UIElements.TestFramework.EditorWindowUITestFixture`1 + UnityEditor.UIElements.TestFramework.EditorWindowPanelSimulator + UnityEngine.UIElements.TestFramework.PanelSimulator (available via com.unity.ui.test-framework)",
                 Attachments = new List<string> { "Screenshots/case-001.png" },
             };
 
@@ -135,6 +140,9 @@ steps:
             Assert.That(File.Exists(Path.Combine(reportRoot, "suite-editor-suite.md")), Is.True);
             Assert.That(File.Exists(Path.Combine(reportRoot, "suite-editor-suite.json")), Is.True);
             Assert.That(File.Exists(Path.Combine(reportRoot, "artifacts.json")), Is.True);
+            Assert.That(File.ReadAllText(Path.Combine(reportRoot, "Reporter Case.md")), Does.Contain("H=OfficialEditorWindowPanelSimulator; P=PanelSimulator; K=PanelSimulator"));
+            Assert.That(File.ReadAllText(Path.Combine(reportRoot, "Reporter Case.md")), Does.Contain("host=OfficialEditorWindowPanelSimulator; pointer=PanelSimulator; keyboard=PanelSimulator"));
+            Assert.That(File.ReadAllText(Path.Combine(reportRoot, "Reporter Case.md")), Does.Contain(ScreenshotManager.SourceWindowReadScreenPixel));
         }
 
         [Test]
@@ -147,6 +155,10 @@ headed: true
 reportPath: ConfigReports
 screenshotOnFailure: false
 defaultTimeoutMs: 1500
+preStepDelayMs: 80
+requireOfficialHost: true
+requireOfficialPointerDriver: true
+requireInputSystemKeyboardDriver: true
 ");
 
             string[] args =
@@ -157,6 +169,10 @@ defaultTimeoutMs: 1500
                 "-unityUIFlow.reportPath", "CliReports",
                 "-unityUIFlow.screenshotOnFailure", "true",
                 "-unityUIFlow.defaultTimeoutMs", "3000",
+                "-unityUIFlow.preStepDelayMs", "120",
+                "-unityUIFlow.requireOfficialHost", "false",
+                "-unityUIFlow.requireOfficialPointerDriver", "false",
+                "-unityUIFlow.requireInputSystemKeyboardDriver", "false",
             };
 
             CliOptions options = new CommandLineOptionsParser().Parse(args);
@@ -165,7 +181,87 @@ defaultTimeoutMs: 1500
             Assert.That(options.ReportPath, Is.EqualTo("CliReports"));
             Assert.That(options.ScreenshotOnFailure, Is.True);
             Assert.That(options.DefaultTimeoutMs, Is.EqualTo(3000));
+            Assert.That(options.PreStepDelayMs, Is.EqualTo(120));
+            Assert.That(options.RequireOfficialHost, Is.False);
+            Assert.That(options.RequireOfficialPointerDriver, Is.False);
+            Assert.That(options.RequireInputSystemKeyboardDriver, Is.False);
             Assert.That(options.ScreenshotPath, Is.EqualTo(Path.Combine("CliReports", "Screenshots")));
+        }
+
+        [Test]
+        public void CommandLineParser_PrefersEnvironmentValuesOverConfig()
+        {
+            string tempDir = CreateTempDirectory();
+            string configPath = Path.Combine(tempDir, "env-config.json");
+            File.WriteAllText(configPath, @"
+headed: true
+reportPath: ConfigReports
+screenshotOnFailure: false
+defaultTimeoutMs: 1500
+");
+
+            var environment = new Dictionary<string, string>
+            {
+                ["UNITY_UI_FLOW_CONFIG_FILE"] = configPath,
+                ["UNITY_UI_FLOW_HEADED"] = "false",
+                ["UNITY_UI_FLOW_REPORT_PATH"] = "EnvReports",
+                ["UNITY_UI_FLOW_SCREENSHOT_ON_FAILURE"] = "true",
+                ["UNITY_UI_FLOW_DEFAULT_TIMEOUT_MS"] = "2200",
+            };
+
+            CliOptions options = new CommandLineOptionsParser().Parse(new[] { "Unity.exe" }, environment);
+
+            Assert.That(options.ConfigFile, Is.EqualTo(configPath));
+            Assert.That(options.Headed, Is.False);
+            Assert.That(options.ReportPath, Is.EqualTo("EnvReports"));
+            Assert.That(options.ScreenshotOnFailure, Is.True);
+            Assert.That(options.DefaultTimeoutMs, Is.EqualTo(2200));
+            Assert.That(options.ScreenshotPath, Is.EqualTo(Path.Combine("EnvReports", "Screenshots")));
+        }
+
+        [Test]
+        public void CommandLineParser_PrefersCliValuesOverEnvironment()
+        {
+            var environment = new Dictionary<string, string>
+            {
+                ["UNITY_UI_FLOW_HEADED"] = "false",
+                ["UNITY_UI_FLOW_REPORT_PATH"] = "EnvReports",
+                ["UNITY_UI_FLOW_DEFAULT_TIMEOUT_MS"] = "2200",
+            };
+
+            string[] args =
+            {
+                "Unity.exe",
+                "-unityUIFlow.headed", "true",
+                "-unityUIFlow.reportPath", "CliReports",
+                "-unityUIFlow.defaultTimeoutMs", "3300",
+            };
+
+            CliOptions options = new CommandLineOptionsParser().Parse(args, environment);
+
+            Assert.That(options.Headed, Is.True);
+            Assert.That(options.ReportPath, Is.EqualTo("CliReports"));
+            Assert.That(options.DefaultTimeoutMs, Is.EqualTo(3300));
+        }
+
+        [Test]
+        public void CommandLineParser_ToTestOptions_MapsStrictFlags()
+        {
+            CliOptions cliOptions = new CommandLineOptionsParser().Parse(new[]
+            {
+                "Unity.exe",
+                "-unityUIFlow.requireOfficialHost", "true",
+                "-unityUIFlow.requireOfficialPointerDriver", "true",
+                "-unityUIFlow.requireInputSystemKeyboardDriver", "true",
+                "-unityUIFlow.preStepDelayMs", "240",
+            });
+
+            TestOptions options = new CommandLineOptionsParser().ToTestOptions(cliOptions);
+
+            Assert.That(options.RequireOfficialHost, Is.True);
+            Assert.That(options.RequireOfficialPointerDriver, Is.True);
+            Assert.That(options.RequireInputSystemKeyboardDriver, Is.True);
+            Assert.That(options.PreStepDelayMs, Is.EqualTo(240));
         }
 
         [Test]
@@ -219,26 +315,41 @@ defaultTimeoutMs: 1500
             UnityUIFlowProjectSettings settings = UnityUIFlowProjectSettings.instance;
             bool previousVerbose = settings.AlwaysEnableVerboseLog;
             int previousDelay = settings.PreStepDelayMs;
+            bool previousRequireOfficialHost = settings.RequireOfficialHostByDefault;
+            bool previousRequireOfficialPointerDriver = settings.RequireOfficialPointerDriverByDefault;
+            bool previousRequireInputSystemKeyboardDriver = settings.RequireInputSystemKeyboardDriverByDefault;
 
             try
             {
                 settings.AlwaysEnableVerboseLog = true;
                 settings.PreStepDelayMs = 1000;
+                settings.RequireOfficialHostByDefault = true;
+                settings.RequireOfficialPointerDriverByDefault = true;
+                settings.RequireInputSystemKeyboardDriverByDefault = true;
 
                 TestOptions resolved = UnityUIFlowProjectSettingsUtility.ApplyOverrides(new TestOptions
                 {
                     Headed = true,
                     EnableVerboseLog = false,
                     PreStepDelayMs = 0,
+                    RequireOfficialHost = false,
+                    RequireOfficialPointerDriver = false,
+                    RequireInputSystemKeyboardDriver = false,
                 });
 
                 Assert.That(resolved.EnableVerboseLog, Is.True);
                 Assert.That(resolved.PreStepDelayMs, Is.EqualTo(1000));
+                Assert.That(resolved.RequireOfficialHost, Is.True);
+                Assert.That(resolved.RequireOfficialPointerDriver, Is.True);
+                Assert.That(resolved.RequireInputSystemKeyboardDriver, Is.True);
             }
             finally
             {
                 settings.AlwaysEnableVerboseLog = previousVerbose;
                 settings.PreStepDelayMs = previousDelay;
+                settings.RequireOfficialHostByDefault = previousRequireOfficialHost;
+                settings.RequireOfficialPointerDriverByDefault = previousRequireOfficialPointerDriver;
+                settings.RequireInputSystemKeyboardDriverByDefault = previousRequireInputSystemKeyboardDriver;
             }
         }
 
@@ -248,11 +359,17 @@ defaultTimeoutMs: 1500
             UnityUIFlowProjectSettings settings = UnityUIFlowProjectSettings.instance;
             bool previousVerbose = settings.AlwaysEnableVerboseLog;
             int previousDelay = settings.PreStepDelayMs;
+            bool previousRequireOfficialHost = settings.RequireOfficialHostByDefault;
+            bool previousRequireOfficialPointerDriver = settings.RequireOfficialPointerDriverByDefault;
+            bool previousRequireInputSystemKeyboardDriver = settings.RequireInputSystemKeyboardDriverByDefault;
 
             try
             {
                 settings.AlwaysEnableVerboseLog = false;
                 settings.PreStepDelayMs = 1000;
+                settings.RequireOfficialHostByDefault = false;
+                settings.RequireOfficialPointerDriverByDefault = false;
+                settings.RequireInputSystemKeyboardDriverByDefault = false;
 
                 TestOptions resolved = UnityUIFlowProjectSettingsUtility.ApplyOverrides(new TestOptions
                 {
@@ -268,6 +385,9 @@ defaultTimeoutMs: 1500
             {
                 settings.AlwaysEnableVerboseLog = previousVerbose;
                 settings.PreStepDelayMs = previousDelay;
+                settings.RequireOfficialHostByDefault = previousRequireOfficialHost;
+                settings.RequireOfficialPointerDriverByDefault = previousRequireOfficialPointerDriver;
+                settings.RequireInputSystemKeyboardDriverByDefault = previousRequireInputSystemKeyboardDriver;
             }
         }
 
@@ -277,25 +397,40 @@ defaultTimeoutMs: 1500
             UnityUIFlowProjectSettings settings = UnityUIFlowProjectSettings.instance;
             bool previousVerbose = settings.AlwaysEnableVerboseLog;
             int previousDelay = settings.PreStepDelayMs;
+            bool previousRequireOfficialHost = settings.RequireOfficialHostByDefault;
+            bool previousRequireOfficialPointerDriver = settings.RequireOfficialPointerDriverByDefault;
+            bool previousRequireInputSystemKeyboardDriver = settings.RequireInputSystemKeyboardDriverByDefault;
 
             try
             {
                 settings.AlwaysEnableVerboseLog = false;
                 settings.PreStepDelayMs = 0;
+                settings.RequireOfficialHostByDefault = false;
+                settings.RequireOfficialPointerDriverByDefault = false;
+                settings.RequireInputSystemKeyboardDriverByDefault = false;
 
                 TestOptions resolved = UnityUIFlowProjectSettingsUtility.ApplyOverrides(new TestOptions
                 {
                     EnableVerboseLog = false,
                     PreStepDelayMs = 250,
+                    RequireOfficialHost = true,
+                    RequireOfficialPointerDriver = true,
+                    RequireInputSystemKeyboardDriver = true,
                 });
 
                 Assert.That(resolved.EnableVerboseLog, Is.False);
                 Assert.That(resolved.PreStepDelayMs, Is.EqualTo(250));
+                Assert.That(resolved.RequireOfficialHost, Is.True);
+                Assert.That(resolved.RequireOfficialPointerDriver, Is.True);
+                Assert.That(resolved.RequireInputSystemKeyboardDriver, Is.True);
             }
             finally
             {
                 settings.AlwaysEnableVerboseLog = previousVerbose;
                 settings.PreStepDelayMs = previousDelay;
+                settings.RequireOfficialHostByDefault = previousRequireOfficialHost;
+                settings.RequireOfficialPointerDriverByDefault = previousRequireOfficialPointerDriver;
+                settings.RequireInputSystemKeyboardDriverByDefault = previousRequireInputSystemKeyboardDriver;
             }
         }
 
@@ -305,6 +440,17 @@ defaultTimeoutMs: 1500
             Assert.That(YamlTestCaseFilter.Match("01-*", "Assets/UnityUIFlow/Samples/Yaml/01-basic-login.yaml", "Basic Login"), Is.True);
             Assert.That(YamlTestCaseFilter.Match("*Selectors", "Assets/UnityUIFlow/Samples/Yaml/03-assertions-and-selectors.yaml", "Assertions And Selectors"), Is.True);
             Assert.That(YamlTestCaseFilter.Match("NoMatch*", "Assets/UnityUIFlow/Samples/Yaml/01-basic-login.yaml", "Basic Login"), Is.False);
+        }
+
+        [Test]
+        public void CustomActionWhitelist_LoadsConfiguredAssemblies()
+        {
+            HashSet<string> assemblies = UnityUIFlowConfigResolver.GetCustomActionAssemblyWhitelist();
+            var registry = new ActionRegistry();
+
+            Assert.That(assemblies, Does.Contain("Assembly-CSharp"));
+            Assert.That(assemblies, Does.Contain("UnityUIFlow.Tests"));
+            Assert.That(registry.HasAction("custom_login"), Is.True);
         }
 
         [Test]

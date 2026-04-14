@@ -1,0 +1,17 @@
+name: Coverage Repeat Button And Toolbar Popup Search
+fixture:
+  host_window:
+    type: UnityUIFlow.Examples.ExampleCoverageInputWindow
+    reopen_if_open: true
+steps:
+  - action: click
+    selector: "#repeat-button"
+  - action: assert_text
+    selector: "#gesture-status"
+    expected: "Repeat: clicked"
+  - action: set_value
+    selector: "#toolbar-popup-search-input"
+    value: "prefab"
+  - action: assert_text
+    selector: "#toolbar-status"
+    expected: "Toolbar: popup-search=prefab"

@@ -1,0 +1,40 @@
+name: Coverage Menus And Commands
+fixture:
+  host_window:
+    type: UnityUIFlow.Examples.ExampleCoverageInputWindow
+    reopen_if_open: true
+steps:
+  - action: open_context_menu
+    selector: "#context-target"
+  - action: assert_menu_item
+    item: "Copy"
+  - action: assert_menu_item_disabled
+    item: "Paste"
+  - action: select_context_menu_item
+    item: "Copy"
+  - action: assert_text
+    selector: "#command-status"
+    expected: "Context: Copy"
+  - action: open_popup_menu
+    selector: "#toolbar-menu"
+  - action: assert_menu_item
+    item: "Refresh"
+  - action: assert_menu_item_disabled
+    item: "Disabled"
+  - action: select_popup_menu_item
+    item: "Reset"
+  - action: assert_text
+    selector: "#toolbar-status"
+    expected: "Toolbar: reset"
+  - action: validate_command
+    selector: "#command-input"
+    command: "Copy"
+  - action: assert_text
+    selector: "#command-status"
+    expected: "Validate: Copy"
+  - action: execute_command
+    selector: "#command-input"
+    command: "Paste"
+  - action: assert_text
+    selector: "#command-status"
+    expected: "Execute: Paste"

@@ -128,8 +128,9 @@ namespace UnityUIFlow
         private TextField _yamlPathField;
         private Label _statusLabel;
         private Label _stepLabel;
+        private Label _driverLabel;
+        private Label _driverDetailsLabel;
         private HelpBox _errorBox;
-        private bool _continueOnStepFailure;
 
         [MenuItem("UnityUIFlow/UnityUIFlow")]
         public static void Open()
@@ -142,6 +143,7 @@ namespace UnityUIFlow
 
         private void OnEnable()
         {
+            HeadedWindowPreferences.Load(_state);
             _state.SelectedYamlPath = HeadedYamlPathPreferences.Load(_state.SelectedYamlPath);
             BuildUi();
             HeadedRunEventBus.RunAttached += OnRunAttached;
@@ -202,27 +204,77 @@ namespace UnityUIFlow
             buttonRow.Add(CreateButton("Settings", OpenSettings));
 
             var runModeField = new EnumField("Run Mode", _state.RunMode);
-            runModeField.RegisterValueChangedCallback(evt => _state.RunMode = (HeadedRunMode)evt.newValue);
+            runModeField.RegisterValueChangedCallback(evt =>
+            {
+                _state.RunMode = (HeadedRunMode)evt.newValue;
+                HeadedWindowPreferences.Save(_state);
+            });
             rootVisualElement.Add(runModeField);
 
             var failurePolicyField = new EnumField("Failure Policy", _state.FailurePolicy);
-            failurePolicyField.RegisterValueChangedCallback(evt => _state.FailurePolicy = (HeadedFailurePolicy)evt.newValue);
+            failurePolicyField.RegisterValueChangedCallback(evt =>
+            {
+                _state.FailurePolicy = (HeadedFailurePolicy)evt.newValue;
+                HeadedWindowPreferences.Save(_state);
+            });
             rootVisualElement.Add(failurePolicyField);
 
             var continueToggle = new Toggle("Continue After Step Failure")
             {
-                value = _continueOnStepFailure,
+                value = _state.ContinueOnStepFailure,
             };
-            continueToggle.RegisterValueChangedCallback(evt => _continueOnStepFailure = evt.newValue);
+            continueToggle.RegisterValueChangedCallback(evt =>
+            {
+                _state.ContinueOnStepFailure = evt.newValue;
+                HeadedWindowPreferences.Save(_state);
+            });
             rootVisualElement.Add(continueToggle);
+
+            var requireOfficialHostToggle = new Toggle("Require Official Host")
+            {
+                value = _state.RequireOfficialHost,
+            };
+            requireOfficialHostToggle.RegisterValueChangedCallback(evt =>
+            {
+                _state.RequireOfficialHost = evt.newValue;
+                HeadedWindowPreferences.Save(_state);
+            });
+            rootVisualElement.Add(requireOfficialHostToggle);
+
+            var requireOfficialPointerToggle = new Toggle("Require Official Pointer Driver")
+            {
+                value = _state.RequireOfficialPointerDriver,
+            };
+            requireOfficialPointerToggle.RegisterValueChangedCallback(evt =>
+            {
+                _state.RequireOfficialPointerDriver = evt.newValue;
+                HeadedWindowPreferences.Save(_state);
+            });
+            rootVisualElement.Add(requireOfficialPointerToggle);
+
+            var requireInputSystemKeyboardToggle = new Toggle("Require InputSystem Keyboard Driver")
+            {
+                value = _state.RequireInputSystemKeyboardDriver,
+            };
+            requireInputSystemKeyboardToggle.RegisterValueChangedCallback(evt =>
+            {
+                _state.RequireInputSystemKeyboardDriver = evt.newValue;
+                HeadedWindowPreferences.Save(_state);
+            });
+            rootVisualElement.Add(requireInputSystemKeyboardToggle);
 
             _statusLabel = new Label("Status: Idle");
             _stepLabel = new Label("Current Step: -");
+            _driverLabel = new Label("Drivers: H=- | P=- | K=-");
+            _driverDetailsLabel = new Label("Driver Details: -");
+            _driverDetailsLabel.style.whiteSpace = WhiteSpace.Normal;
             _errorBox = new HelpBox(string.Empty, HelpBoxMessageType.None);
             _errorBox.style.display = DisplayStyle.None;
 
             rootVisualElement.Add(_statusLabel);
             rootVisualElement.Add(_stepLabel);
+            rootVisualElement.Add(_driverLabel);
+            rootVisualElement.Add(_driverDetailsLabel);
             rootVisualElement.Add(_errorBox);
         }
         private Button CreateButton(string text, Action onClick)
@@ -267,10 +319,14 @@ namespace UnityUIFlow
                 await runner.RunFileAsync(_state.SelectedYamlPath, new TestOptions
                 {
                     Headed = true,
+                    DebugOnFailure = _state.FailurePolicy == HeadedFailurePolicy.Pause,
                     ReportOutputPath = "Reports",
                     ScreenshotPath = "Reports/Screenshots",
                     ScreenshotOnFailure = true,
-                    ContinueOnStepFailure = _continueOnStepFailure,
+                    ContinueOnStepFailure = _state.ContinueOnStepFailure,
+                    RequireOfficialHost = _state.RequireOfficialHost,
+                    RequireOfficialPointerDriver = _state.RequireOfficialPointerDriver,
+                    RequireInputSystemKeyboardDriver = _state.RequireInputSystemKeyboardDriver,
                     EnableVerboseLog = UnityUIFlowMenuItems.IsVerboseLogEnabled,
                 });
             }
@@ -312,6 +368,10 @@ namespace UnityUIFlow
             _runtimeController = controller;
             _runtimeController.RunMode = _state.RunMode;
             _state.RunnerState = HeadedRunnerState.Running;
+            _state.CurrentHostDriver = null;
+            _state.CurrentPointerDriver = null;
+            _state.CurrentKeyboardDriver = null;
+            _state.CurrentDriverDetails = null;
             RefreshLabels();
         }
 
@@ -342,6 +402,11 @@ namespace UnityUIFlow
 
         private void OnStepCompleted(ExecutableStep step, StepResult result, VisualElement element)
         {
+            _state.CurrentHostDriver = result.HostDriver;
+            _state.CurrentPointerDriver = result.PointerDriver;
+            _state.CurrentKeyboardDriver = result.KeyboardDriver;
+            _state.CurrentDriverDetails = result.DriverDetails;
+
             if (element != null)
             {
                 _overlayRenderer.Highlight(element);
@@ -361,14 +426,9 @@ namespace UnityUIFlow
         private void OnFailure(ExecutableStep step, StepResult result)
         {
             ShowError(result.ErrorMessage);
-            _state.RunnerState = _state.FailurePolicy == HeadedFailurePolicy.Pause
+            _state.RunnerState = _runtimeController != null && _runtimeController.IsPaused
                 ? HeadedRunnerState.Paused
                 : HeadedRunnerState.Failed;
-            if (_state.FailurePolicy == HeadedFailurePolicy.Pause)
-            {
-                _runtimeController?.Pause();
-            }
-
             RefreshLabels();
         }
 
@@ -424,7 +484,38 @@ namespace UnityUIFlow
         {
             _statusLabel.text = $"Status: {_state.RunnerState}";
             _stepLabel.text = $"Current Step: {(_state.CurrentStepName ?? "-")}";
+            string host = string.IsNullOrWhiteSpace(_state.CurrentHostDriver) ? "-" : _state.CurrentHostDriver;
+            string pointer = string.IsNullOrWhiteSpace(_state.CurrentPointerDriver) ? "-" : _state.CurrentPointerDriver;
+            string keyboard = string.IsNullOrWhiteSpace(_state.CurrentKeyboardDriver) ? "-" : _state.CurrentKeyboardDriver;
+            _driverLabel.text = $"Drivers: H={host} | P={pointer} | K={keyboard}";
+            _driverDetailsLabel.text = $"Driver Details: {(_state.CurrentDriverDetails ?? "-")}";
             Repaint();
+        }
+    }
+
+    internal static class HeadedWindowPreferences
+    {
+        private const string Prefix = "UnityUIFlow.Headed.";
+
+        public static void Load(HeadedPanelState state)
+        {
+            UnityUIFlowProjectSettings settings = UnityUIFlowProjectSettings.instance;
+            state.ContinueOnStepFailure = EditorPrefs.GetBool(Prefix + nameof(HeadedPanelState.ContinueOnStepFailure), false);
+            state.RunMode = (HeadedRunMode)EditorPrefs.GetInt(Prefix + nameof(HeadedPanelState.RunMode), (int)HeadedRunMode.Continuous);
+            state.FailurePolicy = (HeadedFailurePolicy)EditorPrefs.GetInt(Prefix + nameof(HeadedPanelState.FailurePolicy), (int)HeadedFailurePolicy.Pause);
+            state.RequireOfficialHost = EditorPrefs.GetBool(Prefix + nameof(HeadedPanelState.RequireOfficialHost), settings.RequireOfficialHostByDefault);
+            state.RequireOfficialPointerDriver = EditorPrefs.GetBool(Prefix + nameof(HeadedPanelState.RequireOfficialPointerDriver), settings.RequireOfficialPointerDriverByDefault);
+            state.RequireInputSystemKeyboardDriver = EditorPrefs.GetBool(Prefix + nameof(HeadedPanelState.RequireInputSystemKeyboardDriver), settings.RequireInputSystemKeyboardDriverByDefault);
+        }
+
+        public static void Save(HeadedPanelState state)
+        {
+            EditorPrefs.SetBool(Prefix + nameof(HeadedPanelState.ContinueOnStepFailure), state.ContinueOnStepFailure);
+            EditorPrefs.SetInt(Prefix + nameof(HeadedPanelState.RunMode), (int)state.RunMode);
+            EditorPrefs.SetInt(Prefix + nameof(HeadedPanelState.FailurePolicy), (int)state.FailurePolicy);
+            EditorPrefs.SetBool(Prefix + nameof(HeadedPanelState.RequireOfficialHost), state.RequireOfficialHost);
+            EditorPrefs.SetBool(Prefix + nameof(HeadedPanelState.RequireOfficialPointerDriver), state.RequireOfficialPointerDriver);
+            EditorPrefs.SetBool(Prefix + nameof(HeadedPanelState.RequireInputSystemKeyboardDriver), state.RequireInputSystemKeyboardDriver);
         }
     }
 

@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using UnityEditor;
 using UnityEngine;
 using YamlDotNet.Serialization;
 
@@ -18,7 +19,7 @@ namespace UnityUIFlow
         {
             if (string.IsNullOrWhiteSpace(path))
             {
-                throw new UnityUIFlowException(ErrorCodes.ReportOutputUnavailable, $"报告目录不可写：{path}");
+                throw new UnityUIFlowException(ErrorCodes.ReportOutputUnavailable, $"Report directory is unavailable: {path}");
             }
 
             Directory.CreateDirectory(path);
@@ -65,14 +66,23 @@ namespace UnityUIFlow
     /// </summary>
     public sealed class ScreenshotManager
     {
+        public const string SourceWindowReadScreenPixel = "window-readscreenpixel";
+        public const string SourceFocusedWindowReadScreenPixel = "focused-window-readscreenpixel";
+        public const string SourceDisplayCaptureCrop = "display-capture-crop";
+        public const string SourceFallbackTexture = "fallback-texture";
+
         private readonly TestOptions _options;
         private readonly ReportPathBuilder _pathBuilder = new ReportPathBuilder();
+        private readonly Func<EditorWindow> _windowProvider;
 
-        public ScreenshotManager(TestOptions options)
+        public ScreenshotManager(TestOptions options, Func<EditorWindow> windowProvider = null)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _windowProvider = windowProvider;
             _pathBuilder.EnsureDirectory(_options.ScreenshotPath);
         }
+
+        public string LastCaptureSource { get; private set; }
 
         /// <summary>
         /// Captures a screenshot asynchronously.
@@ -83,7 +93,7 @@ namespace UnityUIFlow
 
             if (string.IsNullOrWhiteSpace(tag) || tag.Length > 64)
             {
-                throw new UnityUIFlowException(ErrorCodes.ScreenshotArgumentInvalid, $"截图参数非法：{tag}");
+                throw new UnityUIFlowException(ErrorCodes.ScreenshotArgumentInvalid, $"Screenshot tag is invalid: {tag}");
             }
 
             string path = _pathBuilder.BuildScreenshotPath(_options.ScreenshotPath, caseName, stepIndex, tag);
@@ -100,27 +110,243 @@ namespace UnityUIFlow
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath) ?? _options.ScreenshotPath);
-                Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                try
+
+                LastCaptureSource = null;
+
+                if (TryCaptureRealScreenshot(out byte[] pngBytes, out string captureSource) && pngBytes != null && pngBytes.Length > 0)
                 {
-                    texture.SetPixel(0, 0, new Color(0.15f, 0.15f, 0.15f, 1f));
-                    texture.SetPixel(1, 0, new Color(0.3f, 0.3f, 0.3f, 1f));
-                    texture.SetPixel(0, 1, new Color(0.85f, 0.2f, 0.2f, 1f));
-                    texture.SetPixel(1, 1, new Color(0.9f, 0.9f, 0.9f, 1f));
-                    texture.Apply();
-                    File.WriteAllBytes(filePath, texture.EncodeToPNG());
+                    LastCaptureSource = captureSource;
+                    File.WriteAllBytes(filePath, pngBytes);
                 }
-                finally
+                else
                 {
-                    UnityEngine.Object.DestroyImmediate(texture);
+                    LastCaptureSource = SourceFallbackTexture;
+                    Texture2D fallbackTexture = CreateFallbackTexture();
+                    try
+                    {
+                        File.WriteAllBytes(filePath, fallbackTexture.EncodeToPNG());
+                    }
+                    finally
+                    {
+                        UnityEngine.Object.DestroyImmediate(fallbackTexture);
+                    }
                 }
 
                 return filePath;
             }
             catch (Exception ex)
             {
-                throw new UnityUIFlowException(ErrorCodes.ScreenshotSaveFailed, $"截图保存失败：{Path.GetFileName(filePath)}", ex);
+                throw new UnityUIFlowException(ErrorCodes.ScreenshotSaveFailed, $"Failed to save screenshot: {Path.GetFileName(filePath)}", ex);
             }
+        }
+
+        private bool TryCaptureRealScreenshot(out byte[] pngBytes, out string captureSource)
+        {
+            pngBytes = null;
+            captureSource = null;
+
+            EditorWindow preferredWindow = ResolveCaptureWindow();
+            if (TryCaptureWindow(preferredWindow, out Texture2D windowTexture))
+            {
+                try
+                {
+                    pngBytes = windowTexture.EncodeToPNG();
+                    captureSource = SourceWindowReadScreenPixel;
+                    return pngBytes != null && pngBytes.Length > 0;
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(windowTexture);
+                }
+            }
+
+            if (TryCaptureWindow(EditorWindow.focusedWindow, out Texture2D focusedWindowTexture))
+            {
+                try
+                {
+                    pngBytes = focusedWindowTexture.EncodeToPNG();
+                    captureSource = SourceFocusedWindowReadScreenPixel;
+                    return pngBytes != null && pngBytes.Length > 0;
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(focusedWindowTexture);
+                }
+            }
+
+            if (TryCaptureFullDisplay(preferredWindow, out Texture2D displayTexture))
+            {
+                try
+                {
+                    pngBytes = displayTexture.EncodeToPNG();
+                    captureSource = SourceDisplayCaptureCrop;
+                    return pngBytes != null && pngBytes.Length > 0;
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(displayTexture);
+                }
+            }
+
+            return false;
+        }
+
+        private EditorWindow ResolveCaptureWindow()
+        {
+            try
+            {
+                EditorWindow provided = _windowProvider?.Invoke();
+                if (provided != null)
+                {
+                    return provided;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[UnityUIFlow] Failed to resolve screenshot host window: {ex.Message}");
+            }
+
+            return EditorWindow.focusedWindow;
+        }
+
+        private static bool TryCaptureWindow(EditorWindow window, out Texture2D texture)
+        {
+            texture = null;
+            if (window == null)
+            {
+                return false;
+            }
+
+            Rect windowRect = window.position;
+            if (windowRect.width < 2f || windowRect.height < 2f)
+            {
+                return false;
+            }
+
+            int screenHeight = GetScreenHeight();
+            if (screenHeight <= 0)
+            {
+                return false;
+            }
+
+            float pixelsPerPoint = Mathf.Max(1f, EditorGUIUtility.pixelsPerPoint);
+            int width = Mathf.Max(2, Mathf.RoundToInt(windowRect.width * pixelsPerPoint));
+            int height = Mathf.Max(2, Mathf.RoundToInt(windowRect.height * pixelsPerPoint));
+            Vector2 readPosition = new Vector2(
+                Mathf.Max(0f, windowRect.xMin * pixelsPerPoint),
+                Mathf.Max(0f, screenHeight - (windowRect.yMax * pixelsPerPoint)));
+
+            Color[] pixels = ReadScreenPixels(readPosition, width, height);
+            if (pixels == null || pixels.Length != width * height)
+            {
+                return false;
+            }
+
+            texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            texture.SetPixels(pixels);
+            texture.Apply();
+            return true;
+        }
+
+        private static bool TryCaptureFullDisplay(EditorWindow window, out Texture2D capturedTexture)
+        {
+            capturedTexture = null;
+            Texture2D fullTexture = null;
+            try
+            {
+                fullTexture = ScreenCapture.CaptureScreenshotAsTexture();
+                if (fullTexture == null)
+                {
+                    return false;
+                }
+
+                RectInt cropRect = BuildCropRect(window, fullTexture.width, fullTexture.height);
+                if (cropRect.width < 2 || cropRect.height < 2)
+                {
+                    capturedTexture = fullTexture;
+                    fullTexture = null;
+                    return true;
+                }
+
+                int sourceY = Mathf.Clamp(fullTexture.height - cropRect.y - cropRect.height, 0, Mathf.Max(0, fullTexture.height - cropRect.height));
+                Color[] pixels = fullTexture.GetPixels(cropRect.x, sourceY, cropRect.width, cropRect.height);
+                var cropped = new Texture2D(cropRect.width, cropRect.height, TextureFormat.RGBA32, false);
+                cropped.SetPixels(pixels);
+                cropped.Apply();
+                capturedTexture = cropped;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                if (fullTexture != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(fullTexture);
+                }
+            }
+        }
+
+        private static RectInt BuildCropRect(EditorWindow window, int textureWidth, int textureHeight)
+        {
+            if (window == null)
+            {
+                return new RectInt(0, 0, textureWidth, textureHeight);
+            }
+
+            float pixelsPerPoint = Mathf.Max(1f, EditorGUIUtility.pixelsPerPoint);
+            Rect rect = window.position;
+            int x = Mathf.Clamp(Mathf.RoundToInt(rect.xMin * pixelsPerPoint), 0, Mathf.Max(0, textureWidth - 2));
+            int y = Mathf.Clamp(Mathf.RoundToInt(rect.yMin * pixelsPerPoint), 0, Mathf.Max(0, textureHeight - 2));
+            int width = Mathf.Clamp(Mathf.RoundToInt(rect.width * pixelsPerPoint), 2, Mathf.Max(2, textureWidth - x));
+            int height = Mathf.Clamp(Mathf.RoundToInt(rect.height * pixelsPerPoint), 2, Mathf.Max(2, textureHeight - y));
+            return new RectInt(x, y, width, height);
+        }
+
+        private static int GetScreenHeight()
+        {
+            if (Display.displays != null && Display.displays.Length > 0 && Display.displays[0] != null && Display.displays[0].systemHeight > 0)
+            {
+                return Display.displays[0].systemHeight;
+            }
+
+            return Screen.currentResolution.height;
+        }
+
+        private static Color[] ReadScreenPixels(Vector2 startPosition, int width, int height)
+        {
+            Type utilityType = Type.GetType("UnityEditorInternal.InternalEditorUtility, UnityEditor");
+            if (utilityType == null)
+            {
+                return null;
+            }
+
+            var method = utilityType.GetMethod(
+                "ReadScreenPixel",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic,
+                null,
+                new[] { typeof(Vector2), typeof(int), typeof(int) },
+                null);
+
+            if (method == null)
+            {
+                return null;
+            }
+
+            return method.Invoke(null, new object[] { startPosition, width, height }) as Color[];
+        }
+
+        private static Texture2D CreateFallbackTexture()
+        {
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            texture.SetPixel(0, 0, new Color(0.15f, 0.15f, 0.15f, 1f));
+            texture.SetPixel(1, 0, new Color(0.3f, 0.3f, 0.3f, 1f));
+            texture.SetPixel(0, 1, new Color(0.85f, 0.2f, 0.2f, 1f));
+            texture.SetPixel(1, 1, new Color(0.9f, 0.9f, 0.9f, 1f));
+            texture.Apply();
+            return texture;
         }
     }
 
@@ -189,9 +415,34 @@ namespace UnityUIFlow
                 EndedAtUtc = result.EndedAtUtc,
                 DurationMs = result.DurationMs,
                 ScreenshotPath = result.ScreenshotPath,
+                ScreenshotSource = result.ScreenshotSource,
                 ErrorCode = result.ErrorCode,
                 ErrorMessage = result.ErrorMessage,
+                HostDriver = result.HostDriver,
+                PointerDriver = result.PointerDriver,
+                KeyboardDriver = result.KeyboardDriver,
+                DriverDetails = result.DriverDetails,
             };
+
+            if (!string.IsNullOrWhiteSpace(result.HostDriver))
+            {
+                entry.Attachments.Add($"host-driver:{result.HostDriver}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.PointerDriver))
+            {
+                entry.Attachments.Add($"pointer-driver:{result.PointerDriver}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.KeyboardDriver))
+            {
+                entry.Attachments.Add($"keyboard-driver:{result.KeyboardDriver}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.DriverDetails))
+            {
+                entry.Attachments.Add($"driver-details:{result.DriverDetails}");
+            }
 
             if (attachments != null)
             {
@@ -215,17 +466,17 @@ namespace UnityUIFlow
             string markdownPath = _pathBuilder.BuildCaseMarkdownPath(_options.ReportRootPath, result.CaseName);
             string jsonPath = _pathBuilder.BuildCaseJsonPath(_options.ReportRootPath, result.CaseName);
             var markdown = new StringBuilder();
-            markdown.AppendLine($"# 测试报告：{result.CaseName}");
+            markdown.AppendLine($"# Test Report: {result.CaseName}");
             markdown.AppendLine();
-            markdown.AppendLine($"**状态**：{result.Status}");
-            markdown.AppendLine($"**开始时间**：{result.StartedAtUtc}");
-            markdown.AppendLine($"**结束时间**：{result.EndedAtUtc}");
-            markdown.AppendLine($"**耗时**：{result.DurationMs}ms");
+            markdown.AppendLine($"**Status**: {result.Status}");
+            markdown.AppendLine($"**Started At**: {result.StartedAtUtc}");
+            markdown.AppendLine($"**Ended At**: {result.EndedAtUtc}");
+            markdown.AppendLine($"**Duration**: {result.DurationMs}ms");
             markdown.AppendLine();
-            markdown.AppendLine("## 步骤详情");
+            markdown.AppendLine("## Step Details");
             markdown.AppendLine();
-            markdown.AppendLine("| 步骤 | 状态 | 耗时(ms) | 错误码 | 截图 |");
-            markdown.AppendLine("| --- | --- | --- | --- | --- |");
+            markdown.AppendLine("| Step | Status | Duration(ms) | Driver | Driver Details | Error Code | Screenshot Source | Screenshot |");
+            markdown.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- |");
 
             if (_buffer.TryGetValue(result.CaseName, out List<StepReportEntry> entries))
             {
@@ -233,8 +484,9 @@ namespace UnityUIFlow
                 {
                     string screenshot = string.IsNullOrWhiteSpace(entry.ScreenshotPath)
                         ? string.Empty
-                        : $"[查看]({entry.ScreenshotPath.Replace('\\', '/')})";
-                    markdown.AppendLine($"| {entry.StepName} | {entry.Status} | {entry.DurationMs} | {entry.ErrorCode ?? string.Empty} | {screenshot} |");
+                        : $"[View]({entry.ScreenshotPath.Replace('\\', '/')})";
+                    string details = string.IsNullOrWhiteSpace(entry.DriverDetails) ? string.Empty : entry.DriverDetails.Replace("|", "/");
+                    markdown.AppendLine($"| {entry.StepName} | {entry.Status} | {entry.DurationMs} | {BuildDriverSummary(entry.Attachments)} | {details} | {entry.ErrorCode ?? string.Empty} | {entry.ScreenshotSource ?? string.Empty} | {screenshot} |");
                 }
             }
 
@@ -250,13 +502,13 @@ namespace UnityUIFlow
             string markdownPath = _pathBuilder.BuildSuiteMarkdownPath(_options.ReportRootPath, _options.SuiteName);
             string jsonPath = _pathBuilder.BuildSuiteJsonPath(_options.ReportRootPath, _options.SuiteName);
             var markdown = new StringBuilder();
-            markdown.AppendLine($"# 套件报告：{_options.SuiteName ?? "suite-report"}");
+            markdown.AppendLine($"# Suite Report: {_options.SuiteName ?? "suite-report"}");
             markdown.AppendLine();
-            markdown.AppendLine($"**总计**：{result.Total} | **通过**：{result.Passed} | **失败**：{result.Failed} | **异常**：{result.Errors} | **跳过**：{result.Skipped}");
+            markdown.AppendLine($"**Total**: {result.Total} | **Passed**: {result.Passed} | **Failed**: {result.Failed} | **Errors**: {result.Errors} | **Skipped**: {result.Skipped}");
             markdown.AppendLine();
-            markdown.AppendLine("## 用例汇总");
+            markdown.AppendLine("## Cases");
             markdown.AppendLine();
-            markdown.AppendLine("| 用例 | 状态 | 耗时(ms) | 报告链接 |");
+            markdown.AppendLine("| Case | Status | Duration(ms) | Report |");
             markdown.AppendLine("| --- | --- | --- | --- |");
 
             foreach (TestResult caseResult in result.CaseResults)
@@ -273,13 +525,76 @@ namespace UnityUIFlow
         {
             if (string.IsNullOrWhiteSpace(caseName))
             {
-                throw new UnityUIFlowException(ErrorCodes.ReportWriteFailed, "测试用例名不能为空");
+                throw new UnityUIFlowException(ErrorCodes.ReportWriteFailed, "Test case name cannot be empty.");
             }
 
             if (caseName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             {
-                throw new UnityUIFlowException(ErrorCodes.ReportWriteFailed, $"测试用例名包含非法文件名字符：{caseName}");
+                throw new UnityUIFlowException(ErrorCodes.ReportWriteFailed, $"Test case name contains invalid file-name characters: {caseName}");
             }
+        }
+
+        private static string BuildDriverSummary(List<string> attachments)
+        {
+            if (attachments == null || attachments.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            string pointer = null;
+            string keyboard = null;
+            string host = null;
+            foreach (string attachment in attachments)
+            {
+                if (attachment != null && attachment.StartsWith("host-driver:", StringComparison.Ordinal))
+                {
+                    host = attachment.Substring("host-driver:".Length);
+                    continue;
+                }
+
+                if (attachment != null && attachment.StartsWith("pointer-driver:", StringComparison.Ordinal))
+                {
+                    pointer = attachment.Substring("pointer-driver:".Length);
+                    continue;
+                }
+
+                if (attachment != null && attachment.StartsWith("keyboard-driver:", StringComparison.Ordinal))
+                {
+                    keyboard = attachment.Substring("keyboard-driver:".Length);
+                }
+            }
+
+            if (host == null && pointer == null && keyboard == null)
+            {
+                return string.Empty;
+            }
+
+            if (host == null && pointer == null)
+            {
+                return $"K={keyboard}";
+            }
+
+            if (host == null && keyboard == null)
+            {
+                return $"P={pointer}";
+            }
+
+            if (pointer == null && keyboard == null)
+            {
+                return $"H={host}";
+            }
+
+            if (pointer == null)
+            {
+                return $"H={host}; K={keyboard}";
+            }
+
+            if (keyboard == null)
+            {
+                return $"H={host}; P={pointer}";
+            }
+
+            return $"H={host}; P={pointer}; K={keyboard}";
         }
     }
 }

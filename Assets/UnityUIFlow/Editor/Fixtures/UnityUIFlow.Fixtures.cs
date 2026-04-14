@@ -15,6 +15,8 @@ namespace UnityUIFlow
     public abstract class UnityUIFlowFixture<TWindow>
         where TWindow : EditorWindow
     {
+        private UnityUIFlowSimulationSession _simulationSession;
+
         /// <summary>
         /// Current test window.
         /// </summary>
@@ -44,6 +46,11 @@ namespace UnityUIFlow
         /// Current execution context when running YAML.
         /// </summary>
         protected ExecutionContext CurrentContext { get; private set; }
+
+        /// <summary>
+        /// Last action context created by ExecuteActionAsync.
+        /// </summary>
+        protected ActionContext LastActionContext { get; private set; }
 
         /// <summary>
         /// Whether the window is ready.
@@ -92,7 +99,16 @@ namespace UnityUIFlow
             }
 
             Finder = new ElementFinder();
-            Screenshot = new ScreenshotManager(CurrentOptions);
+            Screenshot = new ScreenshotManager(CurrentOptions, () => Window);
+            _simulationSession = new UnityUIFlowSimulationSession();
+            _simulationSession.BindEditorWindowHost(Window, $"EditorWindow.GetWindow<{typeof(TWindow).Name}>()");
+            if (CurrentOptions.RequireOfficialHost && !_simulationSession.HasExecutableOfficialHost)
+            {
+                throw new UnityUIFlowException(
+                    ErrorCodes.FixtureWindowCreateFailed,
+                    $"正式验收模式下未能创建官方测试宿主：{typeof(TWindow).Name}");
+            }
+
             IsWindowReady = true;
         }
 
@@ -108,6 +124,15 @@ namespace UnityUIFlow
             }
             finally
             {
+                try
+                {
+                    _simulationSession?.Dispose();
+                }
+                finally
+                {
+                    _simulationSession = null;
+                }
+
                 IsWindowReady = false;
                 if (Window != null)
                 {
@@ -119,6 +144,7 @@ namespace UnityUIFlow
                 Finder = null;
                 Screenshot = null;
                 CurrentContext = null;
+                LastActionContext = null;
             }
 
             yield return null;
@@ -165,8 +191,11 @@ namespace UnityUIFlow
                 CancellationToken = System.Threading.CancellationToken.None,
                 ScreenshotManager = Screenshot,
                 RuntimeController = new RuntimeController(),
+                Simulator = _simulationSession?.PointerDriver,
+                SimulationSession = _simulationSession,
             };
 
+            LastActionContext = context;
             return action.ExecuteAsync(Root, context, parameters);
         }
     }

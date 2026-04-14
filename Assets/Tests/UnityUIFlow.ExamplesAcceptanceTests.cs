@@ -12,22 +12,6 @@ namespace UnityUIFlow
 {
     public sealed class UnityUIFlowExamplesAcceptanceTests
     {
-        private static readonly string[] ExampleUxmlPaths =
-        {
-            "Assets/Examples/Uxml/ExampleBasicLoginWindow.uxml",
-            "Assets/Examples/Uxml/ExampleSelectorsWindow.uxml",
-            "Assets/Examples/Uxml/ExampleWaitForElementWindow.uxml",
-            "Assets/Examples/Uxml/ExampleConditionalLoopWindow.uxml",
-            "Assets/Examples/Uxml/ExampleCsvLoginWindow.uxml",
-            "Assets/Examples/Uxml/ExampleCustomActionWindow.uxml",
-            "Assets/Examples/Uxml/ExampleDoubleClickWindow.uxml",
-            "Assets/Examples/Uxml/ExamplePressKeyWindow.uxml",
-            "Assets/Examples/Uxml/ExampleHoverWindow.uxml",
-            "Assets/Examples/Uxml/ExampleDragWindow.uxml",
-            "Assets/Examples/Uxml/ExampleScrollWindow.uxml",
-            "Assets/Examples/Uxml/ExampleTypeTextWindow.uxml",
-        };
-
         [Test]
         public void Parser_ReadsHostWindowDefinition()
         {
@@ -52,9 +36,10 @@ steps:
         [Test]
         public void ExampleAssets_CanBeLoadedFromProject()
         {
-            foreach (string uxmlPath in ExampleUxmlPaths)
+            foreach (string uxmlPath in Directory.GetFiles("Assets/Examples/Uxml", "*.uxml", SearchOption.TopDirectoryOnly))
             {
-                Assert.That(AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(uxmlPath), Is.Not.Null, uxmlPath);
+                string normalizedPath = uxmlPath.Replace('\\', '/');
+                Assert.That(AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(normalizedPath), Is.Not.Null, normalizedPath);
             }
 
             Assert.That(AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/Examples/Uss/ExampleCommon.uss"), Is.Not.Null);
@@ -170,6 +155,25 @@ steps:
         public IEnumerator Example_TypeText_RunsSuccessfully()
         {
             yield return RunExampleAndAssertPassed("12-type-text.yaml");
+        }
+
+        [UnityTest]
+        public IEnumerator Example_AdvancedControls_RunsSuccessfully()
+        {
+            yield return RunExampleAndAssertPassed("13-advanced-controls.yaml");
+        }
+
+        [UnityTest]
+        public IEnumerator Example_AllYamlCasesInDirectory_RunSuccessfully()
+        {
+            string[] yamlFiles = Directory.GetFiles("Assets/Examples/Yaml", "*.yaml", SearchOption.TopDirectoryOnly);
+            System.Array.Sort(yamlFiles, System.StringComparer.OrdinalIgnoreCase);
+
+            foreach (string yamlPath in yamlFiles)
+            {
+                string fileName = Path.GetFileName(yamlPath);
+                yield return RunExampleAndAssertPassed(fileName);
+            }
         }
 
         private static IEnumerator RunExampleAndAssertPassed(string fileName)

@@ -33,5 +33,20 @@ namespace UnityUIFlow
 
             onCompleted?.Invoke(task.Result);
         }
+
+        public static IEnumerator AwaitFailure(Task task, Action<Exception> onFailed)
+        {
+            while (!task.IsCompleted)
+            {
+                yield return null;
+            }
+
+            if (task.Exception == null)
+            {
+                throw new Exception("Expected task to fail, but it completed successfully.");
+            }
+
+            onFailed?.Invoke(task.Exception.Flatten().InnerException);
+        }
     }
 }

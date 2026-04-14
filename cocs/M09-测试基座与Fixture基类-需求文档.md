@@ -1,14 +1,15 @@
 ﻿# M09 测试基座与Fixture基类 需求文档
 
-版本：1.2.0  
-日期：2026-04-10  
-状态：更新基线
+版本：1.3.0  
+日期：2026-04-11  
+状态：更新基线（补充当前环境官方宿主缺失与 strict 边界）
 
 ## 1. 模块职责
 
 - 负责：提供统一的 `UnityUIFlowFixture<TWindow>` 测试基座，管理测试窗口、根节点、共享查找器、截图管理器与 YAML 执行桥接。
 - 负责：为 C# 测试、Page Object 测试、YAML 回归测试提供一致的宿主环境。
-- 负责：定义当前 fallback 宿主与目标官方 `EditorWindowUITestFixture<TWindow>` 宿主的切换边界。
+- 负责：定义当前官方宿主桥接（`OfficialEditorWindowPanelSimulator`）与可选直接继承 `EditorWindowUITestFixture<TWindow>` 路径之间的边界。
+- 负责：在当前 Unity `6000.6.0a2` 环境中，把 `com.unity.ui.test-framework@6.3.0` 的官方宿主能力接入现有 fixture 生命周期。
 - 不负责：不负责 YAML 语法解析，不负责具体动作实现，不负责 CLI 参数解析。
 - 输入/输出：输入为目标 `EditorWindow` 类型、测试生命周期事件、YAML 文本或动作调用；输出为初始化完成的测试上下文、执行结果与清理状态。
 
@@ -32,8 +33,8 @@
 | 字段名 | 类型 | 必填/可选 | 语义 | 合法范围 | 默认值 |
 | --- | --- | --- | --- | --- | --- |
 | modeName | string | 必填 | 宿主模式名称 | `fallback_get_window`、`official_editor_window_fixture` | 无 |
-| hostFactory | string | 必填 | 窗口创建路径 | `EditorWindow.GetWindow<TWindow>()`、`EditorWindowUITestFixture<TWindow>` | 无 |
-| packageDependency | string | 必填 | 宿主模式所需依赖 | `none`、`com.unity.test-framework` | `none` |
+| hostFactory | string | 必填 | 窗口创建路径 | `EditorWindow.GetWindow<TWindow>()`、`OfficialEditorWindowPanelSimulator`、`EditorWindowUITestFixture<TWindow>` | 无 |
+| packageDependency | string | 必填 | 宿主模式所需依赖 | `none`、`com.unity.ui.test-framework` | `none` |
 | acceptanceAllowed | bool | 必填 | 是否可作为正式验收宿主 | `true`、`false` | `false` |
 | migrationStatus | string | 必填 | 当前状态 | `current`、`target`、`deprecated_after_migration` | 无 |
 | notes | string | 可选 | 备注 | 非空字符串或 `null` | `null` |
@@ -72,10 +73,11 @@
 2. `SetUp` 调用 `Window.Show()` 后等待一帧，再从 `Window.rootVisualElement` 取得 `Root`。
 3. `Finder` 与 `Screenshot` 在当前测试内只初始化一次。
 4. `ExecuteYamlStepsAsync` 始终使用当前 `Root` 作为执行根节点，不允许在 fixture 内另开第二宿主窗口。
+5. 当前环境已完成 `com.unity.ui.test-framework@6.3.0` 安装验证，fixture 会在 `SetUp` 后优先绑定 `OfficialEditorWindowPanelSimulator` 官方宿主桥接；仅在非官方入口时才保留 fallback 标识。
 
 ### 目标基线
 
-1. 正式验收模式下，`UnityUIFlowFixture<TWindow>` 必须建立到官方 `EditorWindowUITestFixture<TWindow>`（位于 `com.unity.test-framework`）的宿主桥接。
+1. 正式验收模式下，`UnityUIFlowFixture<TWindow>` 必须建立到 `com.unity.ui.test-framework@6.3.0` 的官方宿主桥接；当前实现为 `OfficialEditorWindowPanelSimulator`，可选增强路径为直接继承 `EditorWindowUITestFixture<TWindow>`。
 2. `Window`、`Root`、`Finder`、`Screenshot`、`CurrentOptions`、`CurrentContext` 这些对外字段名保持不变。
 3. 当前 `EditorWindow.GetWindow<TWindow>()` 路径只保留为迁移兼容模式，不再作为正式宿主能力宣称。
 4. Headed、YAML 执行、C# 直接动作执行必须共用同一宿主窗口与同一 `Root`。
@@ -94,7 +96,8 @@
 | `SetUp` 完成后 `Window` 不能为空 | `SetUp` 完成前 | Error | `测试窗口创建失败：{windowType}` |
 | `Root` 不能为空 | `SetUp` 完成前 | Error | `测试窗口根节点缺失：{windowType}` |
 | `ExecuteYamlStepsAsync` 的 YAML 内容不能为空 | 执行 YAML 前 | Error | `YAML 内容不能为空` |
-| 正式验收模式下不得继续使用 fallback 宿主 | Fixture 初始化前 | Error | `正式验收模式下必须使用官方 EditorWindowUITestFixture 宿主` |
+| 正式验收模式下不得继续使用 fallback 宿主 | Fixture 初始化前 | Error | `正式验收模式下必须使用官方宿主桥接` |
+| 当前环境未成功绑定官方宿主桥接时不得把 fallback 宿主记为官方宿主 | Fixture 初始化后 / 报告写入前 | Error | `当前环境缺失官方宿主能力，禁止把 fallback 宿主记为官方宿主` |
 
 ### 错误响应
 
@@ -105,6 +108,7 @@
 | YAML 内容为空 | FIXTURE_YAML_EMPTY | `YAML 内容不能为空` | 抛异常并终止当前测试 |
 | Fixture 上下文未就绪 | FIXTURE_CONTEXT_NOT_READY | `测试基座上下文未初始化` | 抛异常并终止当前测试 |
 | 清理失败 | FIXTURE_TEARDOWN_FAILED | `测试清理失败：{detail}` | 记录错误并继续 NUnit 清理流程 |
+| strict 模式下官方宿主缺失 | FIXTURE_WINDOW_CREATE_FAILED | `正式验收模式下未能创建官方测试宿主：{windowType}` | 抛异常并终止当前测试 |
 
 ## 7. 跨模块联动
 
@@ -114,7 +118,7 @@
 | M04 元素定位与等待 | 主动通知 | 通过 fixture 暴露统一 `Finder` 给测试代码与动作系统复用 | `ElementFinder` |
 | M05 动作系统与CSharp扩展 | 被动接收 | 通过 `ExecuteActionAsync` 为单动作测试提供标准 `ActionContext` | `UnityUIFlowFixture<TWindow>.ExecuteActionAsync` |
 | M07 报告与截图 | 被动接收 | 通过 fixture 复用 `ScreenshotManager` | `ScreenshotManager` |
-| M12 官方UI测试框架与输入系统测试接入 | 被动接收 | 将当前 fallback 宿主升级为 `com.unity.test-framework` 中的 `EditorWindowUITestFixture<TWindow>` | `UnityUIFlowFixture<TWindow>`、`EditorWindowUITestFixture<TWindow>` `(目标基线)` |
+| M12 官方UI测试框架与输入系统测试接入 | 被动接收 | 将当前宿主升级为 `com.unity.ui.test-framework` 的官方宿主桥接（当前为 `OfficialEditorWindowPanelSimulator`，可选直接继承 `EditorWindowUITestFixture<TWindow>`） | `UnityUIFlowFixture<TWindow>`、`EditorWindowPanelSimulator`、`EditorWindowUITestFixture<TWindow>` |
 
 ## 8. 技术实现要点
 
@@ -122,8 +126,10 @@
   - `UnityUIFlowFixture<TWindow>`：当前统一测试基座。
   - `UnityUIFlowFixture<TWindow>.SetUp` / `TearDown`：当前生命周期入口。
   - `UnityUIFlowFixture<TWindow>.ExecuteYamlStepsAsync`：当前 YAML 执行桥接入口。
-  - `EditorWindowUITestFixture<TWindow>` `(目标基线，待接入)`：官方宿主基类。
-  - `OfficialFixtureBridge` `(设计提案，实现时确认)`：负责把官方宿主与现有 fixture 外部接口对齐。
+  - `OfficialUiToolkitTestAvailability`：负责探测当前环境是否真实存在官方宿主符号。
+  - `UnityUIFlowSimulationSession`：负责记录当前测试实际使用的宿主标识与驱动标识，并绑定官方 `EditorWindowPanelSimulator`。
+  - `OfficialEditorWindowHostBridge`：负责把 `EditorWindow` 与官方 `EditorWindowPanelSimulator` 对齐。
+  - `EditorWindowUITestFixture<TWindow>`：官方宿主基类；当前不是唯一实现路径，但仍是后续可选增强方向。
 
 - 核心流程：
 
@@ -132,8 +138,10 @@
 -> CreateDefaultOptions()
 -> Create host window
    -> current: EditorWindow.GetWindow<TWindow>()
-   -> target: EditorWindowUITestFixture<TWindow>
+   -> current official path: OfficialEditorWindowPanelSimulator bridge
+   -> optional future path: direct EditorWindowUITestFixture<TWindow>
 -> Wait one frame until Root is ready
+-> Bind UnityUIFlowSimulationSession official host if available
 -> Initialize Finder / Screenshot / IsWindowReady
 -> Execute test body / ExecuteYamlStepsAsync / ExecuteActionAsync
 -> [UnityTearDown]
@@ -156,9 +164,10 @@
 1. [定义继承 `UnityUIFlowFixture<MyWindow>` 的测试类] -> [执行测试] -> [`SetUp` 后可以访问非空的 `Window`、`Root`、`Finder`、`Screenshot`]
 2. [调用 `ExecuteYamlStepsAsync(validYaml)`] -> [执行测试] -> [YAML 使用当前 fixture 的 `Root` 运行，不创建第二宿主窗口]
 3. [调用 `ExecuteActionAsync(action, parameters)`] -> [执行单动作测试] -> [动作能获取完整 `ActionContext` 并正确作用于当前窗口]
-4. [正式验收模式开启且官方宿主已接入] -> [执行 fixture 生命周期回归] -> [宿主通过官方 `EditorWindowUITestFixture<TWindow>` 创建并正常清理]
+4. [正式验收模式开启且官方宿主已接入] -> [执行 fixture 生命周期回归] -> [宿主通过 `OfficialEditorWindowPanelSimulator` 正常绑定并清理]
 5. [窗口创建失败] -> [进入 `SetUp`] -> [抛出 `FIXTURE_WINDOW_CREATE_FAILED`，测试立即失败]
 6. [测试主体抛出异常] -> [结束测试] -> [`TearDown` 仍执行，并释放窗口与上下文]
+7. [当前环境未成功绑定官方宿主桥接且 `RequireOfficialHost=true`] -> [进入 `SetUp`] -> [立即失败，不得继续以 fallback 宿主执行]
 
 ## 10. 边界规范
 
@@ -175,6 +184,7 @@
 - 异常数据恢复：
   - `TearDown` 失败时必须记录 `FIXTURE_TEARDOWN_FAILED`，但不得污染后续测试执行。
   - 官方宿主接入失败时必须返回明确失败结论，不得静默回退为正式基线通过。
+  - 当前环境缺失官方宿主符号时，fixture 仍可继续服务 fallback 回归，但必须在报告与调试信息中明确宿主模式不是官方宿主。
 
 ## 11. 周边可选功能
 

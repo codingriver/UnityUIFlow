@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using static UnityEditor.TypeCache;
 using UnityEngine;
+using InputSystemKey = UnityEngine.InputSystem.Key;
 using UnityEngine.UIElements;
 
 namespace UnityUIFlow
@@ -44,6 +45,7 @@ namespace UnityUIFlow
         public TestOptions Options;
         public IExecutionReporter Reporter;
         public object Simulator;
+        internal UnityUIFlowSimulationSession SimulationSession;
         public string CurrentStepId;
         public string CurrentCaseName;
         public int CurrentStepIndex;
@@ -177,25 +179,54 @@ namespace UnityUIFlow
             Register("type_text", typeof(TypeTextAction));
             Register("type_text_fast", typeof(TypeTextFastAction));
             Register("press_key", typeof(PressKeyAction));
+            Register("execute_command", typeof(ExecuteCommandAction));
+            Register("validate_command", typeof(ValidateCommandAction));
             Register("drag", typeof(DragAction));
             Register("scroll", typeof(ScrollAction));
             Register("hover", typeof(HoverAction));
+            Register("open_context_menu", typeof(OpenContextMenuAction));
+            Register("select_context_menu_item", typeof(SelectContextMenuItemAction));
+            Register("open_popup_menu", typeof(OpenPopupMenuAction));
+            Register("select_popup_menu_item", typeof(SelectPopupMenuItemAction));
+            Register("assert_menu_item", typeof(AssertMenuItemAction));
+            Register("assert_menu_item_disabled", typeof(AssertMenuItemDisabledAction));
+            Register("focus", typeof(FocusAction));
+            Register("set_value", typeof(SetValueAction));
+            Register("set_bound_value", typeof(SetBoundValueAction));
+            Register("select_option", typeof(SelectOptionAction));
+            Register("select_list_item", typeof(SelectListItemAction));
+            Register("drag_reorder", typeof(DragReorderAction));
+            Register("select_tree_item", typeof(SelectTreeItemAction));
+            Register("toggle_foldout", typeof(ToggleFoldoutAction));
+            Register("set_slider", typeof(SetSliderAction));
+            Register("select_tab", typeof(SelectTabAction));
+            Register("navigate_breadcrumb", typeof(NavigateBreadcrumbAction));
+            Register("set_split_view_size", typeof(SetSplitViewSizeAction));
+            Register("page_scroller", typeof(PageScrollerAction));
+            Register("sort_column", typeof(SortColumnAction));
+            Register("resize_column", typeof(ResizeColumnAction));
+            Register("menu_item", typeof(MenuItemAction));
             Register("wait", typeof(WaitAction));
             Register("wait_for_element", typeof(WaitForElementAction));
             Register("assert_visible", typeof(AssertVisibleAction));
             Register("assert_not_visible", typeof(AssertNotVisibleAction));
             Register("assert_text", typeof(AssertTextAction));
             Register("assert_text_contains", typeof(AssertTextContainsAction));
+            Register("assert_value", typeof(AssertValueAction));
+            Register("assert_bound_value", typeof(AssertBoundValueAction));
+            Register("assert_enabled", typeof(AssertEnabledAction));
+            Register("assert_disabled", typeof(AssertDisabledAction));
             Register("assert_property", typeof(AssertPropertyAction));
             Register("screenshot", typeof(ScreenshotAction));
         }
 
         private void RegisterCustomActions()
         {
+            HashSet<string> allowedAssemblies = UnityUIFlowConfigResolver.GetCustomActionAssemblyWhitelist();
             var discoveredTypes = new HashSet<Type>();
             foreach (Type type in GetTypesWithAttribute<ActionNameAttribute>())
             {
-                if (type != null)
+                if (type != null && IsAllowedCustomActionType(type, allowedAssemblies))
                 {
                     discoveredTypes.Add(type);
                 }
@@ -203,6 +234,11 @@ namespace UnityUIFlow
 
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
+                if (assembly == null || !allowedAssemblies.Contains(assembly.GetName().Name ?? string.Empty))
+                {
+                    continue;
+                }
+
                 Type[] types;
                 try
                 {
@@ -219,7 +255,7 @@ namespace UnityUIFlow
 
                 foreach (Type type in types)
                 {
-                    if (type != null && type.GetCustomAttribute<ActionNameAttribute>() != null)
+                    if (type != null && IsAllowedCustomActionType(type, allowedAssemblies) && type.GetCustomAttribute<ActionNameAttribute>() != null)
                     {
                         discoveredTypes.Add(type);
                     }
@@ -241,6 +277,12 @@ namespace UnityUIFlow
 
                 _actions[attribute.ActionName] = type;
             }
+        }
+
+        private static bool IsAllowedCustomActionType(Type type, HashSet<string> allowedAssemblies)
+        {
+            string assemblyName = type?.Assembly?.GetName().Name;
+            return !string.IsNullOrWhiteSpace(assemblyName) && allowedAssemblies.Contains(assemblyName);
         }
     }
 
@@ -296,6 +338,16 @@ namespace UnityUIFlow
             }
         }
 
+        public static string GetValueText(VisualElement element)
+        {
+            if (AdvancedActionHelpers.TryReadValueAsString(element, out string valueText))
+            {
+                return valueText;
+            }
+
+            return GetText(element);
+        }
+
         public static bool TryAssignFieldValue(VisualElement element, string value)
         {
             switch (element)
@@ -317,12 +369,21 @@ namespace UnityUIFlow
                     return true;
             }
 
+            if (AdvancedActionHelpers.TryAssignFieldValue(element, value))
+            {
+                return true;
+            }
+
             PropertyInfo property = element.GetType().GetProperty("value");
             if (property != null && property.CanWrite)
             {
                 try
                 {
-                    object converted = Convert.ChangeType(value, property.PropertyType);
+                    if (!AdvancedActionHelpers.TryConvertStringValue(value, property.PropertyType, out object converted))
+                    {
+                        return false;
+                    }
+
                     property.SetValue(element, converted);
                     return true;
                 }
@@ -335,7 +396,141 @@ namespace UnityUIFlow
             return false;
         }
 
-        public static void DispatchClick(VisualElement element, int clickCount, ActionContext context = null)
+        public static string ResolvePointerDriver(ActionContext context)
+        {
+            if (context?.SimulationSession == null)
+            {
+                return "UIToolkitFallbackOnly";
+            }
+
+            ResolveHostDriver(context);
+            string driver = context.SimulationSession.PointerDriverName;
+            context.SharedBag["inputDriver.pointer"] = driver;
+            context.SharedBag["officialUiToolkit.describe"] = context.SimulationSession.OfficialUiToolkit.Describe();
+            context.SharedBag["driver.binding.summary"] = context.SimulationSession.DescribeDrivers();
+            return driver;
+        }
+
+        public static string ResolveHostDriver(ActionContext context)
+        {
+            string host = context?.SimulationSession?.HostDriverName ?? "RootOverrideOnly";
+            if (context != null)
+            {
+                context.SharedBag["inputDriver.host"] = host;
+            }
+
+            return host;
+        }
+
+        public static string ResolveKeyboardDriver(ActionContext context)
+        {
+            string driver = context?.SimulationSession?.KeyboardDriverName ?? "UIToolkitFallbackOnly";
+            if (context != null)
+            {
+                ResolveHostDriver(context);
+                context.SharedBag["inputDriver.keyboard"] = driver;
+                context.SharedBag["officialUiToolkit.describe"] = context.SimulationSession?.OfficialUiToolkit.Describe() ?? "unavailable";
+                context.SharedBag["driver.binding.summary"] = context.SimulationSession?.DescribeDrivers() ?? $"host={ResolveHostDriver(context)}; pointer=UIToolkitFallbackOnly; keyboard={driver}; official=unavailable";
+            }
+
+            return driver;
+        }
+
+        public static void RequireOfficialPointerDriver(ActionContext context, string actionName)
+        {
+            if (context?.Options?.RequireOfficialPointerDriver != true)
+            {
+                return;
+            }
+
+            if (context?.SimulationSession?.HasExecutableOfficialPointerDriver == true)
+            {
+                return;
+            }
+
+            throw new UnityUIFlowException(
+                ErrorCodes.OfficialUiTestFrameworkUnavailable,
+                $"com.unity.test-framework UI 测试子系统不可用，动作 {actionName} 无法执行");
+        }
+
+        public static MouseButton ParseMouseButton(Dictionary<string, string> parameters, string actionName, string key = "button", MouseButton defaultValue = MouseButton.LeftMouse)
+        {
+            if (parameters == null || !parameters.TryGetValue(key, out string literal) || string.IsNullOrWhiteSpace(literal))
+            {
+                return defaultValue;
+            }
+
+            switch (literal.Trim().ToLowerInvariant())
+            {
+                case "left":
+                case "leftmouse":
+                    return MouseButton.LeftMouse;
+                case "right":
+                case "rightmouse":
+                    return MouseButton.RightMouse;
+                case "middle":
+                case "middlemouse":
+                    return MouseButton.MiddleMouse;
+                default:
+                    throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid, $"Action {actionName} parameter '{key}' is invalid: {literal}");
+            }
+        }
+
+        public static EventModifiers ParseEventModifiers(Dictionary<string, string> parameters, string actionName, string key = "modifiers")
+        {
+            if (parameters == null || !parameters.TryGetValue(key, out string literal) || string.IsNullOrWhiteSpace(literal))
+            {
+                return EventModifiers.None;
+            }
+
+            EventModifiers modifiers = EventModifiers.None;
+            string[] parts = literal.Split(new[] { ',', '+', '|', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string part in parts)
+            {
+                switch (part.Trim().ToLowerInvariant())
+                {
+                    case "none":
+                        modifiers = EventModifiers.None;
+                        break;
+                    case "shift":
+                        modifiers |= EventModifiers.Shift;
+                        break;
+                    case "ctrl":
+                    case "control":
+                        modifiers |= EventModifiers.Control;
+                        break;
+                    case "alt":
+                        modifiers |= EventModifiers.Alt;
+                        break;
+                    case "cmd":
+                    case "command":
+                    case "meta":
+                        modifiers |= EventModifiers.Command;
+                        break;
+                    default:
+                        throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid, $"Action {actionName} parameter '{key}' is invalid: {part}");
+                }
+            }
+
+            return modifiers;
+        }
+
+        public static string RequireMenuItem(Dictionary<string, string> parameters, string actionName)
+        {
+            if (parameters.TryGetValue("item", out string itemName) && !string.IsNullOrWhiteSpace(itemName))
+            {
+                return itemName;
+            }
+
+            if (parameters.TryGetValue("value", out string value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+
+            throw new UnityUIFlowException(ErrorCodes.ActionParameterMissing, $"Action {actionName} is missing parameter item.");
+        }
+
+        public static void DispatchClick(VisualElement element, int clickCount, MouseButton button, EventModifiers modifiers, ActionContext context = null)
         {
             var dispatchRoot = element?.panel?.visualTree ?? element;
             if (dispatchRoot == null)
@@ -348,7 +543,7 @@ namespace UnityUIFlow
             // UI Toolkit can perform normal picking/compatibility-event generation.
             Vector2 worldPos = element.worldBound.center;
             Vector2 localPos = element.WorldToLocal(worldPos);
-            context?.Log($"click: focus {ActionContext.ElementInfo(element)} local={localPos} world={worldPos}");
+            context?.Log($"click: focus {ActionContext.ElementInfo(element)} local={localPos} world={worldPos} button={button} modifiers={modifiers}");
             element.Focus();
 
             for (int index = 0; index < clickCount; index++)
@@ -373,13 +568,27 @@ namespace UnityUIFlow
                 element.RegisterCallback<MouseUpEvent>(OnMouseUp, TrickleDown.TrickleDown);
                 element.RegisterCallback<ClickEvent>(OnClickEvt, TrickleDown.TrickleDown);
 
-                var imgui = new UnityEngine.Event { type = EventType.MouseDown, mousePosition = worldPos, button = 0, clickCount = currentClickCount };
+                var imgui = new UnityEngine.Event
+                {
+                    type = EventType.MouseDown,
+                    mousePosition = worldPos,
+                    button = (int)button,
+                    clickCount = currentClickCount,
+                    modifiers = modifiers,
+                };
                 using (PointerDownEvent pointerDown = PointerDownEvent.GetPooled(imgui))
                 {
                     dispatchRoot.SendEvent(pointerDown);
                 }
 
-                imgui = new UnityEngine.Event { type = EventType.MouseUp, mousePosition = worldPos, button = 0, clickCount = currentClickCount };
+                imgui = new UnityEngine.Event
+                {
+                    type = EventType.MouseUp,
+                    mousePosition = worldPos,
+                    button = (int)button,
+                    clickCount = currentClickCount,
+                    modifiers = modifiers,
+                };
                 using (PointerUpEvent pointerUp = PointerUpEvent.GetPooled(imgui))
                 {
                     dispatchRoot.SendEvent(pointerUp);
@@ -427,7 +636,7 @@ namespace UnityUIFlow
             }
         }
 
-        public static void DispatchKeyboardEvent(VisualElement target, EventType eventType, KeyCode keyCode)
+        public static void DispatchKeyboardEvent(VisualElement target, EventType eventType, KeyCode keyCode, char character = '\0')
         {
             var dispatchRoot = target?.panel?.visualTree ?? target;
             if (dispatchRoot == null)
@@ -439,7 +648,7 @@ namespace UnityUIFlow
             {
                 type = eventType,
                 keyCode = keyCode,
-                character = ToCharacter(keyCode),
+                character = character == '\0' ? ToCharacter(keyCode) : character,
             };
 
             using (var keyboardEvent = eventType == EventType.KeyDown
@@ -451,7 +660,74 @@ namespace UnityUIFlow
             }
         }
 
-        public static void DispatchMouseEvent(VisualElement target, EventType eventType, Vector2 mousePosition, Vector2 delta, int button = 0, int clickCount = 1)
+        public static void DispatchCommandEvent(VisualElement target, EventType eventType, string commandName)
+        {
+            var dispatchRoot = target?.panel?.visualTree ?? target;
+            if (dispatchRoot == null)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, "Command event target is unavailable.");
+            }
+
+            if (string.IsNullOrWhiteSpace(commandName))
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionParameterMissing, "Command name cannot be empty.");
+            }
+
+            var imguiEvent = new UnityEngine.Event
+            {
+                type = eventType,
+                commandName = commandName,
+            };
+
+            EventBase commandEvent;
+            switch (eventType)
+            {
+                case EventType.ExecuteCommand:
+                    commandEvent = ExecuteCommandEvent.GetPooled(imguiEvent);
+                    break;
+                case EventType.ValidateCommand:
+                    commandEvent = ValidateCommandEvent.GetPooled(imguiEvent);
+                    break;
+                default:
+                    throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid, $"Unsupported command event type: {eventType}");
+            }
+
+            using (commandEvent)
+            {
+                commandEvent.target = target;
+                dispatchRoot.SendEvent(commandEvent);
+            }
+        }
+
+        public static bool TrySimulateKeyWithInputSystem(ActionContext context, KeyCode keyCode)
+        {
+            if (context?.SimulationSession == null || !TryMapToInputSystemKey(keyCode, out InputSystemKey inputSystemKey))
+            {
+                ResolveKeyboardDriver(context);
+                return false;
+            }
+
+            context.SimulationSession.EnsureInputSystemReady();
+            context.SimulationSession.PressKey(inputSystemKey);
+            ResolveKeyboardDriver(context);
+            return true;
+        }
+
+        public static bool TrySimulateTextWithInputSystem(ActionContext context, char character)
+        {
+            if (context?.SimulationSession == null)
+            {
+                ResolveKeyboardDriver(context);
+                return false;
+            }
+
+            context.SimulationSession.EnsureInputSystemReady();
+            context.SimulationSession.SendText(character.ToString());
+            ResolveKeyboardDriver(context);
+            return true;
+        }
+
+        public static void DispatchMouseEvent(VisualElement target, EventType eventType, Vector2 mousePosition, Vector2 delta, int button = 0, int clickCount = 1, EventModifiers modifiers = EventModifiers.None)
         {
             var dispatchRoot = target?.panel?.visualTree ?? target;
             if (dispatchRoot == null)
@@ -466,6 +742,7 @@ namespace UnityUIFlow
                 delta = delta,
                 button = button,
                 clickCount = clickCount,
+                modifiers = modifiers,
             };
 
             EventBase evt;
@@ -527,6 +804,134 @@ namespace UnityUIFlow
 
             return '\0';
         }
+
+        private static bool TryMapToInputSystemKey(KeyCode keyCode, out InputSystemKey inputSystemKey)
+        {
+            inputSystemKey = default;
+
+            if (keyCode >= KeyCode.A && keyCode <= KeyCode.Z)
+            {
+                inputSystemKey = (InputSystemKey)((int)InputSystemKey.A + (keyCode - KeyCode.A));
+                return true;
+            }
+
+            if (keyCode >= KeyCode.Alpha0 && keyCode <= KeyCode.Alpha9)
+            {
+                inputSystemKey = (InputSystemKey)((int)InputSystemKey.Digit0 + (keyCode - KeyCode.Alpha0));
+                return true;
+            }
+
+            switch (keyCode)
+            {
+                case KeyCode.Space:
+                    inputSystemKey = InputSystemKey.Space;
+                    return true;
+                case KeyCode.Tab:
+                    inputSystemKey = InputSystemKey.Tab;
+                    return true;
+                case KeyCode.Return:
+                    inputSystemKey = InputSystemKey.Enter;
+                    return true;
+                case KeyCode.KeypadEnter:
+                    inputSystemKey = InputSystemKey.NumpadEnter;
+                    return true;
+                case KeyCode.Backspace:
+                    inputSystemKey = InputSystemKey.Backspace;
+                    return true;
+                case KeyCode.Escape:
+                    inputSystemKey = InputSystemKey.Escape;
+                    return true;
+                case KeyCode.Delete:
+                    inputSystemKey = InputSystemKey.Delete;
+                    return true;
+                case KeyCode.Insert:
+                    inputSystemKey = InputSystemKey.Insert;
+                    return true;
+                case KeyCode.Home:
+                    inputSystemKey = InputSystemKey.Home;
+                    return true;
+                case KeyCode.End:
+                    inputSystemKey = InputSystemKey.End;
+                    return true;
+                case KeyCode.PageUp:
+                    inputSystemKey = InputSystemKey.PageUp;
+                    return true;
+                case KeyCode.PageDown:
+                    inputSystemKey = InputSystemKey.PageDown;
+                    return true;
+                case KeyCode.UpArrow:
+                    inputSystemKey = InputSystemKey.UpArrow;
+                    return true;
+                case KeyCode.DownArrow:
+                    inputSystemKey = InputSystemKey.DownArrow;
+                    return true;
+                case KeyCode.LeftArrow:
+                    inputSystemKey = InputSystemKey.LeftArrow;
+                    return true;
+                case KeyCode.RightArrow:
+                    inputSystemKey = InputSystemKey.RightArrow;
+                    return true;
+                case KeyCode.LeftShift:
+                    inputSystemKey = InputSystemKey.LeftShift;
+                    return true;
+                case KeyCode.RightShift:
+                    inputSystemKey = InputSystemKey.RightShift;
+                    return true;
+                case KeyCode.LeftControl:
+                    inputSystemKey = InputSystemKey.LeftCtrl;
+                    return true;
+                case KeyCode.RightControl:
+                    inputSystemKey = InputSystemKey.RightCtrl;
+                    return true;
+                case KeyCode.LeftAlt:
+                    inputSystemKey = InputSystemKey.LeftAlt;
+                    return true;
+                case KeyCode.RightAlt:
+                    inputSystemKey = InputSystemKey.RightAlt;
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        public static bool TryMapCharacterToKeyCode(char character, out KeyCode keyCode)
+        {
+            keyCode = KeyCode.None;
+
+            if (character >= 'a' && character <= 'z')
+            {
+                keyCode = (KeyCode)((int)KeyCode.A + (character - 'a'));
+                return true;
+            }
+
+            if (character >= 'A' && character <= 'Z')
+            {
+                keyCode = (KeyCode)((int)KeyCode.A + (character - 'A'));
+                return true;
+            }
+
+            if (character >= '0' && character <= '9')
+            {
+                keyCode = (KeyCode)((int)KeyCode.Alpha0 + (character - '0'));
+                return true;
+            }
+
+            switch (character)
+            {
+                case ' ':
+                    keyCode = KeyCode.Space;
+                    return true;
+                case '\t':
+                    keyCode = KeyCode.Tab;
+                    return true;
+                case '\n':
+                case '\r':
+                    keyCode = KeyCode.Return;
+                    return true;
+                default:
+                    return false;
+            }
+        }
     }
 
     internal sealed class ClickAction : IAction
@@ -534,8 +939,19 @@ namespace UnityUIFlow
         public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
         {
             VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "click");
-            context.Log($"click: dispatch to {ActionContext.ElementInfo(element)} at {element.worldBound.center}");
-            ActionHelpers.DispatchClick(element, 1, context);
+            MouseButton button = ActionHelpers.ParseMouseButton(parameters, "click");
+            EventModifiers modifiers = ActionHelpers.ParseEventModifiers(parameters, "click");
+            ActionHelpers.RequireOfficialPointerDriver(context, "click");
+            context.Log($"click: dispatch to {ActionContext.ElementInfo(element)} at {element.worldBound.center} via {ActionHelpers.ResolvePointerDriver(context)} button={button} modifiers={modifiers}");
+            if (context?.SimulationSession?.PointerDriver != null)
+            {
+                context.SimulationSession.PointerDriver.Click(element, 1, button, modifiers, context);
+            }
+            else
+            {
+                ActionHelpers.DispatchClick(element, 1, button, modifiers, context);
+            }
+
             await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
         }
     }
@@ -545,8 +961,19 @@ namespace UnityUIFlow
         public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
         {
             VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "double_click");
-            context.Log($"double_click: dispatch to {ActionContext.ElementInfo(element)} at {element.worldBound.center}");
-            ActionHelpers.DispatchClick(element, 2, context);
+            MouseButton button = ActionHelpers.ParseMouseButton(parameters, "double_click");
+            EventModifiers modifiers = ActionHelpers.ParseEventModifiers(parameters, "double_click");
+            ActionHelpers.RequireOfficialPointerDriver(context, "double_click");
+            context.Log($"double_click: dispatch to {ActionContext.ElementInfo(element)} at {element.worldBound.center} via {ActionHelpers.ResolvePointerDriver(context)} button={button} modifiers={modifiers}");
+            if (context?.SimulationSession?.PointerDriver != null)
+            {
+                context.SimulationSession.PointerDriver.Click(element, 2, button, modifiers, context);
+            }
+            else
+            {
+                ActionHelpers.DispatchClick(element, 2, button, modifiers, context);
+            }
+
             await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
         }
     }
@@ -559,20 +986,52 @@ namespace UnityUIFlow
             string value = ActionHelpers.Require(parameters, "type_text", "value");
             context.Log($"type_text: writing {value.Length} chars to {ActionContext.ElementInfo(element)}");
 
-            string current = string.Empty;
+            element.Focus();
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+
+            if (context?.SimulationSession?.TryTypeTextWithOfficialDriver(element, value, context) == true)
+            {
+                context.Log($"type_text: final value \"{value}\" via {ActionHelpers.ResolveKeyboardDriver(context)}");
+                return;
+            }
+
+            string current = ActionHelpers.GetValueText(element);
+            bool allowDirectWriteCompensation = context?.Options?.RequireInputSystemKeyboardDriver != true;
+            context?.SimulationSession?.MarkKeyboardFallback();
             foreach (char ch in value)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
-                current += ch;
-                if (!ActionHelpers.TryAssignFieldValue(element, current))
+
+                ActionHelpers.TrySimulateTextWithInputSystem(context, ch);
+
+                if (ActionHelpers.TryMapCharacterToKeyCode(ch, out KeyCode keyCode))
                 {
-                    throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"type_text target type is not writable: {element.GetType().Name}");
+                    ActionHelpers.DispatchKeyboardEvent(element, EventType.KeyDown, keyCode, ch);
+                    ActionHelpers.DispatchKeyboardEvent(element, EventType.KeyUp, keyCode, ch);
                 }
 
+                string expected = current + ch;
+                string actual = ActionHelpers.GetValueText(element);
+                if (!string.Equals(actual, expected, StringComparison.Ordinal))
+                {
+                    if (!allowDirectWriteCompensation)
+                    {
+                        throw new UnityUIFlowException(
+                            ErrorCodes.ActionExecutionFailed,
+                            "动作 type_text 在高保真模式下禁止回退到直接写值实现");
+                    }
+
+                    if (!ActionHelpers.TryAssignFieldValue(element, expected))
+                    {
+                        throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"type_text target type is not writable: {element.GetType().Name}");
+                    }
+                }
+
+                current = ActionHelpers.GetValueText(element);
                 await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
             }
 
-            context.Log($"type_text: final value \"{value}\"");
+            context.Log($"type_text: final value \"{value}\" via {ActionHelpers.ResolveKeyboardDriver(context)}");
         }
     }
 
@@ -600,12 +1059,90 @@ namespace UnityUIFlow
                 throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid, "press_key parameter 'key' is invalid.");
             }
 
-            VisualElement target = root.focusController?.focusedElement as VisualElement ?? root;
-            target.Focus();
+            bool hasExplicitSelector = parameters.TryGetValue("selector", out string selector) && !string.IsNullOrWhiteSpace(selector);
+            VisualElement target = hasExplicitSelector
+                ? await ActionHelpers.RequireElementAsync(context, parameters, "press_key")
+                : root.focusController?.focusedElement as VisualElement ?? root;
+
+            target?.Focus();
             await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
-            context.Log($"press_key: sending {keyCode} to {ActionContext.ElementInfo(target)}");
+
+            bool canUseOfficialDriver = context?.SimulationSession != null
+                && target != null
+                && (hasExplicitSelector || !ReferenceEquals(target, root));
+
+            if (canUseOfficialDriver && context.SimulationSession.TryPressKeyWithOfficialDriver(target, keyCode, context))
+            {
+                context.Log($"press_key: sending {keyCode} to {ActionContext.ElementInfo(target)} via {ActionHelpers.ResolveKeyboardDriver(context)}");
+                return;
+            }
+
+            bool usedInputSystem = ActionHelpers.TrySimulateKeyWithInputSystem(context, keyCode);
+            if (context?.Options?.RequireInputSystemKeyboardDriver == true && !usedInputSystem)
+            {
+                throw new UnityUIFlowException(
+                    ErrorCodes.InputSystemTestFrameworkUnavailable,
+                    $"缺少 InputSystem 测试输入能力，动作 press_key 无法执行");
+            }
+
+            if (!usedInputSystem)
+            {
+                context?.SimulationSession?.MarkKeyboardFallback();
+            }
+
+            context.Log($"press_key: sending {keyCode} to {ActionContext.ElementInfo(target)} via {(usedInputSystem ? ActionHelpers.ResolveKeyboardDriver(context) : "UIToolkitFallbackOnly")}");
             ActionHelpers.DispatchKeyboardEvent(target, EventType.KeyDown, keyCode);
             ActionHelpers.DispatchKeyboardEvent(target, EventType.KeyUp, keyCode);
+        }
+    }
+
+    internal sealed class ExecuteCommandAction : IAction
+    {
+        public Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            return CommandActionExecutor.ExecuteAsync(root, context, parameters, "execute_command", EventType.ExecuteCommand);
+        }
+    }
+
+    internal sealed class ValidateCommandAction : IAction
+    {
+        public Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            return CommandActionExecutor.ExecuteAsync(root, context, parameters, "validate_command", EventType.ValidateCommand);
+        }
+    }
+
+    internal static class CommandActionExecutor
+    {
+        public static async Task ExecuteAsync(
+            VisualElement root,
+            ActionContext context,
+            Dictionary<string, string> parameters,
+            string actionName,
+            EventType eventType)
+        {
+            string commandName = ActionHelpers.Require(parameters, actionName, "command");
+            VisualElement target = root.focusController?.focusedElement as VisualElement ?? root;
+
+            if (parameters.TryGetValue("selector", out string selector) && !string.IsNullOrWhiteSpace(selector))
+            {
+                target = await ActionHelpers.RequireElementAsync(context, parameters, actionName);
+            }
+
+            target?.Focus();
+            context.Log($"{actionName}: sending {commandName} to {ActionContext.ElementInfo(target)} via {ActionHelpers.ResolveHostDriver(context)}");
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+
+            bool usedOfficialDriver = eventType == EventType.ExecuteCommand
+                ? context?.SimulationSession?.TryExecuteCommandWithOfficialDriver(target, commandName, context) == true
+                : context?.SimulationSession?.TryValidateCommandWithOfficialDriver(target, commandName, context) == true;
+
+            if (!usedOfficialDriver)
+            {
+                ActionHelpers.DispatchCommandEvent(target, eventType, commandName);
+            }
+
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
         }
     }
 
@@ -615,6 +1152,8 @@ namespace UnityUIFlow
         {
             string from = ActionHelpers.Require(parameters, "drag", "from");
             string to = ActionHelpers.Require(parameters, "drag", "to");
+            MouseButton button = ActionHelpers.ParseMouseButton(parameters, "drag");
+            EventModifiers modifiers = ActionHelpers.ParseEventModifiers(parameters, "drag");
             int delayMs = parameters.TryGetValue("duration", out string duration)
                 ? DurationParser.ParseToMilliseconds(duration, "drag")
                 : 100;
@@ -624,24 +1163,32 @@ namespace UnityUIFlow
             context.Log($"drag: resolve to {to}");
             Vector2 toPos = await ResolvePositionAsync(to, root, context);
             int frameCount = Math.Max(1, delayMs / 16);
-            context.Log($"drag: {fromPos} -> {toPos} in {delayMs}ms across {frameCount} frames");
+            ActionHelpers.RequireOfficialPointerDriver(context, "drag");
+            context.Log($"drag: {fromPos} -> {toPos} in {delayMs}ms across {frameCount} frames via {ActionHelpers.ResolvePointerDriver(context)} button={button} modifiers={modifiers}");
 
-            ActionHelpers.DispatchMouseEvent(root, EventType.MouseDown, fromPos, Vector2.zero);
-
-            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
-
-            for (int i = 1; i <= frameCount; i++)
+            if (context?.SimulationSession?.PointerDriver != null)
             {
-                context.CancellationToken.ThrowIfCancellationRequested();
-                Vector2 prev = Vector2.Lerp(fromPos, toPos, (float)(i - 1) / frameCount);
-                Vector2 pos = Vector2.Lerp(fromPos, toPos, (float)i / frameCount);
-                Vector2 delta = pos - prev;
-                ActionHelpers.DispatchMouseEvent(root, EventType.MouseMove, pos, delta);
+                await context.SimulationSession.PointerDriver.DragAsync(root, fromPos, toPos, delayMs, frameCount, button, modifiers, context);
+            }
+            else
+            {
+                ActionHelpers.DispatchMouseEvent(root, EventType.MouseDown, fromPos, Vector2.zero, button: (int)button, modifiers: modifiers);
 
                 await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
-            }
 
-            ActionHelpers.DispatchMouseEvent(root, EventType.MouseUp, toPos, Vector2.zero);
+                for (int i = 1; i <= frameCount; i++)
+                {
+                    context.CancellationToken.ThrowIfCancellationRequested();
+                    Vector2 prev = Vector2.Lerp(fromPos, toPos, (float)(i - 1) / frameCount);
+                    Vector2 pos = Vector2.Lerp(fromPos, toPos, (float)i / frameCount);
+                    Vector2 delta = pos - prev;
+                    ActionHelpers.DispatchMouseEvent(root, EventType.MouseMove, pos, delta, button: (int)button, modifiers: modifiers);
+
+                    await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+                }
+
+                ActionHelpers.DispatchMouseEvent(root, EventType.MouseUp, toPos, Vector2.zero, button: (int)button, modifiers: modifiers);
+            }
 
             context.Log($"drag: completed {from} -> {to}");
             context.SharedBag["lastDrag"] = $"{from}->{to}";
@@ -699,8 +1246,13 @@ namespace UnityUIFlow
                 throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid, "scroll parameter 'delta' is invalid.");
             }
 
-            context.Log($"scroll: {ActionContext.ElementInfo(element)} delta=({dx},{dy})");
-            if (element is ScrollView scrollView)
+            ActionHelpers.RequireOfficialPointerDriver(context, "scroll");
+            context.Log($"scroll: {ActionContext.ElementInfo(element)} delta=({dx},{dy}) via {ActionHelpers.ResolvePointerDriver(context)}");
+            if (context?.SimulationSession?.PointerDriver != null)
+            {
+                context.SimulationSession.PointerDriver.Scroll(element, dx, dy, context);
+            }
+            else if (element is ScrollView scrollView)
             {
                 float nextX = scrollView.scrollOffset.x + dx;
                 float nextY = scrollView.scrollOffset.y + dy;
@@ -719,10 +1271,11 @@ namespace UnityUIFlow
                 scrollView.scrollOffset = new Vector2(nextX, nextY);
                 ActionHelpers.DispatchWheelEvent(scrollView, scrollView.worldBound.center, new Vector2(dx, dy));
                 context.Log($"scroll: offset is now {scrollView.scrollOffset}");
-                return;
             }
-
-            ActionHelpers.DispatchWheelEvent(element, element.worldBound.center, new Vector2(dx, dy));
+            else
+            {
+                ActionHelpers.DispatchWheelEvent(element, element.worldBound.center, new Vector2(dx, dy));
+            }
         }
     }
 
@@ -732,19 +1285,255 @@ namespace UnityUIFlow
         {
             VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "hover");
             Vector2 center = element.worldBound.center;
-            context.Log($"hover: {ActionContext.ElementInfo(element)} at {center}");
-            element.Focus();
-            ActionHelpers.DispatchMouseEvent(element, EventType.MouseMove, center, Vector2.zero, 0, 0);
-
+            EventModifiers modifiers = ActionHelpers.ParseEventModifiers(parameters, "hover");
+            ActionHelpers.RequireOfficialPointerDriver(context, "hover");
+            context.Log($"hover: {ActionContext.ElementInfo(element)} at {center} via {ActionHelpers.ResolvePointerDriver(context)} modifiers={modifiers}");
+            int delay = 0;
             if (parameters.TryGetValue("duration", out string durationLiteral))
             {
-                int delay = DurationParser.ParseToMilliseconds(durationLiteral, "hover");
+                delay = DurationParser.ParseToMilliseconds(durationLiteral, "hover");
+            }
+
+            if (context?.SimulationSession?.PointerDriver != null)
+            {
+                await context.SimulationSession.PointerDriver.HoverAsync(element, center, delay, modifiers, context);
+            }
+            else
+            {
+                element.Focus();
+                ActionHelpers.DispatchMouseEvent(element, EventType.MouseMove, center, Vector2.zero, 0, 0, modifiers);
+
                 if (delay > 0)
                 {
                     context.Log($"hover: wait {delay}ms");
                     await EditorAsyncUtility.DelayAsync(delay, context.CancellationToken);
                 }
             }
+        }
+    }
+
+    internal sealed class OpenContextMenuAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "open_context_menu");
+            EventModifiers modifiers = ActionHelpers.ParseEventModifiers(parameters, "open_context_menu");
+            bool opened = context?.SimulationSession?.TryOpenContextMenu(element, modifiers, context) == true;
+            if (!opened)
+            {
+                throw new UnityUIFlowException(ErrorCodes.OfficialUiTestFrameworkUnavailable, "open_context_menu requires official ContextMenuSimulator support.");
+            }
+
+            context.Log($"open_context_menu: {ActionContext.ElementInfo(element)} modifiers={modifiers}");
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+    }
+
+    internal sealed class SelectContextMenuItemAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            string itemName = ActionHelpers.RequireMenuItem(parameters, "select_context_menu_item");
+            bool selected = context?.SimulationSession?.TrySelectContextMenuItem(itemName, context) == true;
+            if (!selected)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"Context menu item was not available: {itemName}");
+            }
+
+            context.Log($"select_context_menu_item: {itemName}");
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+    }
+
+    internal sealed class OpenPopupMenuAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "open_popup_menu");
+            EventModifiers modifiers = ActionHelpers.ParseEventModifiers(parameters, "open_popup_menu");
+            bool opened = context?.SimulationSession?.TryOpenPopupMenu(element, modifiers, context) == true;
+            if (!opened)
+            {
+                throw new UnityUIFlowException(ErrorCodes.OfficialUiTestFrameworkUnavailable, "open_popup_menu requires official PopupMenuSimulator support.");
+            }
+
+            context.Log($"open_popup_menu: {ActionContext.ElementInfo(element)} modifiers={modifiers}");
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+    }
+
+    internal sealed class SelectPopupMenuItemAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            string itemName = ActionHelpers.RequireMenuItem(parameters, "select_popup_menu_item");
+            bool selected = context?.SimulationSession?.TrySelectPopupMenuItem(itemName, context) == true;
+            if (!selected)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"Popup menu item was not available: {itemName}");
+            }
+
+            context.Log($"select_popup_menu_item: {itemName}");
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+    }
+
+    internal sealed class AssertMenuItemAction : IAction
+    {
+        public Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            string itemName = ActionHelpers.RequireMenuItem(parameters, "assert_menu_item");
+            bool passed = context?.SimulationSession?.TryAssertMenuItem(itemName, expectDisabled: false, context) == true;
+            if (!passed)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"Menu item was not available or not enabled: {itemName}");
+            }
+
+            context.Log($"assert_menu_item: {itemName}");
+            return Task.CompletedTask;
+        }
+    }
+
+    internal sealed class AssertMenuItemDisabledAction : IAction
+    {
+        public Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            string itemName = ActionHelpers.RequireMenuItem(parameters, "assert_menu_item_disabled");
+            bool passed = context?.SimulationSession?.TryAssertMenuItem(itemName, expectDisabled: true, context) == true;
+            if (!passed)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"Menu item was not available or not disabled: {itemName}");
+            }
+
+            context.Log($"assert_menu_item_disabled: {itemName}");
+            return Task.CompletedTask;
+        }
+    }
+
+    internal sealed class MenuItemAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            parameters.TryGetValue("mode", out string modeLiteral);
+            parameters.TryGetValue("menu", out string menuLiteral);
+            string mode = string.IsNullOrWhiteSpace(modeLiteral) ? (string.IsNullOrWhiteSpace(menuLiteral) ? "select" : menuLiteral) : modeLiteral;
+            string itemName = ActionHelpers.RequireMenuItem(parameters, "menu_item");
+            string menuKind = parameters.TryGetValue("kind", out string kindLiteral) && !string.IsNullOrWhiteSpace(kindLiteral)
+                ? kindLiteral.Trim().ToLowerInvariant()
+                : "auto";
+
+            if (parameters.TryGetValue("selector", out string selector) && !string.IsNullOrWhiteSpace(selector))
+            {
+                VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "menu_item");
+                OpenMenuOrThrow(element, menuKind, context);
+                await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+            }
+
+            switch (mode.Trim().ToLowerInvariant())
+            {
+                case "select":
+                case "click":
+                    if (!TrySelect(menuKind, itemName, context))
+                    {
+                        throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"Menu item was not available: {itemName}");
+                    }
+                    break;
+                case "assert_enabled":
+                case "enabled":
+                case "assert":
+                    if (context?.SimulationSession?.TryAssertMenuItem(itemName, expectDisabled: false, context) != true)
+                    {
+                        throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"Menu item was not available or not enabled: {itemName}");
+                    }
+                    break;
+                case "assert_disabled":
+                case "disabled":
+                    if (context?.SimulationSession?.TryAssertMenuItem(itemName, expectDisabled: true, context) != true)
+                    {
+                        throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"Menu item was not available or not disabled: {itemName}");
+                    }
+                    break;
+                default:
+                    throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid, $"Action menu_item parameter 'mode' is invalid: {mode}");
+            }
+
+            context.Log($"menu_item: kind={menuKind} mode={mode} item={itemName}");
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+
+        private static void OpenMenuOrThrow(VisualElement element, string menuKind, ActionContext context)
+        {
+            if (menuKind == "context")
+            {
+                if (context?.SimulationSession?.TryOpenContextMenu(element, EventModifiers.None, context) == true)
+                {
+                    return;
+                }
+            }
+            else if (menuKind == "popup")
+            {
+                if (context?.SimulationSession?.TryOpenPopupMenu(element, EventModifiers.None, context) == true)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                if (context?.SimulationSession?.TryOpenPopupMenu(element, EventModifiers.None, context) == true)
+                {
+                    return;
+                }
+
+                if (context?.SimulationSession?.TryOpenContextMenu(element, EventModifiers.None, context) == true)
+                {
+                    return;
+                }
+            }
+
+            throw new UnityUIFlowException(ErrorCodes.OfficialUiTestFrameworkUnavailable, $"menu_item could not open a {menuKind} menu.");
+        }
+
+        private static bool TrySelect(string menuKind, string itemName, ActionContext context)
+        {
+            if (menuKind == "context")
+            {
+                return context?.SimulationSession?.TrySelectContextMenuItem(itemName, context) == true;
+            }
+
+            if (menuKind == "popup")
+            {
+                return context?.SimulationSession?.TrySelectPopupMenuItem(itemName, context) == true;
+            }
+
+            return (context?.SimulationSession?.TrySelectPopupMenuItem(itemName, context) == true)
+                || (context?.SimulationSession?.TrySelectContextMenuItem(itemName, context) == true);
+        }
+    }
+
+    internal sealed class FocusAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "focus");
+            element.Focus();
+            context.Log($"focus: {ActionContext.ElementInfo(element)}");
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+    }
+
+    internal sealed class SetValueAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "set_value");
+            string value = ActionHelpers.Require(parameters, "set_value", "value");
+            context.Log($"set_value: setting {ActionContext.ElementInfo(element)} to \"{value}\"");
+            if (!ActionHelpers.TryAssignFieldValue(element, value))
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"set_value target type is not writable: {element.GetType().Name}");
+            }
+
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
         }
     }
 
@@ -861,6 +1650,61 @@ namespace UnityUIFlow
             }
 
             context.Log("assert_text_contains: passed");
+        }
+    }
+
+    internal sealed class AssertValueAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "assert_value");
+            string expected = ActionHelpers.Require(parameters, "assert_value", "expected");
+
+            if (AdvancedActionHelpers.TryReadValue(element, out object actualValue, out Type valueType)
+                && AdvancedActionHelpers.TryConvertStringValue(expected, valueType, out object expectedValue))
+            {
+                string actualText = ActionHelpers.GetValueText(element);
+                context.Log($"assert_value: expected={expected}, actual={actualText}");
+                if (!AdvancedActionHelpers.ValuesEqual(actualValue, expectedValue, valueType))
+                {
+                    throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"assert_value failed: expected '{expected}', actual '{actualText}'");
+                }
+
+                return;
+            }
+
+            string actual = ActionHelpers.GetValueText(element);
+            context.Log($"assert_value: expected={expected}, actual={actual}");
+            if (!string.Equals(actual, expected, StringComparison.Ordinal))
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"assert_value failed: expected '{expected}', actual '{actual}'");
+            }
+        }
+    }
+
+    internal sealed class AssertEnabledAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "assert_enabled");
+            context.Log($"assert_enabled: {ActionContext.ElementInfo(element)} => {element.enabledInHierarchy}");
+            if (!element.enabledInHierarchy)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"assert_enabled failed: {ActionContext.ElementInfo(element)} is disabled");
+            }
+        }
+    }
+
+    internal sealed class AssertDisabledAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "assert_disabled");
+            context.Log($"assert_disabled: {ActionContext.ElementInfo(element)} => {element.enabledInHierarchy}");
+            if (element.enabledInHierarchy)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"assert_disabled failed: {ActionContext.ElementInfo(element)} is enabled");
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine.UIElements;
@@ -103,6 +104,52 @@ steps:
         }
 
         [Test]
+        public void TestDataResolver_LoadsUtf8BomCsvRows()
+        {
+            string tempDirectory = Path.Combine(Path.GetTempPath(), "UnityUIFlowTests", System.Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDirectory);
+
+            try
+            {
+                string csvPath = Path.Combine(tempDirectory, "users.csv");
+                File.WriteAllText(csvPath, "username,expected\r\nalice,ok\r\n", new UTF8Encoding(true));
+
+                var definition = new TestCaseDefinition
+                {
+                    Name = "CSV BOM",
+                    SourceFile = Path.Combine(tempDirectory, "case.yaml"),
+                    Data = new DataSourceDefinition
+                    {
+                        FromCsv = "users.csv",
+                    },
+                    Steps = new List<StepDefinition>
+                    {
+                        new StepDefinition
+                        {
+                            Action = "wait",
+                            Duration = "10ms",
+                        },
+                    },
+                };
+
+                List<Dictionary<string, string>> rows = TestDataResolver.ResolveRows(definition);
+
+                Assert.That(rows, Has.Count.EqualTo(1));
+                Assert.That(rows[0].ContainsKey("username"), Is.True);
+                Assert.That(rows[0].ContainsKey("\ufeffusername"), Is.False);
+                Assert.That(rows[0]["username"], Is.EqualTo("alice"));
+                Assert.That(rows[0]["expected"], Is.EqualTo("ok"));
+            }
+            finally
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, true);
+                }
+            }
+        }
+
+        [Test]
         public void SelectorCompiler_ParsesPseudoAndChildSelectors()
         {
             SelectorExpression expression = new SelectorCompiler().Compile("#panel > .item:first-child");
@@ -167,7 +214,11 @@ steps:
             var registry = new ActionRegistry();
 
             Assert.That(registry.HasAction("click"), Is.True);
+            Assert.That(registry.HasAction("execute_command"), Is.True);
+            Assert.That(registry.HasAction("validate_command"), Is.True);
             Assert.That(registry.Resolve("click"), Is.Not.Null);
+            Assert.That(registry.Resolve("execute_command"), Is.Not.Null);
+            Assert.That(registry.Resolve("validate_command"), Is.Not.Null);
             Assert.That(registry.HasAction("custom_login"), Is.True);
             Assert.That(registry.Resolve("custom_login"), Is.TypeOf<CustomLoginAction>());
         }

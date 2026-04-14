@@ -1,0 +1,11 @@
+name: Coverage Double Click And Object Search
+fixture:
+  host_window:
+    type: UnityUIFlow.Examples.ExampleCoverageInputWindow
+    reopen_if_open: true
+steps:
+  - action: double_click
+    selector: "#gesture-double-target"
+  - action: assert_text
+    selector: "#gesture-status"
+    expected: "Double: 2"

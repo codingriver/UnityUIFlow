@@ -1,0 +1,13 @@
+name: Coverage Layer Mask
+fixture:
+  host_window:
+    type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow
+    reopen_if_open: true
+steps:
+  - action: select_option
+    selector: "#layer-mask-selector"
+    index: "0"
+  - action: assert_property
+    selector: "#layer-mask-selector"
+    property: "value"
+    expected: "1"

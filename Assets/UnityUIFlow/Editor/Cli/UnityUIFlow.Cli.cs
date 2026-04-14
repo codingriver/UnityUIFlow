@@ -35,6 +35,64 @@ namespace UnityUIFlow
         }
     }
 
+    internal static class UnityUIFlowConfigResolver
+    {
+        private static readonly string[] DefaultCustomActionAssemblies =
+        {
+            "Assembly-CSharp",
+            "Assembly-CSharp-Editor",
+            "Assembly-CSharp-firstpass",
+        };
+
+        public static string GetDefaultConfigFilePath()
+        {
+            return Path.Combine(Directory.GetCurrentDirectory(), ".unityuiflow.json");
+        }
+
+        public static HashSet<string> GetCustomActionAssemblyWhitelist()
+        {
+            var result = new HashSet<string>(DefaultCustomActionAssemblies, StringComparer.Ordinal);
+            Dictionary<string, object> config = TryLoadConfig(GetDefaultConfigFilePath());
+            if (config == null || !config.TryGetValue("customActionAssemblies", out object value) || value == null)
+            {
+                return result;
+            }
+
+            List<object> assemblies;
+            try
+            {
+                assemblies = YamlObjectReader.AsSequence(value, "customActionAssemblies");
+            }
+            catch
+            {
+                return result;
+            }
+
+            foreach (object assembly in assemblies)
+            {
+                string assemblyName = assembly?.ToString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(assemblyName))
+                {
+                    result.Add(assemblyName);
+                }
+            }
+
+            return result;
+        }
+
+        private static Dictionary<string, object> TryLoadConfig(string path)
+        {
+            try
+            {
+                return new ConfigFileLoader().Load(path);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
     /// <summary>
     /// Parses UnityUIFlow command-line parameters.
     /// </summary>
@@ -45,10 +103,11 @@ namespace UnityUIFlow
         /// <summary>
         /// Parses current process args.
         /// </summary>
-        public CliOptions Parse(string[] args = null)
+        public CliOptions Parse(string[] args = null, IDictionary<string, string> environmentVariables = null)
         {
             args ??= Environment.GetCommandLineArgs();
             var raw = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> environment = CreateEnvironmentSnapshot(environmentVariables);
 
             for (int index = 0; index < args.Length; index++)
             {
@@ -73,24 +132,32 @@ namespace UnityUIFlow
                 index++;
             }
 
-            string configFile = raw.TryGetValue("unityUIFlow.configFile", out string explicitConfig)
-                ? explicitConfig
-                : Path.Combine(Directory.GetCurrentDirectory(), ".unityuiflow.json");
+            string configFile = ReadString(
+                raw,
+                environment,
+                new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase),
+                "unityUIFlow.configFile",
+                "configFile",
+                UnityUIFlowConfigResolver.GetDefaultConfigFilePath());
 
             Dictionary<string, object> config = _configFileLoader.Load(configFile);
             var options = new CliOptions
             {
-                YamlPath = ReadString(raw, config, "unityUIFlow.yamlPath", "yamlPath", null),
-                YamlDirectory = ReadString(raw, config, "unityUIFlow.yamlDirectory", "yamlDirectory", null),
-                Headed = ReadBool(raw, config, "unityUIFlow.headed", "headed", true),
-                ReportPath = ReadString(raw, config, "unityUIFlow.reportPath", "reportPath", "Reports"),
-                ScreenshotOnFailure = ReadBool(raw, config, "unityUIFlow.screenshotOnFailure", "screenshotOnFailure", true),
-                ScreenshotPath = ReadString(raw, config, "unityUIFlow.screenshotPath", "screenshotPath", null),
-                TestFilter = ReadString(raw, config, "unityUIFlow.testFilter", "testFilter", null),
-                StopOnFirstFailure = ReadBool(raw, config, "unityUIFlow.stopOnFirstFailure", "stopOnFirstFailure", false),
-                ContinueOnStepFailure = ReadBool(raw, config, "unityUIFlow.continueOnStepFailure", "continueOnStepFailure", false),
-                DefaultTimeoutMs = ReadInt(raw, config, "unityUIFlow.defaultTimeoutMs", "defaultTimeoutMs", 3000),
-                EnableVerboseLog = ReadBool(raw, config, "unityUIFlow.verbose", "verbose", false),
+                YamlPath = ReadString(raw, environment, config, "unityUIFlow.yamlPath", "yamlPath", null),
+                YamlDirectory = ReadString(raw, environment, config, "unityUIFlow.yamlDirectory", "yamlDirectory", null),
+                Headed = ReadBool(raw, environment, config, "unityUIFlow.headed", "headed", true),
+                ReportPath = ReadString(raw, environment, config, "unityUIFlow.reportPath", "reportPath", "Reports"),
+                ScreenshotOnFailure = ReadBool(raw, environment, config, "unityUIFlow.screenshotOnFailure", "screenshotOnFailure", true),
+                ScreenshotPath = ReadString(raw, environment, config, "unityUIFlow.screenshotPath", "screenshotPath", null),
+                TestFilter = ReadString(raw, environment, config, "unityUIFlow.testFilter", "testFilter", null),
+                StopOnFirstFailure = ReadBool(raw, environment, config, "unityUIFlow.stopOnFirstFailure", "stopOnFirstFailure", false),
+                ContinueOnStepFailure = ReadBool(raw, environment, config, "unityUIFlow.continueOnStepFailure", "continueOnStepFailure", false),
+                DefaultTimeoutMs = ReadInt(raw, environment, config, "unityUIFlow.defaultTimeoutMs", "defaultTimeoutMs", 3000),
+                PreStepDelayMs = ReadInt(raw, environment, config, "unityUIFlow.preStepDelayMs", "preStepDelayMs", 0),
+                RequireOfficialHost = ReadBool(raw, environment, config, "unityUIFlow.requireOfficialHost", "requireOfficialHost", false),
+                RequireOfficialPointerDriver = ReadBool(raw, environment, config, "unityUIFlow.requireOfficialPointerDriver", "requireOfficialPointerDriver", false),
+                RequireInputSystemKeyboardDriver = ReadBool(raw, environment, config, "unityUIFlow.requireInputSystemKeyboardDriver", "requireInputSystemKeyboardDriver", false),
+                EnableVerboseLog = ReadBool(raw, environment, config, "unityUIFlow.verbose", "verbose", false),
                 Batchmode = HasFlag(args, "-batchmode"),
                 Nographics = HasFlag(args, "-nographics"),
                 ConfigFile = configFile,
@@ -141,6 +208,9 @@ namespace UnityUIFlow
                 DefaultTimeoutMs = cliOptions.DefaultTimeoutMs,
                 EnableVerboseLog = cliOptions.EnableVerboseLog,
                 PreStepDelayMs = cliOptions.PreStepDelayMs,
+                RequireOfficialHost = cliOptions.RequireOfficialHost,
+                RequireOfficialPointerDriver = cliOptions.RequireOfficialPointerDriver,
+                RequireInputSystemKeyboardDriver = cliOptions.RequireInputSystemKeyboardDriver,
             };
 
             if (cliOptions.Batchmode)
@@ -151,6 +221,28 @@ namespace UnityUIFlow
             options = UnityUIFlowProjectSettingsUtility.ApplyOverrides(options);
             options.Validate();
             return options;
+        }
+
+        private static Dictionary<string, string> CreateEnvironmentSnapshot(IDictionary<string, string> source)
+        {
+            if (source != null)
+            {
+                return new Dictionary<string, string>(source, StringComparer.OrdinalIgnoreCase);
+            }
+
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+            {
+                string key = entry.Key?.ToString();
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                result[key] = entry.Value?.ToString();
+            }
+
+            return result;
         }
 
         private static bool HasFlag(string[] args, string flag)
@@ -166,11 +258,22 @@ namespace UnityUIFlow
             return false;
         }
 
-        private static string ReadString(Dictionary<string, string> cli, Dictionary<string, object> config, string cliKey, string configKey, string defaultValue)
+        private static string ReadString(
+            Dictionary<string, string> cli,
+            Dictionary<string, string> environment,
+            Dictionary<string, object> config,
+            string cliKey,
+            string configKey,
+            string defaultValue)
         {
             if (cli.TryGetValue(cliKey, out string cliValue))
             {
                 return cliValue;
+            }
+
+            if (TryReadEnvironmentValue(environment, configKey, out string environmentValue))
+            {
+                return environmentValue;
             }
 
             if (config.TryGetValue(configKey, out object configValue))
@@ -181,11 +284,22 @@ namespace UnityUIFlow
             return defaultValue;
         }
 
-        private static bool ReadBool(Dictionary<string, string> cli, Dictionary<string, object> config, string cliKey, string configKey, bool defaultValue)
+        private static bool ReadBool(
+            Dictionary<string, string> cli,
+            Dictionary<string, string> environment,
+            Dictionary<string, object> config,
+            string cliKey,
+            string configKey,
+            bool defaultValue)
         {
             if (cli.TryGetValue(cliKey, out string cliValue))
             {
                 return ParseBool(cliKey, cliValue);
+            }
+
+            if (TryReadEnvironmentValue(environment, configKey, out string environmentValue))
+            {
+                return ParseBool(ToEnvironmentKey(configKey), environmentValue);
             }
 
             if (config.TryGetValue(configKey, out object configValue))
@@ -196,11 +310,22 @@ namespace UnityUIFlow
             return defaultValue;
         }
 
-        private static int ReadInt(Dictionary<string, string> cli, Dictionary<string, object> config, string cliKey, string configKey, int defaultValue)
+        private static int ReadInt(
+            Dictionary<string, string> cli,
+            Dictionary<string, string> environment,
+            Dictionary<string, object> config,
+            string cliKey,
+            string configKey,
+            int defaultValue)
         {
             if (cli.TryGetValue(cliKey, out string cliValue))
             {
                 return ParseInt(cliKey, cliValue);
+            }
+
+            if (TryReadEnvironmentValue(environment, configKey, out string environmentValue))
+            {
+                return ParseInt(ToEnvironmentKey(configKey), environmentValue);
             }
 
             if (config.TryGetValue(configKey, out object configValue))
@@ -209,6 +334,22 @@ namespace UnityUIFlow
             }
 
             return defaultValue;
+        }
+
+        private static bool TryReadEnvironmentValue(Dictionary<string, string> environment, string configKey, out string value)
+        {
+            if (environment != null && environment.TryGetValue(ToEnvironmentKey(configKey), out value))
+            {
+                return !string.IsNullOrWhiteSpace(value);
+            }
+
+            value = null;
+            return false;
+        }
+
+        private static string ToEnvironmentKey(string configKey)
+        {
+            return "UNITY_UI_FLOW_" + Regex.Replace(configKey ?? string.Empty, "(?<!^)([A-Z])", "_$1").ToUpperInvariant();
         }
 
         private static bool ParseBool(string name, string value)

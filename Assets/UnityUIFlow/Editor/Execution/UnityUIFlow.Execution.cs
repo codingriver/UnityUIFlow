@@ -23,19 +23,28 @@ namespace UnityUIFlow
         public ScreenshotManager ScreenshotManager;
         public ActionRegistry ActionRegistry;
         public RuntimeController RuntimeController;
+        internal UnityUIFlowSimulationSession SimulationSession;
         public Dictionary<string, object> SharedBag = new Dictionary<string, object>(StringComparer.Ordinal);
         public CancellationToken CancellationToken;
         public string CaseName;
 
         public void Dispose()
         {
-            if (ManagedWindow != null)
+            try
             {
-                ManagedWindow.Close();
-                ManagedWindow = null;
+                SimulationSession?.Dispose();
+                SimulationSession = null;
             }
+            finally
+            {
+                if (ManagedWindow != null)
+                {
+                    ManagedWindow.Close();
+                    ManagedWindow = null;
+                }
 
-            RuntimeController?.Dispose();
+                RuntimeController?.Dispose();
+            }
         }
     }
 
@@ -48,6 +57,7 @@ namespace UnityUIFlow
         private bool _isPaused;
         private bool _stepRequested;
         private bool _isStopped;
+        private bool _pausedForFailure;
 
         public HeadedRunMode RunMode { get; set; } = HeadedRunMode.Continuous;
 
@@ -57,21 +67,31 @@ namespace UnityUIFlow
 
         public bool IsStopped => _isStopped;
 
+        public bool IsPausedForFailure => _pausedForFailure;
+
         public void Pause()
         {
             _isPaused = true;
+        }
+
+        public void PauseForFailure()
+        {
+            _isPaused = true;
+            _pausedForFailure = true;
         }
 
         public void Resume()
         {
             _isPaused = false;
             _stepRequested = false;
+            _pausedForFailure = false;
         }
 
         public void StepOnce()
         {
             _isPaused = false;
             _stepRequested = true;
+            _pausedForFailure = false;
         }
 
         public void Stop()
@@ -218,6 +238,7 @@ namespace UnityUIFlow
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 VisualElement highlightedElement = null;
+                ActionContext actionContext = null;
 
                 if (step.Condition != null && !context.Finder.Exists(step.Condition.SelectorExpression, context.Root, true))
                 {
@@ -259,7 +280,7 @@ namespace UnityUIFlow
                 try
                 {
                     timeoutController.CancelAfter(step.TimeoutMs);
-                    var actionContext = new ActionContext
+                    actionContext = new ActionContext
                     {
                         Root = context.Root,
                         Finder = context.Finder,
@@ -272,7 +293,17 @@ namespace UnityUIFlow
                         CancellationToken = timeoutController.Token,
                         ScreenshotManager = context.ScreenshotManager,
                         RuntimeController = context.RuntimeController,
+                        Simulator = context.SimulationSession?.PointerDriver,
+                        SimulationSession = context.SimulationSession,
                     };
+                    actionContext.SharedBag.Remove("inputDriver.host");
+                    actionContext.SharedBag.Remove("inputDriver.pointer");
+                    actionContext.SharedBag.Remove("inputDriver.keyboard");
+                    actionContext.SharedBag.Remove("officialUiToolkit.describe");
+                    actionContext.SharedBag.Remove("driver.binding.summary");
+                    actionContext.SharedBag["inputDriver.host"] = context.SimulationSession?.HostDriverName ?? "RootOverrideOnly";
+                    actionContext.SharedBag["officialUiToolkit.describe"] = context.SimulationSession?.OfficialUiToolkit.Describe() ?? "unavailable";
+                    actionContext.SharedBag["driver.binding.summary"] = context.SimulationSession?.DescribeDrivers() ?? "host=RootOverrideOnly; pointer=UIToolkitFallbackOnly; keyboard=UIToolkitFallbackOnly; official=unavailable";
 
                     if (step.Kind == ExecutableStepKind.Loop)
                     {
@@ -290,6 +321,32 @@ namespace UnityUIFlow
                     {
                         result.Attachments.AddRange(actionContext.CurrentAttachments);
                         result.ScreenshotPath = actionContext.CurrentAttachments.FirstOrDefault();
+                        if (actionContext.ScreenshotManager != null
+                            && !string.IsNullOrWhiteSpace(result.ScreenshotPath))
+                        {
+                            result.ScreenshotSource = actionContext.ScreenshotManager.LastCaptureSource;
+                        }
+                    }
+
+                    if (actionContext.SharedBag.TryGetValue("inputDriver.host", out object hostDriver))
+                    {
+                        result.HostDriver = hostDriver?.ToString();
+                    }
+
+                    if (actionContext.SharedBag.TryGetValue("inputDriver.pointer", out object pointerDriver))
+                    {
+                        result.PointerDriver = pointerDriver?.ToString();
+                    }
+
+                    if (actionContext.SharedBag.TryGetValue("inputDriver.keyboard", out object keyboardDriver))
+                    {
+                        result.KeyboardDriver = keyboardDriver?.ToString();
+                    }
+
+                    if (actionContext.SharedBag.TryGetValue("driver.binding.summary", out object driverDetails)
+                        || actionContext.SharedBag.TryGetValue("officialUiToolkit.describe", out driverDetails))
+                    {
+                        result.DriverDetails = driverDetails?.ToString();
                     }
                 }
                 catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
@@ -330,6 +387,7 @@ namespace UnityUIFlow
                 {
                     string screenshotPath = await context.ScreenshotManager.CaptureAsync(context.CaseName, stepIndex, "failure", context.CancellationToken);
                     result.ScreenshotPath = screenshotPath;
+                    result.ScreenshotSource = context.ScreenshotManager.LastCaptureSource;
                     result.Attachments.Add(screenshotPath);
                 }
                 catch (Exception captureException)
@@ -338,6 +396,13 @@ namespace UnityUIFlow
                         ? captureException.Message
                         : result.ErrorMessage + Environment.NewLine + captureException.Message;
                 }
+            }
+
+            if ((result.Status == TestStatus.Failed || result.Status == TestStatus.Error)
+                && context.Options.Headed
+                && context.Options.DebugOnFailure)
+            {
+                context.RuntimeController?.PauseForFailure();
             }
 
             result.EndedAtUtc = DateTimeOffset.UtcNow.ToString("O");
@@ -541,6 +606,22 @@ namespace UnityUIFlow
                 ScreenshotRootPath = options.ScreenshotPath,
             };
 
+            var simulationSession = new UnityUIFlowSimulationSession();
+            if (managedWindow != null)
+            {
+                simulationSession.BindEditorWindowHost(managedWindow, "HostWindowManager(EditorWindow.GetWindow)");
+            }
+            else
+            {
+                simulationSession.BindHostDriver("RootOverrideOnly");
+            }
+            if (options.RequireOfficialHost && !simulationSession.HasExecutableOfficialHost)
+            {
+                throw new UnityUIFlowException(
+                    ErrorCodes.FixtureWindowCreateFailed,
+                    $"正式验收模式下未能创建官方测试宿主：{definition.Fixture?.HostWindow?.Type ?? definition.Name}");
+            }
+
             var context = new ExecutionContext
             {
                 Root = root,
@@ -548,9 +629,10 @@ namespace UnityUIFlow
                 Finder = new ElementFinder(),
                 Options = options,
                 Reporter = new MarkdownReporter(reportOptions),
-                ScreenshotManager = new ScreenshotManager(options),
+                ScreenshotManager = new ScreenshotManager(options, () => ResolveScreenshotWindow(managedWindow, root)),
                 ActionRegistry = _actionRegistry,
                 RuntimeController = new RuntimeController(),
+                SimulationSession = simulationSession,
                 CaseName = definition.Name,
             };
             context.CancellationToken = context.RuntimeController.CancellationToken;
@@ -618,6 +700,11 @@ namespace UnityUIFlow
                     }
 
                     context.RuntimeController.OnStepCompleted();
+                }
+
+                if (context.RuntimeController.IsPausedForFailure && !context.RuntimeController.IsStopped)
+                {
+                    await context.RuntimeController.WaitIfPausedAsync();
                 }
             }
             catch (OperationCanceledException)
@@ -735,6 +822,29 @@ namespace UnityUIFlow
             }
 
             return (null, ResolveDefaultRoot());
+        }
+
+        private static EditorWindow ResolveScreenshotWindow(EditorWindow managedWindow, VisualElement root)
+        {
+            if (managedWindow != null)
+            {
+                return managedWindow;
+            }
+
+            if (root?.panel == null)
+            {
+                return EditorWindow.focusedWindow;
+            }
+
+            foreach (EditorWindow window in Resources.FindObjectsOfTypeAll<EditorWindow>())
+            {
+                if (window != null && window.rootVisualElement?.panel == root.panel)
+                {
+                    return window;
+                }
+            }
+
+            return EditorWindow.focusedWindow;
         }
     }
 }

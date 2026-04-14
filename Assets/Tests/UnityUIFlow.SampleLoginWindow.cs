@@ -165,7 +165,10 @@ namespace UnityUIFlow
         private Label _hoverStatus;
         private Label _keyStatus;
         private Label _dragStatus;
+        private Label _pointerStatus;
+        private Label _menuStatus;
         private ScrollView _scrollView;
+        private DropdownField _popupMenuDropdown;
         private int _clickCount;
         private int _doubleClickCount;
         private bool _dragStarted;
@@ -194,14 +197,19 @@ namespace UnityUIFlow
             _hoverStatus = rootVisualElement.Q<Label>("hover-status");
             _keyStatus = rootVisualElement.Q<Label>("key-status");
             _dragStatus = rootVisualElement.Q<Label>("drag-status");
+            _pointerStatus = rootVisualElement.Q<Label>("pointer-status");
+            _menuStatus = rootVisualElement.Q<Label>("menu-status");
             _scrollView = rootVisualElement.Q<ScrollView>("scroll-view");
+            _popupMenuDropdown = rootVisualElement.Q<DropdownField>("popup-menu-dropdown");
             Button clickButton = rootVisualElement.Q<Button>("click-button");
             Button doubleClickButton = rootVisualElement.Q<Button>("double-click-button");
             VisualElement hoverTarget = rootVisualElement.Q<VisualElement>("hover-target");
+            Label contextMenuTarget = rootVisualElement.Q<Label>("context-menu-target");
 
             if (_inputField == null || _clickStatus == null || _doubleClickStatus == null || _hoverStatus == null
-                || _keyStatus == null || _dragStatus == null || _scrollView == null
-                || clickButton == null || doubleClickButton == null || hoverTarget == null)
+                || _keyStatus == null || _dragStatus == null || _pointerStatus == null || _menuStatus == null
+                || _popupMenuDropdown == null || _scrollView == null
+                || clickButton == null || doubleClickButton == null || hoverTarget == null || contextMenuTarget == null)
             {
                 throw new UnityUIFlowException(ErrorCodes.RootElementMissing, "Sample interaction UXML is missing required elements.");
             }
@@ -224,18 +232,24 @@ namespace UnityUIFlow
             _hoverStatus.text = "Hover: idle";
             _keyStatus.text = "Key: none";
             _dragStatus.text = "Drag: idle";
+            _pointerStatus.text = "Pointer: none";
+            _menuStatus.text = "Menu: none";
             _scrollView.scrollOffset = Vector2.zero;
+            _popupMenuDropdown.choices = new List<string> { "Option1", "Option2" };
+            _popupMenuDropdown.index = -1;
 
-            clickButton.RegisterCallback<MouseUpEvent>(_ =>
+            clickButton.RegisterCallback<MouseUpEvent>(evt =>
             {
                 _clickCount++;
                 _clickStatus.text = $"Clicks: {_clickCount}";
+                _pointerStatus.text = $"Pointer: button={evt.button}, modifiers={evt.modifiers}";
             });
 
-            doubleClickButton.RegisterCallback<MouseUpEvent>(_ =>
+            doubleClickButton.RegisterCallback<MouseUpEvent>(evt =>
             {
                 _doubleClickCount++;
                 _doubleClickStatus.text = $"Double Clicks: {_doubleClickCount}";
+                _pointerStatus.text = $"Pointer: button={evt.button}, modifiers={evt.modifiers}";
             });
 
             hoverTarget.RegisterCallback<MouseOverEvent>(_ =>
@@ -243,15 +257,40 @@ namespace UnityUIFlow
                 _hoverStatus.text = "Hover: active";
             });
 
+            contextMenuTarget.RegisterCallback<ContextualMenuPopulateEvent>(evt =>
+            {
+                evt.menu.AppendAction("Copy", _ => _menuStatus.text = "Context: Copy");
+                evt.menu.AppendAction("Delete", _ => _menuStatus.text = "Context: Delete", _ => DropdownMenuAction.Status.Disabled);
+            });
+
+            _popupMenuDropdown.RegisterValueChangedCallback(evt =>
+            {
+                if (!string.IsNullOrWhiteSpace(evt.newValue))
+                {
+                    _menuStatus.text = $"Popup: {evt.newValue}";
+                }
+            });
+
             rootVisualElement.RegisterCallback<KeyDownEvent>(evt =>
             {
                 _keyStatus.text = $"Key: {evt.keyCode}";
             });
 
-            rootVisualElement.RegisterCallback<MouseDownEvent>(_ =>
+            rootVisualElement.RegisterCallback<ValidateCommandEvent>(evt =>
+            {
+                _keyStatus.text = $"Validate: {evt.commandName}";
+            });
+
+            rootVisualElement.RegisterCallback<ExecuteCommandEvent>(evt =>
+            {
+                _keyStatus.text = $"Execute: {evt.commandName}";
+            });
+
+            rootVisualElement.RegisterCallback<MouseDownEvent>(evt =>
             {
                 _dragStarted = true;
                 _dragStatus.text = "Drag: started";
+                _pointerStatus.text = $"Pointer: button={evt.button}, modifiers={evt.modifiers}";
             });
 
             rootVisualElement.RegisterCallback<MouseMoveEvent>(evt =>
@@ -262,13 +301,15 @@ namespace UnityUIFlow
                 }
             });
 
-            rootVisualElement.RegisterCallback<MouseUpEvent>(_ =>
+            rootVisualElement.RegisterCallback<MouseUpEvent>(evt =>
             {
                 if (_dragStarted)
                 {
                     _dragStatus.text = "Drag: completed";
                     _dragStarted = false;
                 }
+
+                _pointerStatus.text = $"Pointer: button={evt.button}, modifiers={evt.modifiers}";
             });
         }
 
@@ -304,7 +345,7 @@ namespace UnityUIFlow
 
             if (_root.Q<Button>("login-button") is Button loginButton)
             {
-                ActionHelpers.DispatchClick(loginButton, 1);
+                ActionHelpers.DispatchClick(loginButton, 1, MouseButton.LeftMouse, EventModifiers.None);
             }
 
             return Task.CompletedTask;
@@ -355,7 +396,7 @@ namespace UnityUIFlow
                 throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, "custom_login target type is not assignable.");
             }
 
-            ActionHelpers.DispatchClick(buttonElement, 1);
+            ActionHelpers.DispatchClick(buttonElement, 1, MouseButton.LeftMouse, EventModifiers.None);
         }
     }
 }

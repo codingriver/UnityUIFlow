@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -431,6 +435,167 @@ namespace UnityUIFlow.Examples
         {
             TextField input = rootVisualElement.Q<TextField>("type-text-input");
             input.value = string.Empty;
+        }
+    }
+
+    public sealed class ExampleAdvancedControlsWindow : ExampleAcceptanceWindowBase
+    {
+        private readonly System.Collections.Generic.List<string> _items = new System.Collections.Generic.List<string>
+        {
+            "Alpha",
+            "Beta",
+            "Gamma",
+            "Delta",
+        };
+        private readonly System.Collections.Generic.List<TreeViewItemData<string>> _treeItems = new System.Collections.Generic.List<TreeViewItemData<string>>
+        {
+            new TreeViewItemData<string>(100, "General", new System.Collections.Generic.List<TreeViewItemData<string>>
+            {
+                new TreeViewItemData<string>(110, "Display"),
+                new TreeViewItemData<string>(120, "Audio"),
+            }),
+            new TreeViewItemData<string>(200, "Advanced", new System.Collections.Generic.List<TreeViewItemData<string>>
+            {
+                new TreeViewItemData<string>(210, "Network"),
+            }),
+        };
+
+        protected override string UxmlPath => "Assets/Examples/Uxml/ExampleAdvancedControlsWindow.uxml";
+
+        protected override string WindowTitle => "Example Advanced Controls";
+
+        protected override void AfterBuild()
+        {
+            VisualElement host = rootVisualElement.Q<VisualElement>("advanced-controls-host");
+
+            var dropdown = new DropdownField("Choice", new System.Collections.Generic.List<string> { "Alpha", "Beta", "Gamma" }, 0)
+            {
+                name = "choice-dropdown",
+            };
+
+            var foldout = new Foldout
+            {
+                name = "settings-foldout",
+                text = "Advanced Settings",
+                value = false,
+            };
+            foldout.Add(new Label("Foldout Content"));
+
+            var slider = new Slider("Volume", 0f, 10f)
+            {
+                name = "volume-slider",
+                value = 0f,
+            };
+
+            var color = new ColorField("Accent")
+            {
+                name = "accent-color",
+                value = Color.white,
+                showEyeDropper = false,
+            };
+
+            var vector = new Vector3Field("Offset")
+            {
+                name = "offset-vector3",
+                value = Vector3.zero,
+            };
+
+            var listView = new ListView
+            {
+                name = "item-list",
+                itemsSource = _items,
+                selectionType = SelectionType.Multiple,
+                fixedItemHeight = 20,
+                style =
+                {
+                    height = 120,
+                },
+            };
+            listView.makeItem = () => new Label();
+            listView.bindItem = (element, index) => ((Label)element).text = _items[index];
+            listView.Rebuild();
+
+            var listStatus = new Label("List: none")
+            {
+                name = "list-selection-status",
+            };
+            listView.selectionChanged += _ =>
+            {
+                listStatus.text = listView.selectedIndex >= 0
+                    ? $"List: {listView.selectedIndex}"
+                    : "List: none";
+            };
+
+            var treeView = new TreeView
+            {
+                name = "navigation-tree",
+                selectionType = SelectionType.Single,
+                fixedItemHeight = 20,
+                style =
+                {
+                    height = 120,
+                },
+            };
+            treeView.SetRootItems(_treeItems);
+            treeView.makeItem = () => new Label();
+            treeView.bindItem = (element, index) => ((Label)element).text = treeView.GetItemDataForIndex<string>(index);
+            treeView.ExpandRootItems();
+
+            var treeStatus = new Label("Tree: none")
+            {
+                name = "tree-selection-status",
+            };
+            treeView.selectionChanged += _ =>
+            {
+                treeStatus.text = treeView.selectedIndex >= 0
+                    ? $"Tree: {treeView.GetItemDataForIndex<string>(treeView.selectedIndex)}"
+                    : "Tree: none";
+            };
+
+            var tabView = new TabView
+            {
+                name = "settings-tabs",
+            };
+            var generalTab = new Tab("General")
+            {
+                name = "tab-general",
+            };
+            generalTab.Add(new Label("General Content"));
+            var advancedTab = new Tab("Advanced")
+            {
+                name = "tab-advanced",
+            };
+            advancedTab.Add(new Label("Advanced Content"));
+            var aboutTab = new Tab("About")
+            {
+                name = "tab-about",
+            };
+            aboutTab.Add(new Label("About Content"));
+            tabView.Add(generalTab);
+            tabView.Add(advancedTab);
+            tabView.Add(aboutTab);
+            tabView.activeTab = generalTab;
+
+            var tabStatus = new Label("Tab: General")
+            {
+                name = "tab-selection-status",
+            };
+            tabView.activeTabChanged += (_, to) =>
+            {
+                tabStatus.text = to == null ? "Tab: none" : $"Tab: {to.label}";
+            };
+
+            host.Add(dropdown);
+            host.Add(foldout);
+            host.Add(slider);
+            host.Add(color);
+            host.Add(vector);
+            host.Add(listView);
+            host.Add(listStatus);
+            host.Add(treeView);
+            host.Add(treeStatus);
+            host.Add(tabView);
+            host.Add(tabStatus);
         }
     }
 }

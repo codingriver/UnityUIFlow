@@ -1,5 +1,6 @@
 using System.Collections;
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine.TestTools;
@@ -22,6 +23,23 @@ namespace UnityUIFlow
                 Assert.That(controller.IsPaused, Is.True);
                 controller.Resume();
                 Assert.That(controller.IsPaused, Is.False);
+            }
+        }
+
+        [Test]
+        public void RuntimeController_PauseForFailure_TracksFailurePauseState()
+        {
+            using (var controller = new RuntimeController())
+            {
+                controller.PauseForFailure();
+
+                Assert.That(controller.IsPaused, Is.True);
+                Assert.That(controller.IsPausedForFailure, Is.True);
+
+                controller.Resume();
+
+                Assert.That(controller.IsPaused, Is.False);
+                Assert.That(controller.IsPausedForFailure, Is.False);
             }
         }
 
@@ -111,6 +129,20 @@ namespace UnityUIFlow
             window.Close();
         }
 
+        [UnityTest]
+        public IEnumerator HeadedTestWindow_RendersStrictTogglesAndDriverDetails()
+        {
+            HeadedTestWindow window = EditorWindow.GetWindow<HeadedTestWindow>();
+            yield return null;
+
+            Assert.That(window.rootVisualElement.Query<Toggle>().ToList().Exists(toggle => toggle.label == "Require Official Host"), Is.True);
+            Assert.That(window.rootVisualElement.Query<Toggle>().ToList().Exists(toggle => toggle.label == "Require Official Pointer Driver"), Is.True);
+            Assert.That(window.rootVisualElement.Query<Toggle>().ToList().Exists(toggle => toggle.label == "Require InputSystem Keyboard Driver"), Is.True);
+            Assert.That(window.rootVisualElement.Query<Label>().ToList().Exists(label => label.text.StartsWith("Driver Details:")), Is.True);
+
+            window.Close();
+        }
+
         [Test]
         public void HeadedYamlPathPreferences_PersistsLastSelectedPath()
         {
@@ -132,6 +164,42 @@ namespace UnityUIFlow
             Assert.That(
                 HeadedYamlPathPreferences.GetInitialDirectory(normalized).Replace('\\', '/'),
                 Is.EqualTo(Path.GetFullPath("Assets/Examples/Yaml").Replace('\\', '/')));
+        }
+
+        [Test]
+        public void HeadedWindowPreferences_LoadsAndSavesStrictFlags()
+        {
+            var previous = new HeadedPanelState();
+            HeadedWindowPreferences.Load(previous);
+
+            var state = new HeadedPanelState
+            {
+                RunMode = HeadedRunMode.Step,
+                FailurePolicy = HeadedFailurePolicy.Continue,
+                ContinueOnStepFailure = true,
+                RequireOfficialHost = true,
+                RequireOfficialPointerDriver = true,
+                RequireInputSystemKeyboardDriver = true,
+            };
+
+            try
+            {
+                HeadedWindowPreferences.Save(state);
+
+                var loaded = new HeadedPanelState();
+                HeadedWindowPreferences.Load(loaded);
+
+                Assert.That(loaded.RunMode, Is.EqualTo(HeadedRunMode.Step));
+                Assert.That(loaded.FailurePolicy, Is.EqualTo(HeadedFailurePolicy.Continue));
+                Assert.That(loaded.ContinueOnStepFailure, Is.True);
+                Assert.That(loaded.RequireOfficialHost, Is.True);
+                Assert.That(loaded.RequireOfficialPointerDriver, Is.True);
+                Assert.That(loaded.RequireInputSystemKeyboardDriver, Is.True);
+            }
+            finally
+            {
+                HeadedWindowPreferences.Save(previous);
+            }
         }
 
         [Test]
@@ -157,6 +225,49 @@ namespace UnityUIFlow
 
             Assert.That(paths, Has.Count.EqualTo(2));
             Assert.That(string.Compare(paths[0], paths[1], System.StringComparison.OrdinalIgnoreCase), Is.LessThanOrEqualTo(0));
+        }
+
+        [Test]
+        public void BatchRunnerPreferences_LoadsAndSavesStrictFlags()
+        {
+            var previous = new BatchRunnerViewState();
+            BatchRunnerPreferences.Load(previous);
+
+            var state = new BatchRunnerViewState
+            {
+                RequireOfficialHost = true,
+                RequireOfficialPointerDriver = true,
+                RequireInputSystemKeyboardDriver = true,
+            };
+
+            try
+            {
+                BatchRunnerPreferences.Save(state);
+
+                var loaded = new BatchRunnerViewState();
+                BatchRunnerPreferences.Load(loaded);
+
+                Assert.That(loaded.RequireOfficialHost, Is.True);
+                Assert.That(loaded.RequireOfficialPointerDriver, Is.True);
+                Assert.That(loaded.RequireInputSystemKeyboardDriver, Is.True);
+            }
+            finally
+            {
+                BatchRunnerPreferences.Save(previous);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator BatchRunnerWindow_RendersStrictToggles()
+        {
+            BatchRunnerWindow window = EditorWindow.GetWindow<BatchRunnerWindow>();
+            yield return null;
+
+            Assert.That(window.rootVisualElement.Query<Toggle>().ToList().Exists(toggle => toggle.label == "Require Official Host"), Is.True);
+            Assert.That(window.rootVisualElement.Query<Toggle>().ToList().Exists(toggle => toggle.label == "Require Official Pointer Driver"), Is.True);
+            Assert.That(window.rootVisualElement.Query<Toggle>().ToList().Exists(toggle => toggle.label == "Require InputSystem Keyboard Driver"), Is.True);
+
+            window.Close();
         }
     }
 }

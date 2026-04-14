@@ -1,8 +1,8 @@
 # M08 命令行与CI集成 需求文档
 
-版本：1.1.0
-日期：2026-04-08
-状态：补充版
+版本：1.2.0
+日期：2026-04-11
+状态：更新基线（已接入环境变量默认值优先级）
 
 ---
 
@@ -49,6 +49,7 @@
 | 操作 | 入口 | 禁用条件 | 实现标识 | Undo语义 |
 | --- | --- | --- | --- | --- |
 | 解析命令行参数 | Unity 启动后初始化测试环境 | 参数格式非法；键重复冲突 | `CommandLineOptionsParser.Parse` `(设计提案，实现时确认)` | 不涉及；只读操作 |
+| 读取环境变量参数 | 解析 CLI 后、加载配置文件前 | 环境变量布尔值或整数值非法 | `CommandLineOptionsParser.Parse`（已实现 `UNITY_UI_FLOW_*` 优先级源） | 不涉及；只读操作 |
 | 加载配置文件参数 | 工作目录或 `--configFile` 指定路径存在 `.unityuiflow.json` 时自动加载 | 配置文件不可读；JSON 格式非法 | `ConfigFileLoader.Load` `(设计提案，实现时确认)` | 不涉及；只读操作 |
 | 构造 `TestOptions` | 参数解析成功后 | 必需目录为空；Headed 与批处理模式冲突未处理 | `CommandLineOptionsParser.ToTestOptions` `(设计提案，实现时确认)` | 不涉及；只读操作 |
 | 过滤用例列表 | 套件扫描后 | `testFilter` 非法 | `YamlTestCaseFilter.Match` `(设计提案，实现时确认)` | 不涉及；只读操作 |
@@ -60,12 +61,12 @@
 ## 4. 交互规格
 
 - 触发事件：Unity Test Runner 启动流程中读取进程参数。
-- 状态变化：`Read command line -> Load config file -> Parse options -> Merge (CLI overrides config) -> Build TestOptions -> Execute suite -> Resolve exit code -> Emit artifacts`。
+- 状态变化：`Read command line -> Read environment variables -> Resolve config file path -> Load config file -> Parse options -> Merge (CLI > environment > config > defaults) -> Build TestOptions -> Execute suite -> Resolve exit code -> Emit artifacts`。
 - 数据提交时机：参数解析完成后一次性构造 `TestOptions`；套件结束后一次性计算退出码。
 - 取消/回退：参数解析失败时直接返回退出码 `2`，不进入测试执行。
 - Headed 开关：显式 `-unityUIFlow.headed false` 时，必须关闭 Headed 面板和元素高亮，即使本地 Editor 环境可用。
 - 过滤行为：`testFilter` 作用于 YAML 文件名（不含扩展名）和用例 `name`，采用大小写不敏感的通配匹配（`*` 匹配任意字符段）。
-- 参数优先级：CLI 参数 > 配置文件参数 > 默认值；配置文件中存在但 CLI 未传的参数才使用配置文件值。
+- 参数优先级：CLI 参数 > 环境变量参数 > 配置文件参数 > 默认值；仅当高优先级来源未提供时才继续读取下一层。
 - 批处理自动调整：检测到 `batchmode=true` 时，自动将 `headed` 改为 `false`，并输出 `Info` 日志。
 
 ---
@@ -117,6 +118,7 @@
 
 - 关键类与职责：
   - `CommandLineOptionsParser` `(设计提案，实现时确认)`：读取 `Environment.GetCommandLineArgs()` 并解析 `unityUIFlow.*` 参数，支持 `-key value` 格式。
+  - `CommandLineOptionsParser` 也负责读取 `UNITY_UI_FLOW_*` 环境变量，并将 `UNITY_UI_FLOW_CONFIG_FILE` 纳入配置文件定位。
   - `ConfigFileLoader` `(设计提案，实现时确认)`：从 `.unityuiflow.json` 加载默认参数，JSON schema 字段名与 CLI 参数名一致（去掉 `unityUIFlow.` 前缀）。
   - `YamlTestCaseFilter` `(设计提案，实现时确认)`：对文件名（不含扩展名）或用例 `name` 做大小写不敏感通配匹配。
   - `ExitCodeResolver` `(设计提案，实现时确认)`：把 `TestSuiteResult` 映射为 `0/1/2`，规则见数据模型中的 ExitCode 表。
@@ -129,11 +131,32 @@
   "headed": false,
   "reportPath": "./TestReports",
   "screenshotOnFailure": true,
-  "defaultTimeoutMs": 15000
+  "defaultTimeoutMs": 15000,
+  "preStepDelayMs": 250,
+  "requireOfficialHost": false,
+  "requireOfficialPointerDriver": false,
+  "requireInputSystemKeyboardDriver": false
 }
 ```
 
-  此方案与 CLI 参数互补：CI 场景只需维护配置文件，无需在每条 CI 命令中堆砌参数。CLI 参数始终高于配置文件。
+  此方案与 CLI 参数互补：CI 场景只需维护配置文件，无需在每条 CI 命令中堆砌参数。CLI 参数始终高于环境变量与配置文件。
+
+- 环境变量命名规则：
+
+| 配置项 | 环境变量 | 说明 |
+| --- | --- | --- |
+| `configFile` | `UNITY_UI_FLOW_CONFIG_FILE` | 指定配置文件路径，优先级低于 CLI、高于默认 `.unityuiflow.json` |
+| `headed` | `UNITY_UI_FLOW_HEADED` | Headed 模式开关 |
+| `reportPath` | `UNITY_UI_FLOW_REPORT_PATH` | 报告输出目录 |
+| `screenshotOnFailure` | `UNITY_UI_FLOW_SCREENSHOT_ON_FAILURE` | 失败截图开关 |
+| `screenshotPath` | `UNITY_UI_FLOW_SCREENSHOT_PATH` | 截图目录 |
+| `testFilter` | `UNITY_UI_FLOW_TEST_FILTER` | YAML 文件/用例过滤 |
+| `defaultTimeoutMs` | `UNITY_UI_FLOW_DEFAULT_TIMEOUT_MS` | 默认超时 |
+| `preStepDelayMs` | `UNITY_UI_FLOW_PRE_STEP_DELAY_MS` | 步前调试延迟 |
+| `requireOfficialHost` | `UNITY_UI_FLOW_REQUIRE_OFFICIAL_HOST` | strict 官方宿主 |
+| `requireOfficialPointerDriver` | `UNITY_UI_FLOW_REQUIRE_OFFICIAL_POINTER_DRIVER` | strict 官方指针 |
+| `requireInputSystemKeyboardDriver` | `UNITY_UI_FLOW_REQUIRE_INPUT_SYSTEM_KEYBOARD_DRIVER` | strict InputSystem 键盘 |
+| `verbose` | `UNITY_UI_FLOW_VERBOSE` | 详细日志 |
 
 ### CLI 参数完整参考
 
@@ -147,6 +170,10 @@
 | `unityUIFlow.stopOnFirstFailure` | `-unityUIFlow.stopOnFirstFailure false` | bool | 首次失败后是否停止套件 | `false` |
 | `unityUIFlow.continueOnStepFailure` | `-unityUIFlow.continueOnStepFailure false` | bool | 步骤失败后是否继续用例 | `false` |
 | `unityUIFlow.defaultTimeoutMs` | `-unityUIFlow.defaultTimeoutMs 10000` | int | 默认步骤超时（ms） | `10000` |
+| `unityUIFlow.preStepDelayMs` | `-unityUIFlow.preStepDelayMs 250` | int | 每步动作开始前的调试延迟（ms） | `0` |
+| `unityUIFlow.requireOfficialHost` | `-unityUIFlow.requireOfficialHost true` | bool | 强制要求官方 `EditorWindowUITestFixture` 宿主 | `false` |
+| `unityUIFlow.requireOfficialPointerDriver` | `-unityUIFlow.requireOfficialPointerDriver true` | bool | 强制要求官方 UI 指针驱动 | `false` |
+| `unityUIFlow.requireInputSystemKeyboardDriver` | `-unityUIFlow.requireInputSystemKeyboardDriver true` | bool | 强制要求 InputSystem 键盘驱动 | `false` |
 | `unityUIFlow.configFile` | `-unityUIFlow.configFile ./uiflow.json` | string | 指定配置文件路径 | 无 |
 
 - 核心流程：
@@ -154,8 +181,10 @@
 ```text
 Read Environment.GetCommandLineArgs()
 -> CommandLineOptionsParser.Parse extracts unityUIFlow.* options
--> ConfigFileLoader.Load from .unityuiflow.json (if exists)
--> Merge: CLI > config file > defaults
+-> Read UNITY_UI_FLOW_* environment variables
+-> Resolve config file path from CLI / environment / default
+-> ConfigFileLoader.Load from resolved config path (if exists)
+-> Merge: CLI > environment > config file > defaults
 -> Validate option values
 -> Build TestOptions
 -> Run suite/test
@@ -186,6 +215,8 @@ Read Environment.GetCommandLineArgs()
 5. [命令行包含 `-unityUIFlow.testFilter Login*`] -> [执行套件] -> [仅执行匹配文件名或用例名的用例]
 6. [工作目录存在 `.unityuiflow.json`，含 `headed: false`，命令行未指定 headed] -> [启动测试] -> [`TestOptions.Headed=false`]
 7. [工作目录存在 `.unityuiflow.json`，含 `headed: false`，命令行指定 `-unityUIFlow.headed true`] -> [启动测试] -> [`TestOptions.Headed=true`（CLI 优先）]
+8. [配置文件中 `reportPath=ConfigReports`，环境变量 `UNITY_UI_FLOW_REPORT_PATH=EnvReports`，命令行未指定 reportPath] -> [启动测试] -> [`TestOptions.ReportOutputPath=EnvReports`]
+9. [环境变量 `UNITY_UI_FLOW_HEADED=false`，命令行指定 `-unityUIFlow.headed true`] -> [启动测试] -> [`TestOptions.Headed=true`（CLI 优先于环境变量）]
 
 ---
 
@@ -200,6 +231,5 @@ Read Environment.GetCommandLineArgs()
 
 ## 11. 周边可选功能
 
-- P1：支持从环境变量读取默认参数；当前预留 `EnvironmentOptionSource`，变量名格式为 `UNITY_UI_FLOW_{PARAMETER_NAME}`（如 `UNITY_UI_FLOW_REPORT_PATH`），优先级低于 CLI 参数但高于配置文件。
 - P1：支持 JSON 格式产物清单（已在 `CiArtifactManifestWriter` 中预留 `WriteJson` 方法），V1 默认输出文本格式。
 - P2：支持 JUnit XML 适配输出；当前不预留 V1 文件结构。

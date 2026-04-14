@@ -1,103 +1,170 @@
 # UnityUIFlow API 速查与最佳实践
 
-版本：1.0.0  
-日期：2026-04-08  
-状态：补充版
+版本：1.4.0
+日期：2026-04-13
+状态：以当前代码实现为准更新
 
 ## 内置动作速查
 
+当前内置动作以当前代码实现为准，核心动作如下。
+
+### 指针交互
+
 | 动作 | 关键参数 | 说明 |
 | --- | --- | --- |
-| `click` | `selector` | 单击元素 |
-| `double_click` | `selector` | 双击元素 |
-| `type_text` | `selector`, `value` | 模拟键盘输入 |
-| `type_text_fast` | `selector`, `value` | 直接写入文本值 |
-| `press_key` | `key` | 发送按键 |
-| `drag` | `from`, `to` | 拖拽元素或坐标 |
-| `scroll` | `selector`, `delta` | 发送滚轮事件 |
-| `hover` | `selector` | 悬停到目标元素 |
+| `click` | `selector`，可选 `button`、`modifiers` | 单击目标元素 |
+| `double_click` | `selector`，可选 `button`、`modifiers` | 双击目标元素 |
+| `hover` | `selector`，可选 `duration`、`modifiers` | 悬停目标元素 |
+| `drag` | `selector` 或 `from`，以及 `to`，可选 `duration`、`button`、`modifiers` | 从元素或坐标拖拽到目标 |
+| `scroll` | `selector`、`delta` | 在目标元素上发送滚轮事件 |
+
+### 文本与键盘
+
+| 动作 | 关键参数 | 说明 |
+| --- | --- | --- |
+| `press_key` | `key`，可选 `selector` | 发送按键 |
+| `type_text` | `selector`、`value` | 优先走官方文本输入链路 |
+| `type_text_fast` | `selector`、`value` | 直接写入文本值，不宣称真实输入 |
+| `focus` | `selector` | 聚焦目标元素 |
+
+### 命令与菜单
+
+| 动作 | 关键参数 | 说明 |
+| --- | --- | --- |
+| `execute_command` | `selector`、`command` | 执行编辑器命令 |
+| `validate_command` | `selector`、`command` | 预校验编辑器命令 |
+| `open_context_menu` | `selector` | 打开上下文菜单 |
+| `select_context_menu_item` | `item` | 选择上下文菜单项 |
+| `open_popup_menu` | `selector` | 打开弹出菜单 |
+| `select_popup_menu_item` | `item` | 选择弹出菜单项 |
+| `assert_menu_item` | `item` | 断言菜单项存在且可用 |
+| `assert_menu_item_disabled` | `item` | 断言菜单项存在且禁用 |
+| `menu_item` | 可选 `selector`，必填 `item`，可选 `kind`、`mode` | 统一菜单 DSL，支持选择与菜单项启用状态断言 |
+
+### 值与选择
+
+| 动作 | 关键参数 | 说明 |
+| --- | --- | --- |
+| `set_value` | `selector`、`value` | 直接写入 `BaseField<T>` 等控件值 |
+| `select_option` | `selector`，`value` 或 `index` 或 `indices` | 用于下拉、枚举、遮罩、Popup、Tag、Layer 等 |
+| `select_list_item` | `selector`，`index` 或 `indices` | 选择 `ListView` / `MultiColumnListView` 行 |
+| `drag_reorder` | `selector`、`from_index`、`to_index` | 对 `ListView.itemsSource` 执行逻辑重排 |
+| `select_tree_item` | `selector`，`id` 或 `index` | 选择 `TreeView` / `MultiColumnTreeView` 节点 |
+| `toggle_foldout` | `selector`，可选 `expand` | 折叠/展开 `Foldout` |
+| `set_slider` | `selector`、`value` 或 `min_value/max_value` | 设置 `Slider` / `SliderInt` / `MinMaxSlider` |
+| `select_tab` | `selector`，`label` 或 `index` | 切换 `TabView` 页签 |
+| `sort_column` | `selector`，`column` 或 `index`，可选 `direction` | 设置 `MultiColumn*View` 排序 |
+| `resize_column` | `selector`，`column` 或 `index`，`width` | 设置 `MultiColumn*View` 列宽 |
+| `set_bound_value` | `selector`、`binding_path`、`value` | 对绑定字段执行语义赋值 |
+| `assert_bound_value` | `selector`、`binding_path`、`expected` | 断言绑定字段值 |
+| `navigate_breadcrumb` | `selector`，以及 `label` 或 `index` | 导航 `ToolbarBreadcrumbs` |
+| `set_split_view_size` | `selector`、`size`，可选 `pane` | 设置 `TwoPaneSplitView` 固定 pane 尺寸 |
+| `page_scroller` | `selector`，可选 `direction`、`pages`、`page_size` | 按分页语义驱动 `Scroller` |
+
+### 等待与断言
+
+| 动作 | 关键参数 | 说明 |
+| --- | --- | --- |
 | `wait` | `duration` | 固定等待 |
-| `wait_for_element` | `selector`, `timeout` | 等待目标元素出现 |
+| `wait_for_element` | `selector`，可选 `timeout` | 等待元素出现且可见 |
 | `assert_visible` | `selector` | 断言元素可见 |
-| `assert_not_visible` | `selector` | 断言元素不可见 |
-| `assert_text` | `selector`, `expected` | 断言文本完全相等 |
-| `assert_text_contains` | `selector`, `expected` | 断言文本包含目标片段 |
-| `assert_property` | `selector`, `property`, `expected` | 断言属性值 |
-| `screenshot` | `name` | 生成截图附件 |
+| `assert_not_visible` | `selector`，可选 `timeout` | 断言元素不可见 |
+| `assert_text` | `selector`、`expected` | 断言文本完全相等 |
+| `assert_text_contains` | `selector`、`expected` | 断言文本包含片段 |
+| `assert_value` | `selector`、`expected` | 断言控件值 |
+| `assert_enabled` | `selector` | 断言元素可用 |
+| `assert_disabled` | `selector` | 断言元素不可用 |
+| `assert_property` | `selector`、`property`、`expected` | 断言属性值 |
+| `screenshot` | 可选 `tag` | 生成截图附件 |
 
 ## 选择器速查
 
 | 语法 | 含义 |
 | --- | --- |
-| `#login-button` | 按 `element.name` 查找 |
+| `#login-button` | 按 `name` 查找 |
 | `.btn-primary` | 按 class 查找 |
 | `Button` | 按类型名查找 |
 | `[tooltip=Save]` | 按属性值查找 |
 | `#panel .btn` | 后代选择器 |
 | `#panel > .btn` | 直接子级选择器 |
-| `.item:first-child` | 仅支持首子元素伪类 |
+| `.item:first-child` | 首子元素伪类 |
 
-## 测试入口速查
+## 常见值格式
 
-| API | 说明 |
+| 场景 | 格式示例 |
 | --- | --- |
-| `TestRunner.RunTest(yamlPath, options)` | 运行单个 YAML 用例 |
-| `TestRunner.RunSuite(directory, options)` | 运行目录下所有 YAML 用例 |
-| `UnityUIFlowFixture<TWindow>.ExecuteYamlSteps(yamlContent)` | 在 C# 测试中直接桥接 YAML 步骤 |
+| `Vector3Field` | `1,2,3` |
+| `RectField` | `0,0,100,50` |
+| `BoundsField` | `0,0,0,1,1,1` |
+| `ColorField` | `#FF8040CC` 或 `1,0.5,0.25,0.8` |
+| `ObjectField` | `Assets/.../file.asset` 或 `guid:xxxxxxxx...` |
+| `CurveField` | `0:0:1:1;1:2:0:0` |
+| `GradientField` | `0:#FF0000FF;1:#00FF00FF|0:1;1:0.5` |
+| `select_list_item.indices` | `1,3,5` |
+| `scroll.delta` | `0,120` |
+| `modifiers` | `shift,ctrl` |
 
 ## CLI 参数速查
 
 | 参数 | 说明 |
 | --- | --- |
 | `-unityUIFlow.testFilter` | 按 YAML 文件名或用例名过滤 |
-| `-unityUIFlow.headed` | 开启或关闭 Headed 模式 |
+| `-unityUIFlow.headed` | 开启/关闭 Headed 模式 |
 | `-unityUIFlow.reportPath` | 指定报告输出目录 |
-| `-unityUIFlow.screenshotOnFailure` | 控制失败是否自动截图 |
+| `-unityUIFlow.screenshotOnFailure` | 失败时自动截图 |
+| `-unityUIFlow.requireOfficialHost` | 强制要求官方宿主桥接 |
+| `-unityUIFlow.requireOfficialPointerDriver` | 强制要求官方指针驱动 |
+| `-unityUIFlow.requireInputSystemKeyboardDriver` | 强制要求 InputSystem 键盘高保真链路 |
+| `-unityUIFlow.preStepDelayMs` | 每步执行前注入固定延时 |
+
+## 当前驱动口径
+
+| 能力 | 当前实现 |
+| --- | --- |
+| 指针动作 | 官方 `PanelSimulator` 优先；非官方入口 fallback |
+| 键盘/文本 | 官方 `PanelSimulator` 优先；InputSystem 测试桥接补充 |
+| 快速写值 | `set_value` / `type_text_fast` 保留直接写值 |
+| 菜单动作 | 官方 `ContextMenuSimulator` / `PopupMenuSimulator` |
+| 命令动作 | 官方 `PanelSimulator.ExecuteCommand/ValidateCommand` 优先 |
 
 ## 最佳实践
 
-1. 为所有可测试元素设置稳定的 `name`，优先使用 `#name` 选择器。
-2. 优先使用 `wait_for_element`，尽量避免固定 `wait`。
-3. 对复杂交互优先写成自定义动作或 Page Object，不把复杂逻辑堆进 YAML。
-4. 只在关键断言前和失败场景截图，避免 I/O 膨胀。
-5. 数据驱动数据尽量外置，避免在一个 YAML 文件中堆叠过多重复步骤。
-6. Headed 模式只用于开发调试，CI 默认使用无头模式。
+1. 优先给被测元素设置稳定 `name`，然后用 `#name` 选择器。
+2. 对真正依赖用户语义的输入用 `type_text` / `press_key`，只在需要稳定直写时使用 `type_text_fast` / `set_value`。
+3. 对 `ObjectField`、`CurveField`、`GradientField` 优先使用当前支持的值 DSL，不要把浮窗交互写进 YAML。
+4. 对 `PropertyField`、`InspectorElement` 通过已生成的后代控件命名后再自动化，不要假设内部子树永远稳定。
+5. 列表重排、列排序、列宽调整优先用 `drag_reorder`、`sort_column`、`resize_column`，不要依赖易碎的内部拖拽结构。
+6. 需要验证菜单项时，先 `open_context_menu` / `open_popup_menu`，再执行 `assert_menu_item*` 或 `select_*_menu_item`。
+7. CI 或严格验收场景打开 `requireOfficialHost` / `requireOfficialPointerDriver` / `requireInputSystemKeyboardDriver`，避免 fallback 被误判为高保真通过。
 
-## 已知限制
+## 已知边界
 
-| 限制 | 建议规避方式 |
+| 范围 | 当前结论 |
 | --- | --- |
-| 键盘输入兼容性依赖 `com.unity.test-framework` UI 测试子系统与 InputSystem | 对中文或复杂输入优先使用 `type_text_fast` |
-| 自动等待能力有限 | 用 `wait_for_element` 显式声明等待点 |
-| 拖拽细节依赖底层模拟器实现 | 在 M0/M1 先做原型验证 |
-| 复杂条件表达式未进入 V1 | 用自定义动作承接复杂分支 |
-| 截图当前为占位 PNG，非真实窗口截图 | 正式截图能力在 M3 阶段升级 |
-
-## 高价值周边功能路线图
-
-以下功能未进入 V1 强制范围，但具有较高的实用价值，建议在首版稳定后优先评估：
-
-| 功能 | 优先级 | 说明 |
-| --- | --- | --- |
-| 失败步骤自动重试 | P1 | 支持配置重试次数，减少环境噪音导致的误报 |
-| `assert_screenshot_matches` 视觉回归 | P1 | 对比截图与基准图，输出像素差异报告 |
-| 步骤耗时记录与慢步骤告警 | P1 | 将每步执行时间写入报告，标注超阈值步骤 |
-| Headed 面板显示当前驱动类型 | P1 | 实时显示当前步骤使用的驱动（官方 / InputSystem / fallback） |
-| `Shift+Click`、`Ctrl+Click` 修饰键组合 | P1 | 通过 `com.unity.test-framework` UI 测试子系统修饰键 API 实现 |
-| HTML 格式报告（内嵌截图缩略图） | P1 | 替代或补充当前 Markdown 报告，更适合 CI 可视化 |
-| Watch 模式（文件变更自动重跑） | P2 | YAML 或动作代码变更后自动触发对应用例重跑 |
-| 程序集白名单通过配置文件扩展 | P2 | 通过 `.unityuiflow.json` 扩展自定义动作扫描范围 |
-| IME / 剪贴板 / 多设备输入 | P2 | 高级输入场景，IME 不纳入 V1 验收范围 |
-| 并行套件执行 | P2 | 多 YAML 套件并发执行，需解决 EditorWindow 隔离问题 |
+| `ObjectField` Object Picker / DragAndDrop | 不支持 |
+| `CurveField` / `GradientField` 独立编辑器浮窗 | 不支持 |
+| `ToolbarPopupSearchField` 弹出结果列表 | 不支持 |
+| `ToolbarBreadcrumbs` 专用“按 label / index 导航”动作 | 未封装 |
+| `PropertyField` / `InspectorElement` 自身统一语义赋值 | 未封装 |
+| `IMGUIContainer` 内部内容 | 不支持 |
+| IME / 系统剪贴板 / 多窗口协同 / 像素级视觉 diff | 不支持 |
 
 ## 与 Playwright 的类比
 
 | Playwright | UnityUIFlow |
 | --- | --- |
-| `page.locator('#btn')` | `finder.Find(\"#btn\", root)` |
-| `locator.click()` | `click` 动作 |
-| `page.fill()` | `type_text` 或 `type_text_fast` |
-| `page.dragTo()` | `drag` 动作 |
+| `page.locator('#btn')` | `selector: "#btn"` |
+| `locator.click()` | `click` |
+| `locator.fill()` | `type_text` / `type_text_fast` / `set_value` |
+| `locator.dragTo()` | `drag` |
 | `page.waitForSelector()` | `wait_for_element` |
 | `expect(locator).toHaveText()` | `assert_text` |
-| `headed` | `HeadedTestWindow` |
+| `expect(locator).toHaveValue()` | `assert_value` |
+| `headed` | Headed 窗口 + `RuntimeController` |
+
+## 2026-04-13 更新摘要
+
+- 动作清单已从早期版本的 16 个扩展为当前真实实现的 38 个。
+- 已补充 `focus`、`set_value`、`select_option`、`drag_reorder`、`sort_column`、`resize_column`、菜单动作、命令动作。
+- 已补充复杂字段 DSL、Toolbar 系列、`PropertyField` / `InspectorElement` 相关最佳实践和边界。
+- 全文口径已改为“代码为准”，不再把已实现动作继续写成待开发。

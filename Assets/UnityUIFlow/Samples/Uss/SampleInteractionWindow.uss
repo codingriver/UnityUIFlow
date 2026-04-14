@@ -57,6 +57,23 @@
     border-bottom-color: rgb(115, 133, 148);
 }
 
+.menu-target {
+    margin-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgb(166, 132, 95);
+    border-right-color: rgb(166, 132, 95);
+    border-top-color: rgb(166, 132, 95);
+    border-bottom-color: rgb(166, 132, 95);
+    background-color: rgb(247, 237, 221);
+}
+
 .status {
     margin-bottom: 4px;
 }

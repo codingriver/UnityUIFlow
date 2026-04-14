@@ -209,6 +209,13 @@ TestRunner.RunTestAsync(yamlPath)
 | `10-drag.yaml` | `drag` |
 | `11-scroll.yaml` | `scroll` |
 | `12-type-text.yaml` | `type_text`、`assert_property` |
+| `13-advanced-controls.yaml` | 基础高级控件验收：`select_option`、`toggle_foldout`、`set_slider`、`select_list_item`、`set_value`、`select_tree_item`、`select_tab` |
+| `14-34` | 覆盖窗口扩展验收：绑定字段、复杂值类型、集合/列/布局、菜单与命令、修饰键输入、`menu_item`、`navigate_breadcrumb`、`set_split_view_size`、`page_scroller`、`drag_reorder`、`ObjectField search:`、数字字段、显示控件、`RepeatButton`、`ToolbarPopupSearchField` 输入本体等 |
+
+补充口径：
+- 当前 `Assets/Examples/Yaml/` 已扩展到 `01-34` 共 34 份 YAML。
+- `UnityUIFlow.ExamplesAcceptanceTests` 已增加“自动扫描 Examples/Yaml 全目录”的验收入口，新 YAML 无需再逐个手写测试方法。
+- 以当前代码基线核对，内置动作注册表中的全部 built-in actions 均已在 Examples YAML 中出现至少一次；此外还保留了 `custom_login` 作为自定义动作示例。
 
 ### 可选扩展
 
