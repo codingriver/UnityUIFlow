@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using UnityEditor;
@@ -66,6 +67,13 @@ namespace UnityUIFlow
                 case RadioButtonGroup radioButtonGroup when TryResolveIndex(value, null, out int radioIndex):
                     radioButtonGroup.value = radioIndex;
                     return true;
+                case ObjectField objectField:
+                    if (TryLoadUnityObject(value, objectField.objectType, out UnityEngine.Object objValue))
+                    {
+                        objectField.value = objValue;
+                        return true;
+                    }
+                    return false;
             }
 
             PropertyInfo valueProperty = element.GetType().GetProperty("value", PublicInstance);
@@ -277,6 +285,98 @@ namespace UnityUIFlow
             throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"Action {actionName} target is not a selectable control: {element.GetType().Name}");
         }
 
+        public static void ToggleMaskOptionOrThrow(VisualElement element, Dictionary<string, string> parameters, string actionName)
+        {
+            parameters.TryGetValue("value", out string valueLiteral);
+            parameters.TryGetValue("index", out string indexLiteral);
+
+            if (string.IsNullOrWhiteSpace(valueLiteral) && string.IsNullOrWhiteSpace(indexLiteral))
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionParameterMissing, $"Action {actionName} requires value or index.");
+            }
+
+            if (element is EnumFlagsField enumFlagsField && enumFlagsField.value != null)
+            {
+                Type enumType = enumFlagsField.value.GetType();
+                if (!TryResolveEnumFlagsMaskIndex(enumType, valueLiteral, indexLiteral, out int bitIndex))
+                {
+                    throw new UnityUIFlowException(ErrorCodes.ActionOptionNotFound, $"Action {actionName} option {valueLiteral ?? indexLiteral} was not found for {element.GetType().Name}.");
+                }
+                int intValue = Convert.ToInt32(enumFlagsField.value);
+                int newValue = intValue ^ (1 << bitIndex);
+                enumFlagsField.value = (Enum)Enum.ToObject(enumType, newValue);
+                return;
+            }
+
+            if (element is MaskField maskField)
+            {
+                if (!TryResolveMaskToggleIndex(maskField.choices, valueLiteral, indexLiteral, out int maskBitIndex))
+                {
+                    throw new UnityUIFlowException(ErrorCodes.ActionOptionNotFound, $"Action {actionName} option {valueLiteral ?? indexLiteral} was not found for {element.GetType().Name}.");
+                }
+                maskField.value ^= (1 << maskBitIndex);
+                return;
+            }
+
+            if (element is LayerMaskField layerMaskField)
+            {
+                if (!TryResolveMaskToggleIndex(layerMaskField.choices, valueLiteral, indexLiteral, out int layerMaskBitIndex))
+                {
+                    throw new UnityUIFlowException(ErrorCodes.ActionOptionNotFound, $"Action {actionName} option {valueLiteral ?? indexLiteral} was not found for {element.GetType().Name}.");
+                }
+                layerMaskField.value ^= (1 << layerMaskBitIndex);
+                return;
+            }
+
+            throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"Action {actionName} target is not a mask/flags control: {element.GetType().Name}");
+        }
+
+        private static bool TryResolveEnumFlagsMaskIndex(Type enumType, string valueLiteral, string indexLiteral, out int bitIndex)
+        {
+            bitIndex = 0;
+            Array values = Enum.GetValues(enumType);
+            string[] names = Enum.GetNames(enumType);
+            if (!string.IsNullOrWhiteSpace(indexLiteral) && TryParseInt(indexLiteral, out int idx) && idx >= 0 && idx < values.Length)
+            {
+                bitIndex = (int)Math.Log(Convert.ToInt32(values.GetValue(idx)), 2);
+                return true;
+            }
+            if (!string.IsNullOrWhiteSpace(valueLiteral))
+            {
+                for (int i = 0; i < names.Length; i++)
+                {
+                    if (string.Equals(names[i], valueLiteral, StringComparison.OrdinalIgnoreCase))
+                    {
+                        bitIndex = (int)Math.Log(Convert.ToInt32(values.GetValue(i)), 2);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static bool TryResolveMaskToggleIndex(IList<string> choices, string valueLiteral, string indexLiteral, out int bitIndex)
+        {
+            bitIndex = 0;
+            if (!string.IsNullOrWhiteSpace(indexLiteral) && TryParseInt(indexLiteral, out int idx) && idx >= 0 && idx < choices.Count)
+            {
+                bitIndex = idx;
+                return true;
+            }
+            if (!string.IsNullOrWhiteSpace(valueLiteral))
+            {
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    if (string.Equals(choices[i], valueLiteral, StringComparison.Ordinal))
+                    {
+                        bitIndex = i;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         public static void SelectListItemOrThrow(VisualElement element, int index, string actionName)
         {
             IList itemsSource = GetItemsSource(element);
@@ -482,18 +582,13 @@ namespace UnityUIFlow
 
             if (!string.IsNullOrWhiteSpace(indexLiteral) && TryParseInt(indexLiteral, out int index))
             {
-                if (TrySetIntProperty(element, "selectedTabIndex", index) || TrySetIntProperty(element, "selectedIndex", index))
-                {
-                    return;
-                }
-
-                if (TryClickTabByIndex(element, index, context))
+                if (TrySelectTab(element, index, context))
                 {
                     return;
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(labelLiteral) && TryClickTabByLabel(element, labelLiteral, context))
+            if (!string.IsNullOrWhiteSpace(labelLiteral) && TrySelectTab(element, labelLiteral, context))
             {
                 return;
             }
@@ -501,11 +596,90 @@ namespace UnityUIFlow
             throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"Action {actionName} target is not a supported TabView: {element.GetType().Name}");
         }
 
+        public static void CloseTabOrThrow(VisualElement element, Dictionary<string, string> parameters, string actionName, ActionContext context)
+        {
+            parameters.TryGetValue("label", out string labelLiteral);
+            parameters.TryGetValue("index", out string indexLiteral);
+
+            if (string.IsNullOrWhiteSpace(labelLiteral) && string.IsNullOrWhiteSpace(indexLiteral))
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionParameterMissing, $"Action {actionName} requires label or index.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(indexLiteral) && TryParseInt(indexLiteral, out int index))
+            {
+                if (TryCloseTab(element, index, context))
+                {
+                    return;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(labelLiteral) && TryCloseTab(element, labelLiteral, context))
+            {
+                return;
+            }
+
+            throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"Action {actionName} could not close the specified tab on {element.GetType().Name}");
+        }
+
         public static void SetBoundValueOrThrow(VisualElement element, Dictionary<string, string> parameters, string actionName)
         {
             string propertyPath = ResolveBoundPropertyPath(element, parameters, actionName, requireExplicitProperty: false);
             string value = ActionHelpers.Require(parameters, actionName, "value");
-            VisualElement targetField = FindBoundTargetOrThrow(element, propertyPath, actionName);
+            bool infer = parameters.TryGetValue("infer", out string inferValue) && !string.Equals(inferValue, "false", StringComparison.OrdinalIgnoreCase);
+
+            if (infer && string.IsNullOrWhiteSpace(propertyPath))
+            {
+                List<VisualElement> candidates = element.Query<VisualElement>().ToList();
+
+                // Phase 1: bool-specific controls
+                if (TryParseBool(value, out _))
+                {
+                    foreach (VisualElement candidate in candidates)
+                    {
+                        if ((candidate is Toggle || candidate is Foldout) && ActionHelpers.TryAssignFieldValue(candidate, value))
+                        {
+                            return;
+                        }
+                    }
+                }
+
+                // Phase 2: enum / discrete controls
+                foreach (VisualElement candidate in candidates)
+                {
+                    if ((candidate is EnumField || candidate is EnumFlagsField || candidate is MaskField || candidate is LayerMaskField || candidate is RadioButtonGroup || candidate is DropdownField) && ActionHelpers.TryAssignFieldValue(candidate, value))
+                    {
+                        return;
+                    }
+                }
+
+                // Phase 3: numeric controls
+                if (TryParseFloat(value, out _) || TryParseInt(value, out _))
+                {
+                    foreach (VisualElement candidate in candidates)
+                    {
+                        if ((candidate is FloatField || candidate is IntegerField || candidate is LongField || candidate is DoubleField || candidate is Slider || candidate is SliderInt || candidate is MinMaxSlider) && ActionHelpers.TryAssignFieldValue(candidate, value))
+                        {
+                            return;
+                        }
+                    }
+                }
+
+                // Phase 4: any writable control (fallback to TextField, etc.)
+                foreach (VisualElement candidate in candidates)
+                {
+                    if (candidate.GetType().GetProperty("value", PublicInstance)?.CanWrite == true && ActionHelpers.TryAssignFieldValue(candidate, value))
+                    {
+                        return;
+                    }
+                }
+
+                throw new UnityUIFlowException(
+                    ErrorCodes.ActionTargetTypeInvalid,
+                    $"Action {actionName} could not infer a writable bound child matching value '{value}'.");
+            }
+
+            VisualElement targetField = FindBoundTargetOrThrow(element, propertyPath, actionName, infer);
             if (!ActionHelpers.TryAssignFieldValue(targetField, value))
             {
                 throw new UnityUIFlowException(
@@ -518,7 +692,86 @@ namespace UnityUIFlow
         {
             string propertyPath = ResolveBoundPropertyPath(element, parameters, actionName, requireExplicitProperty: false);
             string expected = ActionHelpers.Require(parameters, actionName, "expected");
-            VisualElement targetField = FindBoundTargetOrThrow(element, propertyPath, actionName);
+            bool infer = parameters.TryGetValue("infer", out string inferValue) && !string.Equals(inferValue, "false", StringComparison.OrdinalIgnoreCase);
+
+            if (infer && string.IsNullOrWhiteSpace(propertyPath))
+            {
+                List<VisualElement> candidates = element.Query<VisualElement>().ToList();
+
+                // Phase 1: bool-specific controls
+                if (TryParseBool(expected, out _))
+                {
+                    foreach (VisualElement candidate in candidates)
+                    {
+                        if ((candidate is Toggle || candidate is Foldout)
+                            && TryReadValue(candidate, out object inferredActualValue, out Type inferredValueType)
+                            && TryConvertStringValue(expected, inferredValueType, out object inferredExpectedValue)
+                            && ValuesEqual(inferredActualValue, inferredExpectedValue, inferredValueType))
+                        {
+                            return;
+                        }
+                    }
+                }
+
+                // Phase 2: enum / discrete controls
+                foreach (VisualElement candidate in candidates)
+                {
+                    if ((candidate is EnumField || candidate is EnumFlagsField || candidate is MaskField || candidate is LayerMaskField || candidate is RadioButtonGroup || candidate is DropdownField)
+                        && TryReadValue(candidate, out object inferredActualValue, out Type inferredValueType)
+                        && TryConvertStringValue(expected, inferredValueType, out object inferredExpectedValue)
+                        && ValuesEqual(inferredActualValue, inferredExpectedValue, inferredValueType))
+                    {
+                        return;
+                    }
+                }
+
+                // Phase 3: numeric controls
+                if (TryParseFloat(expected, out _) || TryParseInt(expected, out _))
+                {
+                    foreach (VisualElement candidate in candidates)
+                    {
+                        if ((candidate is FloatField || candidate is IntegerField || candidate is LongField || candidate is DoubleField || candidate is Slider || candidate is SliderInt || candidate is MinMaxSlider)
+                            && TryReadValue(candidate, out object inferredActualValue, out Type inferredValueType)
+                            && TryConvertStringValue(expected, inferredValueType, out object inferredExpectedValue)
+                            && ValuesEqual(inferredActualValue, inferredExpectedValue, inferredValueType))
+                        {
+                            return;
+                        }
+                    }
+                }
+
+                // Phase 4: any readable control
+                foreach (VisualElement candidate in candidates)
+                {
+                    if (candidate.GetType().GetProperty("value", PublicInstance)?.CanRead != true)
+                    {
+                        continue;
+                    }
+
+                    if (TryReadValue(candidate, out object inferredActualValue, out Type inferredValueType)
+                        && TryConvertStringValue(expected, inferredValueType, out object inferredExpectedValue))
+                    {
+                        if (ValuesEqual(inferredActualValue, inferredExpectedValue, inferredValueType))
+                        {
+                            return;
+                        }
+
+                        continue;
+                    }
+
+                    string inferredActual = ActionHelpers.GetValueText(candidate);
+                    if (string.Equals(inferredActual, expected, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+                }
+
+                throw new UnityUIFlowException(
+                    ErrorCodes.ActionExecutionFailed,
+                    $"Action {actionName} could not infer a bound child matching expected '{expected}'.");
+            }
+
+            VisualElement targetField = FindBoundTargetOrThrow(element, propertyPath, actionName, infer);
             if (TryReadValue(targetField, out object actualValue, out Type valueType)
                 && TryConvertStringValue(expected, valueType, out object expectedValue))
             {
@@ -572,14 +825,117 @@ namespace UnityUIFlow
                 target = buttons[index];
             }
 
-            if (context?.SimulationSession?.PointerDriver != null)
+            try
             {
-                context.SimulationSession.PointerDriver.Click(target, 1, MouseButton.LeftMouse, EventModifiers.None, context);
+                if (context?.SimulationSession?.PointerDriver != null)
+                {
+                    context.SimulationSession.PointerDriver.Click(target, 1, MouseButton.LeftMouse, EventModifiers.None, context);
+                }
+                else
+                {
+                    ActionHelpers.DispatchClick(target, 1, MouseButton.LeftMouse, EventModifiers.None, context);
+                }
             }
-            else
+            catch (UnityUIFlowException)
             {
-                ActionHelpers.DispatchClick(target, 1, MouseButton.LeftMouse, EventModifiers.None, context);
+                // Fallback for elements inside containers (e.g. Toolbar) where panel hit-testing may miss the target.
+                context?.Log($"navigate_breadcrumb: panel click failed, using reflection fallback on {ActionContext.ElementInfo(target)}");
+                bool triggered = false;
+
+                // 1) Try Button.SendClickEvent() if available (Unity 2023+)
+                try
+                {
+                    var sendClick = target.GetType().GetMethod("SendClickEvent", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (sendClick != null)
+                    {
+                        sendClick.Invoke(target, null);
+                        triggered = true;
+                    }
+                }
+                catch { }
+
+                // 2) Try invoking Button.clicked directly via reflection
+                if (!triggered)
+                {
+                    try
+                    {
+                        var clickedField = typeof(Button).GetField("clicked", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                        if (clickedField != null)
+                        {
+                            var del = clickedField.GetValue(target) as System.Delegate;
+                            if (del != null)
+                            {
+                                del.DynamicInvoke();
+                                triggered = true;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                // 3) Try invoking Clickable.clicked via reflection (com.unity.ui 1.x only)
+                object clickable = null;
+                try
+                {
+                    var clickableProp = target.GetType().GetProperty("clickable", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                    clickable = clickableProp?.GetValue(target);
+                }
+                catch { }
+
+                if (!triggered && clickable != null)
+                {
+                    try
+                    {
+                        var clickedField = clickable.GetType().GetField("clicked", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                        if (clickedField != null)
+                        {
+                            var del = clickedField.GetValue(clickable) as System.Delegate;
+                            if (del != null)
+                            {
+                                del.DynamicInvoke();
+                                triggered = true;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                // 4) Try to simulate Clickable using its SimulateSingleClick internal method if available (com.unity.ui 1.x only)
+                if (!triggered && clickable != null)
+                {
+                    try
+                    {
+                        var sim = clickable.GetType().GetMethod("SimulateSingleClick", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (sim != null)
+                        {
+                            sim.Invoke(clickable, new object[] { null, Vector2.zero });
+                            triggered = true;
+                        }
+                    }
+                    catch { }
+                }
+
+                // 5) Dispatch ClickEvent directly to the button
+                if (!triggered)
+                {
+                    using (ClickEvent clickEvt = ClickEvent.GetPooled())
+                    {
+                        clickEvt.target = target;
+                        target.SendEvent(clickEvt);
+                    }
+                }
             }
+        }
+
+        public static List<string> ReadBreadcrumbsOrThrow(VisualElement element, string actionName)
+        {
+            List<Button> buttons = element.Query<Button>().ToList();
+            if (buttons.Count == 0)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"Action {actionName} target does not contain breadcrumb buttons: {element.GetType().Name}");
+            }
+
+            return buttons.Select(button => button.text).ToList();
         }
 
         public static void SetSplitViewSizeOrThrow(VisualElement element, Dictionary<string, string> parameters, string actionName)
@@ -664,6 +1020,61 @@ namespace UnityUIFlow
             scroller.value = next;
         }
 
+        public static (Vector2 from, Vector2 to) ResolveScrollerThumbDrag(Scroller scroller, Dictionary<string, string> parameters, string actionName)
+        {
+            string directionLiteral = parameters.TryGetValue("direction", out string dir) && !string.IsNullOrWhiteSpace(dir)
+                ? dir.Trim().ToLowerInvariant()
+                : null;
+
+            float ratio = 0.5f;
+            if (parameters.TryGetValue("ratio", out string ratioLiteral) && !string.IsNullOrWhiteSpace(ratioLiteral))
+            {
+                if (!TryParseFloat(ratioLiteral, out ratio) || ratio < 0f || ratio > 1f)
+                {
+                    throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid, $"Action {actionName} ratio is invalid: {ratioLiteral}");
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(directionLiteral))
+            {
+                switch (directionLiteral)
+                {
+                    case "up":
+                    case "left":
+                    case "decrease":
+                    case "previous":
+                        ratio = 0f;
+                        break;
+                    case "down":
+                    case "right":
+                    case "increase":
+                    case "next":
+                        ratio = 1f;
+                        break;
+                    default:
+                        throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid, $"Action {actionName} direction is invalid: {directionLiteral}");
+                }
+            }
+
+            VisualElement thumb = scroller.Q<VisualElement>(className: "unity-scroller__thumb")
+                ?? scroller.Q<VisualElement>(className: "unity-base-slider__dragger")
+                ?? scroller.Q<VisualElement>(className: "unity-base-slider__thumb");
+            VisualElement track = scroller.Q<VisualElement>(className: "unity-scroller__track")
+                ?? scroller.Q<VisualElement>(className: "unity-base-slider__tracker")
+                ?? scroller.Q<VisualElement>(className: "unity-base-slider__track");
+            if (thumb == null || track == null)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"Action {actionName} could not locate scroller thumb or track.");
+            }
+
+            Vector2 fromPos = thumb.worldBound.center;
+            Rect trackRect = track.worldBound;
+            Vector2 toPos = scroller.direction == SliderDirection.Horizontal
+                ? new Vector2(Mathf.Lerp(trackRect.xMin, trackRect.xMax, ratio), fromPos.y)
+                : new Vector2(fromPos.x, Mathf.Lerp(trackRect.yMin, trackRect.yMax, ratio));
+
+            return (fromPos, toPos);
+        }
+
         private static float ResolveScrollerPageSize(Scroller scroller, Dictionary<string, string> parameters)
         {
             if (parameters.TryGetValue("page_size", out string literal) && !string.IsNullOrWhiteSpace(literal) && TryParseFloat(literal, out float explicitPageSize) && explicitPageSize > 0f)
@@ -698,10 +1109,34 @@ namespace UnityUIFlow
                 throw new UnityUIFlowException(ErrorCodes.ActionParameterMissing, $"Action {actionName} requires property.");
             }
 
+            bool infer = parameters.TryGetValue("infer", out string inferValue) && !string.Equals(inferValue, "false", StringComparison.OrdinalIgnoreCase);
+            if (infer)
+            {
+                string inferred = TryInferBoundPropertyPath(element);
+                if (!string.IsNullOrWhiteSpace(inferred))
+                {
+                    return inferred;
+                }
+                return null;
+            }
+
             throw new UnityUIFlowException(ErrorCodes.ActionParameterMissing, $"Action {actionName} requires property or a directly bound target.");
         }
 
-        private static VisualElement FindBoundTargetOrThrow(VisualElement root, string propertyPath, string actionName)
+        private static string TryInferBoundPropertyPath(VisualElement element)
+        {
+            List<VisualElement> candidates = element.Query<VisualElement>().ToList();
+            foreach (VisualElement candidate in candidates)
+            {
+                if (candidate is IBindable childBindable && !string.IsNullOrWhiteSpace(childBindable.bindingPath))
+                {
+                    return childBindable.bindingPath;
+                }
+            }
+            return null;
+        }
+
+        private static VisualElement FindBoundTargetOrThrow(VisualElement root, string propertyPath, string actionName, bool infer = false)
         {
             List<VisualElement> candidates = root.Query<VisualElement>().ToList();
             if (candidates.Count == 0)
@@ -717,7 +1152,7 @@ namespace UnityUIFlow
                     continue;
                 }
 
-                if (!string.Equals(bindable.bindingPath, propertyPath, StringComparison.Ordinal))
+                if (!string.IsNullOrWhiteSpace(propertyPath) && !string.Equals(bindable.bindingPath, propertyPath, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -725,6 +1160,17 @@ namespace UnityUIFlow
                 if (candidate.GetType().GetProperty("value", PublicInstance)?.CanWrite == true)
                 {
                     return candidate;
+                }
+            }
+
+            if (infer && string.IsNullOrWhiteSpace(propertyPath))
+            {
+                foreach (VisualElement candidate in candidates)
+                {
+                    if (candidate.GetType().GetProperty("value", PublicInstance)?.CanWrite == true)
+                    {
+                        return candidate;
+                    }
                 }
             }
 
@@ -1058,7 +1504,13 @@ namespace UnityUIFlow
                         continue;
                     }
 
-                    if (TryBuildSelectionArgument(method.GetParameters()[0].ParameterType, indices, out object argument))
+                    Type paramType = method.GetParameters()[0].ParameterType;
+                    if (paramType == typeof(int))
+                    {
+                        continue;
+                    }
+
+                    if (TryBuildSelectionArgument(paramType, indices, out object argument))
                     {
                         method.Invoke(control, new[] { argument });
                         return true;
@@ -1226,6 +1678,28 @@ namespace UnityUIFlow
                 return false;
             }
 
+            if (property.PropertyType != typeof(int) && property.PropertyType != typeof(int?))
+            {
+                return false;
+            }
+
+            property.SetValue(target, value);
+            return true;
+        }
+
+        private static bool TrySetObjectProperty(object target, string propertyName, object value)
+        {
+            PropertyInfo property = target?.GetType().GetProperty(propertyName, PublicInstance);
+            if (property == null || !property.CanWrite)
+            {
+                return false;
+            }
+
+            if (value != null && !property.PropertyType.IsInstanceOfType(value))
+            {
+                return false;
+            }
+
             property.SetValue(target, value);
             return true;
         }
@@ -1242,7 +1716,7 @@ namespace UnityUIFlow
             return true;
         }
 
-        private static bool TryClickTabByIndex(VisualElement element, int index, ActionContext context)
+        private static bool TrySelectTab(VisualElement element, int index, ActionContext context)
         {
             List<VisualElement> tabs = CollectTabCandidates(element);
             if (index < 0 || index >= tabs.Count)
@@ -1250,22 +1724,183 @@ namespace UnityUIFlow
                 return false;
             }
 
-            ActionHelpers.DispatchClick(tabs[index], 1, MouseButton.LeftMouse, EventModifiers.None, context);
-            return true;
+            if (TrySetIntProperty(element, "selectedTabIndex", index) || TrySetIntProperty(element, "selectedIndex", index))
+            {
+                return true;
+            }
+
+            if (TrySetObjectProperty(element, "activeTab", tabs[index]))
+            {
+                return true;
+            }
+
+            return TryActivateTab(tabs[index], context);
         }
 
-        private static bool TryClickTabByLabel(VisualElement element, string label, ActionContext context)
+        private static bool TrySelectTab(VisualElement element, string label, ActionContext context)
         {
             foreach (VisualElement candidate in CollectTabCandidates(element))
             {
-                if (string.Equals(ActionHelpers.GetText(candidate), label, StringComparison.Ordinal))
+                if (!string.Equals(GetTabLabel(candidate), label, StringComparison.Ordinal))
                 {
-                    ActionHelpers.DispatchClick(candidate, 1, MouseButton.LeftMouse, EventModifiers.None, context);
+                    continue;
+                }
+
+                if (TrySetObjectProperty(element, "activeTab", candidate))
+                {
                     return true;
                 }
+
+                return TryActivateTab(candidate, context);
             }
 
             return false;
+        }
+
+        private static string GetTabLabel(VisualElement element)
+        {
+            string text = ActionHelpers.GetText(element);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+
+            PropertyInfo labelProperty = element?.GetType().GetProperty("label", PublicInstance);
+            if (labelProperty?.CanRead == true)
+            {
+                return labelProperty.GetValue(element)?.ToString() ?? string.Empty;
+            }
+
+            return string.Empty;
+        }
+
+        private static bool TryActivateTab(VisualElement tab, ActionContext context)
+        {
+            if (tab == null)
+            {
+                return false;
+            }
+
+            if (TryInvokeParameterlessMethod(tab, "Activate")
+                || TryInvokeParameterlessMethod(tab, "Click")
+                || TryInvokeParameterlessMethod(tab, "Select"))
+            {
+                return true;
+            }
+
+            ActionHelpers.DispatchClick(tab, 1, MouseButton.LeftMouse, EventModifiers.None, context);
+            return true;
+        }
+
+        private static bool TryCloseTab(VisualElement element, int index, ActionContext context)
+        {
+            List<VisualElement> tabs = CollectTabCandidates(element);
+            if (index < 0 || index >= tabs.Count)
+            {
+                return false;
+            }
+
+            return TryCloseTab(tabs[index], context);
+        }
+
+        private static bool TryCloseTab(VisualElement element, string label, ActionContext context)
+        {
+            foreach (VisualElement candidate in CollectTabCandidates(element))
+            {
+                if (!string.Equals(GetTabLabel(candidate), label, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                return TryCloseTab(candidate, context);
+            }
+
+            return false;
+        }
+
+        private static bool TryCloseTab(VisualElement tab, ActionContext context)
+        {
+            if (tab == null)
+            {
+                return false;
+            }
+
+            // 1) Try tab.Close()
+            if (TryInvokeParameterlessMethod(tab, "Close"))
+            {
+                return true;
+            }
+
+            // 2) Try parent TabView.CloseTab(tab) or CloseTab(index)
+            VisualElement parent = tab.parent;
+            while (parent != null)
+            {
+                if (parent.GetType().Name == "TabView")
+                {
+                    foreach (MethodInfo m in parent.GetType().GetMethods(PublicInstance).Where(m => m.Name == "CloseTab"))
+                    {
+                        ParameterInfo[] ps = m.GetParameters();
+                        if (ps.Length == 1 && ps[0].ParameterType.IsInstanceOfType(tab))
+                        {
+                            m.Invoke(parent, new[] { tab });
+                            return true;
+                        }
+                        if (ps.Length == 1 && ps[0].ParameterType == typeof(int))
+                        {
+                            var tabs = CollectTabCandidates(parent);
+                            int idx = tabs.IndexOf(tab);
+                            if (idx >= 0)
+                            {
+                                m.Invoke(parent, new object[] { idx });
+                                return true;
+                            }
+                        }
+                    }
+
+                    // 2.5) Unity 6000+: TabView has private OnTabClosed(Tab) instead of public CloseTab
+                    MethodInfo onTabClosed = parent.GetType().GetMethod("OnTabClosed", BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { tab.GetType() }, null);
+                    if (onTabClosed != null)
+                    {
+                        onTabClosed.Invoke(parent, new[] { tab });
+                        return true;
+                    }
+
+                    // 3) Fallback: directly remove the tab from the TabView
+                    MethodInfo removeMethod = parent.GetType().GetMethod("Remove", PublicInstance, null, new[] { typeof(VisualElement) }, null)
+                        ?? parent.GetType().GetMethods(PublicInstance).FirstOrDefault(m => m.Name == "Remove" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType.IsInstanceOfType(tab));
+                    if (removeMethod != null)
+                    {
+                        removeMethod.Invoke(parent, new[] { tab });
+                        return true;
+                    }
+
+                    break;
+                }
+                parent = parent.parent;
+            }
+
+            // 4) Fallback: click the close button inside the tab if available
+            VisualElement closeButton = tab.Q<VisualElement>(className: "unity-tab__close-button")
+                ?? tab.Query<VisualElement>().ToList().FirstOrDefault(child => child.name.Contains("close", StringComparison.OrdinalIgnoreCase));
+            if (closeButton != null)
+            {
+                ActionHelpers.DispatchClick(closeButton, 1, MouseButton.LeftMouse, EventModifiers.None, context);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryInvokeParameterlessMethod(object target, string methodName)
+        {
+            MethodInfo method = target?.GetType().GetMethod(methodName, PublicInstance, null, Type.EmptyTypes, null);
+            if (method == null)
+            {
+                return false;
+            }
+
+            method.Invoke(target, null);
+            return true;
         }
 
         private static List<VisualElement> CollectTabCandidates(VisualElement root)
@@ -1279,7 +1914,7 @@ namespace UnityUIFlow
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(ActionHelpers.GetText(element)))
+                if (string.IsNullOrWhiteSpace(GetTabLabel(element)))
                 {
                     continue;
                 }
@@ -2093,6 +2728,17 @@ namespace UnityUIFlow
         }
     }
 
+    internal sealed class ToggleMaskOptionAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "toggle_mask_option");
+            context.Log($"toggle_mask_option: target {ActionContext.ElementInfo(element)}");
+            AdvancedActionHelpers.ToggleMaskOptionOrThrow(element, parameters, "toggle_mask_option");
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+    }
+
     internal sealed class SelectListItemAction : IAction
     {
         public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
@@ -2192,6 +2838,17 @@ namespace UnityUIFlow
         }
     }
 
+    internal sealed class CloseTabAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "close_tab");
+            context.Log($"close_tab: target {ActionContext.ElementInfo(element)}");
+            AdvancedActionHelpers.CloseTabOrThrow(element, parameters, "close_tab", context);
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+    }
+
     internal sealed class SetBoundValueAction : IAction
     {
         public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
@@ -2225,6 +2882,22 @@ namespace UnityUIFlow
         }
     }
 
+    internal sealed class ReadBreadcrumbsAction : IAction
+    {
+        public Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            return ActionHelpers.RequireElementAsync(context, parameters, "read_breadcrumbs")
+                .ContinueWith(task =>
+                {
+                    VisualElement element = task.Result;
+                    List<string> crumbs = AdvancedActionHelpers.ReadBreadcrumbsOrThrow(element, "read_breadcrumbs");
+                    string bagKey = parameters.TryGetValue("bag_key", out string key) && !string.IsNullOrWhiteSpace(key) ? key : "breadcrumbs";
+                    context.SharedBag[bagKey] = crumbs;
+                    context.Log($"read_breadcrumbs: {string.Join(" > ", crumbs)}");
+                }, TaskScheduler.Default);
+        }
+    }
+
     internal sealed class SetSplitViewSizeAction : IAction
     {
         public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
@@ -2243,6 +2916,51 @@ namespace UnityUIFlow
             VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "page_scroller");
             context.Log($"page_scroller: target {ActionContext.ElementInfo(element)}");
             AdvancedActionHelpers.PageScrollerOrThrow(element, parameters, "page_scroller");
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+    }
+
+    internal sealed class DragScrollerAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "drag_scroller");
+            if (!(element is Scroller scroller))
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"Action drag_scroller target is not a Scroller: {element.GetType().Name}");
+            }
+
+            (Vector2 fromPos, Vector2 toPos) = AdvancedActionHelpers.ResolveScrollerThumbDrag(scroller, parameters, "drag_scroller");
+            MouseButton button = ActionHelpers.ParseMouseButton(parameters, "drag_scroller");
+            EventModifiers modifiers = ActionHelpers.ParseEventModifiers(parameters, "drag_scroller");
+            int delayMs = parameters.TryGetValue("duration", out string duration) && !string.IsNullOrWhiteSpace(duration)
+                ? DurationParser.ParseToMilliseconds(duration, "drag_scroller")
+                : 100;
+            int frameCount = Math.Max(1, delayMs / 16);
+
+            context.Log($"drag_scroller: {fromPos} -> {toPos} ratio target via {ActionHelpers.ResolvePointerDriver(context)} button={button} modifiers={modifiers}");
+
+            if (context?.SimulationSession?.PointerDriver != null)
+            {
+                await context.SimulationSession.PointerDriver.DragAsync(root, fromPos, toPos, delayMs, frameCount, button, modifiers, context);
+            }
+            else
+            {
+                ActionHelpers.DispatchMouseEvent(element, EventType.MouseDown, fromPos, Vector2.zero, button: (int)button, modifiers: modifiers);
+                await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+                for (int i = 1; i <= frameCount; i++)
+                {
+                    context.CancellationToken.ThrowIfCancellationRequested();
+                    Vector2 prev = Vector2.Lerp(fromPos, toPos, (float)(i - 1) / frameCount);
+                    Vector2 pos = Vector2.Lerp(fromPos, toPos, (float)i / frameCount);
+                    Vector2 delta = pos - prev;
+                    ActionHelpers.DispatchMouseEvent(root, EventType.MouseMove, pos, delta, button: (int)button, modifiers: modifiers);
+                    await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+                }
+                ActionHelpers.DispatchMouseEvent(element, EventType.MouseUp, toPos, Vector2.zero, button: (int)button, modifiers: modifiers);
+            }
+
+            context.Log($"drag_scroller: completed");
             await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
         }
     }
@@ -2312,6 +3030,7 @@ namespace UnityUIFlow
             VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "sort_column");
             Column column = ColumnActionHelpers.FindColumnOrThrow(element, parameters, "sort_column");
             parameters.TryGetValue("direction", out string directionParam);
+            parameters.TryGetValue("mode", out string modeParam);
 
             SortDirection direction = SortDirection.Ascending;
             if (!string.IsNullOrWhiteSpace(directionParam))
@@ -2328,27 +3047,58 @@ namespace UnityUIFlow
                 }
             }
 
-            context.Log($"sort_column: column={column.name} direction={direction}");
+            ColumnSortingMode sortingMode = ColumnSortingMode.Default;
+            if (!string.IsNullOrWhiteSpace(modeParam))
+            {
+                string mode = modeParam.Trim().ToLowerInvariant();
+                switch (mode)
+                {
+                    case "default":
+                        sortingMode = ColumnSortingMode.Default;
+                        break;
+                    case "none":
+                        sortingMode = ColumnSortingMode.None;
+                        break;
+                    case "custom":
+                        sortingMode = ColumnSortingMode.Custom;
+                        break;
+                    default:
+                        throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid,
+                            $"Action sort_column: invalid mode '{modeParam}'. Use 'default', 'none', or 'custom'.");
+                }
+            }
+
+            context.Log($"sort_column: column={column.name} direction={direction} mode={sortingMode}");
 
             switch (element)
             {
                 case MultiColumnListView mclv:
-                    if (mclv.sortingMode == ColumnSortingMode.None)
-                    {
-                        mclv.sortingMode = ColumnSortingMode.Default;
-                    }
-
+                    mclv.sortingMode = sortingMode;
                     mclv.sortColumnDescriptions.Clear();
                     mclv.sortColumnDescriptions.Add(new SortColumnDescription(column.name, direction));
+                    if (sortingMode == ColumnSortingMode.Custom)
+                    {
+                        MethodInfo raiseMethod = mclv.GetType().GetMethod("RaiseColumnSortingChanged", BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (raiseMethod != null)
+                        {
+                            try { raiseMethod.Invoke(mclv, null); }
+                            catch { /* ignored */ }
+                        }
+                    }
                     break;
                 case MultiColumnTreeView mctv:
-                    if (mctv.sortingMode == ColumnSortingMode.None)
-                    {
-                        mctv.sortingMode = ColumnSortingMode.Default;
-                    }
-
+                    mctv.sortingMode = sortingMode;
                     mctv.sortColumnDescriptions.Clear();
                     mctv.sortColumnDescriptions.Add(new SortColumnDescription(column.name, direction));
+                    if (sortingMode == ColumnSortingMode.Custom)
+                    {
+                        MethodInfo raiseMethod = mctv.GetType().GetMethod("RaiseColumnSortingChanged", BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (raiseMethod != null)
+                        {
+                            try { raiseMethod.Invoke(mctv, null); }
+                            catch { /* ignored */ }
+                        }
+                    }
                     break;
             }
 
@@ -2375,4 +3125,141 @@ namespace UnityUIFlow
             await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
         }
     }
+
+    internal sealed class ClickPopupItemAction : IAction
+    {
+        public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
+        {
+            VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "click_popup_item");
+            string value = null;
+            int? index = null;
+            if (parameters.TryGetValue("value", out string valueLiteral) && !string.IsNullOrWhiteSpace(valueLiteral))
+            {
+                value = valueLiteral;
+            }
+            else if (parameters.TryGetValue("index", out string indexLiteral) && int.TryParse(indexLiteral, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedIndex))
+            {
+                index = parsedIndex;
+            }
+            else
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionParameterMissing, "Action click_popup_item requires value or index.");
+            }
+
+            context.Log($"click_popup_item: selecting item '{value ?? index.ToString()}' on {ActionContext.ElementInfo(element)}");
+
+            switch (element)
+            {
+                // LayerMaskField must come before MaskField because it inherits from MaskField
+                case LayerMaskField layerMaskField:
+                    int layerIndex = ResolveIndexOrValue(layerMaskField.choices, index, value, "LayerMaskField");
+                    int layerBit = 1 << layerIndex;
+                    layerMaskField.value = layerMaskField.value | layerBit;
+                    break;
+
+                case MaskField maskField:
+                    int maskIndex = ResolveIndexOrValue(maskField.choices, index, value, "MaskField");
+                    int maskBit = 1 << maskIndex;
+                    maskField.value = maskField.value | maskBit;
+                    break;
+
+                case EnumFlagsField enumFlagsField when enumFlagsField.value != null:
+                    int enumIndex = ResolveIndexOrValue(enumFlagsField.choices, index, value, "EnumFlagsField");
+                    Type enumType = enumFlagsField.value.GetType();
+                    int currentEnumValue = Convert.ToInt32(enumFlagsField.value);
+                    int newEnumValue = currentEnumValue | (1 << enumIndex);
+                    enumFlagsField.value = (Enum)Enum.ToObject(enumType, newEnumValue);
+                    break;
+
+                default:
+                    if (!TryHandlePopupField(element, index, value, out string popupError))
+                    {
+                        throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed,
+                            $"Action click_popup_item does not support element type {element.GetType().Name}. {popupError}");
+                    }
+                    break;
+            }
+
+            await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
+        }
+
+        private static int ResolveIndexOrValue(List<string> choices, int? index, string value, string fieldType)
+        {
+            if (index.HasValue)
+            {
+                if (index.Value < 0 || index.Value >= choices.Count)
+                {
+                    throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid,
+                        $"Action click_popup_item: index {index.Value} out of range for {fieldType} (count={choices.Count}).");
+                }
+                return index.Value;
+            }
+
+            int foundIndex = choices.IndexOf(value);
+            if (foundIndex < 0)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid,
+                    $"Action click_popup_item: value '{value}' not found in {fieldType} choices.");
+            }
+            return foundIndex;
+        }
+
+        private static bool TryHandlePopupField(VisualElement element, int? index, string value, out string error)
+        {
+            error = null;
+            Type type = element.GetType();
+            if (!type.Name.StartsWith("PopupField"))
+            {
+                error = "Element is not a PopupField.";
+                return false;
+            }
+
+            PropertyInfo choicesProp = type.GetProperty("choices", BindingFlags.Public | BindingFlags.Instance);
+            PropertyInfo indexProp = type.GetProperty("index", BindingFlags.Public | BindingFlags.Instance);
+            if (choicesProp == null || indexProp == null || !indexProp.CanWrite)
+            {
+                error = "Missing choices or writable index property.";
+                return false;
+            }
+
+            System.Collections.IList choices = choicesProp.GetValue(element) as System.Collections.IList;
+            if (choices == null)
+            {
+                error = "choices is null.";
+                return false;
+            }
+
+            int targetIndex;
+            if (index.HasValue)
+            {
+                targetIndex = index.Value;
+                if (targetIndex < 0 || targetIndex >= choices.Count)
+                {
+                    error = $"Index {targetIndex} out of range (count={choices.Count}).";
+                    return false;
+                }
+            }
+            else
+            {
+                targetIndex = -1;
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    if (string.Equals(choices[i]?.ToString(), value, StringComparison.Ordinal))
+                    {
+                        targetIndex = i;
+                        break;
+                    }
+                }
+                if (targetIndex < 0)
+                {
+                    error = $"Value '{value}' not found in PopupField choices.";
+                    return false;
+                }
+            }
+
+            indexProp.SetValue(element, targetIndex);
+            return true;
+        }
+    }
 }
+

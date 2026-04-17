@@ -61,7 +61,7 @@ namespace UnityUIFlow
 
         public HeadedRunMode RunMode { get; set; } = HeadedRunMode.Continuous;
 
-        public CancellationToken CancellationToken => _cancellationTokenSource.Token;
+        public CancellationToken CancellationToken => _cancellationTokenSource?.Token ?? default;
 
         public bool IsPaused => _isPaused;
 
@@ -386,9 +386,16 @@ namespace UnityUIFlow
                 try
                 {
                     string screenshotPath = await context.ScreenshotManager.CaptureAsync(context.CaseName, stepIndex, "failure", context.CancellationToken);
-                    result.ScreenshotPath = screenshotPath;
-                    result.ScreenshotSource = context.ScreenshotManager.LastCaptureSource;
-                    result.Attachments.Add(screenshotPath);
+                    if (screenshotPath != null)
+                    {
+                        result.ScreenshotPath = screenshotPath;
+                        result.ScreenshotSource = context.ScreenshotManager.LastCaptureSource;
+                        result.Attachments.Add(screenshotPath);
+                    }
+                    else
+                    {
+                        result.ScreenshotSource = context.ScreenshotManager.LastCaptureSource;
+                    }
                 }
                 catch (Exception captureException)
                 {

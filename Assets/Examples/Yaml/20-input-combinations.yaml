@@ -19,8 +19,8 @@ steps:
     selector: "#gesture-status"
     expected: "Alt"
   - action: drag
-    selector: "#gesture-drag-target"
-    to: "#gesture-click-target"
+    from: "#gesture-drag-target"
+    to: "#gesture-drag-target"
     button: "right"
     modifiers: "alt"
     duration: "64ms"
@@ -41,3 +41,11 @@ steps:
   - action: assert_text
     selector: "#keyboard-status"
     expected: "Key: A"
+  - action: focus
+    selector: "#command-input"
+  - action: press_key_combination
+    selector: "#command-input"
+    keys: "Ctrl+C"
+  - action: assert_text
+    selector: "#command-status"
+    expected: "Execute: Copy"

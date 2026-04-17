@@ -1323,6 +1323,156 @@ namespace UnityUIFlow
             Assert.That(AssetDatabase.GetAssetPath(Root.Q<ObjectField>("template-asset").value), Is.EqualTo("Assets/UnityUIFlow/Samples/Uxml/SampleInteractionWindow.uxml"));
         }
 
+        [UnityTest]
+        public IEnumerator CloseTabAction_ClosesSpecifiedTab()
+        {
+            yield return null;
+            TabView tabView = Root.Q<TabView>("settings-tabs");
+            Assert.That(tabView, Is.Not.Null);
+            int initialTabCount = tabView.contentContainer.childCount;
+            Assert.That(initialTabCount, Is.EqualTo(3));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new CloseTabAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#settings-tabs",
+                ["label"] = "About",
+            }));
+
+            Assert.That(tabView.contentContainer.childCount, Is.EqualTo(initialTabCount - 1));
+        }
+
+        [UnityTest]
+        public IEnumerator DragScrollerAction_UpdatesScrollerValue()
+        {
+            Scroller scroller = Root.Q<Scroller>("standalone-scroller");
+            Assert.That(scroller, Is.Not.Null);
+            float before = scroller.value;
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new DragScrollerAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#standalone-scroller",
+                ["ratio"] = "0.5",
+                ["duration"] = "64ms",
+            }));
+
+            Assert.That(Mathf.Abs(scroller.value - before), Is.GreaterThan(1f));
+        }
+
+        [UnityTest]
+        public IEnumerator SelectTreeItemAction_SupportsLabelSelection()
+        {
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new SelectTreeItemAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#navigation-tree",
+                ["label"] = "Leaf A2",
+            }));
+
+            Assert.That(Root.Q<Label>("tree-selection-status").text, Is.EqualTo("Tree: Leaf A2"));
+        }
+
+        [UnityTest]
+        public IEnumerator SelectListItemAction_SupportsSingleIndexSelection()
+        {
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new SelectListItemAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#item-list",
+                ["index"] = "2",
+            }));
+
+            Assert.That(Root.Q<Label>("list-selection-status").text, Is.EqualTo("List: 2"));
+        }
+
+        [UnityTest]
+        public IEnumerator SortColumnAction_SupportsDefaultMode()
+        {
+            VisualElement multiColumnListView = Root.Q<VisualElement>("planet-list");
+            Assert.That(multiColumnListView, Is.Not.Null);
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new SortColumnAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#planet-list",
+                ["column"] = "planet",
+                ["direction"] = "ascending",
+            }));
+
+            object firstSortDescription = GetIndexedMember(ReadMember(multiColumnListView, "sortColumnDescriptions"), 0);
+            Assert.That(ReadMember(firstSortDescription, "columnName", "ColumnName")?.ToString(), Is.EqualTo("planet"));
+            Assert.That(ReadMember(firstSortDescription, "direction", "Direction")?.ToString(), Is.EqualTo("Ascending"));
+        }
+
+        [UnityTest]
+        public IEnumerator ResizeColumnAction_SupportsDifferentIndices()
+        {
+            VisualElement multiColumnTreeView = Root.Q<VisualElement>("scene-tree");
+            Assert.That(multiColumnTreeView, Is.Not.Null);
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new ResizeColumnAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#scene-tree",
+                ["index"] = "0",
+                ["width"] = "200",
+            }));
+
+            object firstTreeColumn = GetIndexedMember(ReadMember(multiColumnTreeView, "columns"), 0);
+            Assert.That(ReadMember(firstTreeColumn, "width", "Width")?.ToString(), Does.Contain("200"));
+        }
+
+        [UnityTest]
+        public IEnumerator ReadBreadcrumbsAction_PopulatesSharedBag()
+        {
+            VisualElement breadcrumbs = Root.Q<VisualElement>("toolbar-breadcrumbs");
+            if (breadcrumbs == null)
+            {
+                Assert.Ignore("Current Unity environment does not expose ToolbarBreadcrumbs.");
+            }
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new ReadBreadcrumbsAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#toolbar-breadcrumbs",
+                ["bag_key"] = "crumbs",
+            }));
+
+            Assert.That(LastActionContext.SharedBag.ContainsKey("crumbs"), Is.True);
+            var crumbs = LastActionContext.SharedBag["crumbs"] as System.Collections.Generic.List<string>;
+            Assert.That(crumbs, Is.Not.Null);
+            Assert.That(crumbs.Count, Is.GreaterThanOrEqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator ClickPopupItemAction_UpdatesPopupFieldValue()
+        {
+            yield return null;
+            PopupField<string> popup = Root.Q<PopupField<string>>("quick-popup");
+            Assert.That(popup, Is.Not.Null);
+            Assert.That(popup.value, Is.EqualTo("North"));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new ClickPopupItemAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#quick-popup",
+                ["value"] = "South",
+            }));
+
+            Assert.That(popup.value, Is.EqualTo("South"));
+        }
+
+        [UnityTest]
+        public IEnumerator NavigateBreadcrumbAction_SupportsIndexNavigation()
+        {
+            VisualElement breadcrumbs = Root.Q<VisualElement>("toolbar-breadcrumbs");
+            if (breadcrumbs == null)
+            {
+                Assert.Ignore("Current Unity environment does not expose ToolbarBreadcrumbs.");
+            }
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new NavigateBreadcrumbAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#toolbar-breadcrumbs",
+                ["index"] = "1",
+            }));
+
+            Assert.That(Root.Q<Label>("toolbar-status").text, Is.EqualTo("Toolbar: breadcrumb-settings"));
+        }
+
         private static List<int> ReadIndicesProperty(object target, params string[] propertyNames)
         {
             foreach (string propertyName in propertyNames)

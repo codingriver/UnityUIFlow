@@ -1,0 +1,36 @@
+name: Debug Infer Status
+fixture:
+  host_window:
+    type: UnityUIFlow.Examples.ExampleBoundInferenceWindow
+    reopen_if_open: true
+steps:
+  - name: Set inferred float
+    action: set_bound_value
+    selector: "#inference-host"
+    value: "3.14"
+    infer: "true"
+  - name: Check after float
+    action: assert_text_contains
+    selector: "#status-label"
+    expected: "F:3.14"
+  - name: Set inferred text
+    action: set_bound_value
+    selector: "#inference-host"
+    value: "hello"
+    infer: "true"
+  - name: Check after text
+    action: assert_text_contains
+    selector: "#status-label"
+    expected: "T:hello"
+  - name: Set inferred toggle
+    action: set_bound_value
+    selector: "#inference-host"
+    value: "true"
+    infer: "true"
+  - name: Wait a bit
+    action: wait
+    duration: "500ms"
+  - name: Check after toggle
+    action: assert_text_contains
+    selector: "#status-label"
+    expected: "B:True"

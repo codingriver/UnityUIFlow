@@ -96,6 +96,13 @@ namespace UnityUIFlow
                 throw new UnityUIFlowException(ErrorCodes.ScreenshotArgumentInvalid, $"Screenshot tag is invalid: {tag}");
             }
 
+            EditorWindow preferred = ResolveCaptureWindow();
+            if (preferred == null || preferred != EditorWindow.focusedWindow)
+            {
+                LastCaptureSource = "skipped-unfocused";
+                return null;
+            }
+
             string path = _pathBuilder.BuildScreenshotPath(_options.ScreenshotPath, caseName, stepIndex, tag);
             await EditorAsyncUtility.NextFrameAsync(cancellationToken);
             CaptureSync(path);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -42,14 +43,22 @@ namespace UnityUIFlow.Examples
 
         protected override string WindowTitle => "Example Coverage Fields";
 
+        public override void PrepareForAutomatedTest()
+        {
+            base.PrepareForAutomatedTest();
+            minSize = new Vector2(420f, 800f);
+            position = new Rect(position.x, position.y, 600f, 800f);
+        }
+
         protected override void OnEnable()
         {
-            base.OnEnable();
             if (_data == null)
             {
                 _data = CreateInstance<CoverageData>();
                 _data.hideFlags = HideFlags.HideAndDontSave;
             }
+
+            base.OnEnable();
         }
 
         private void OnDisable()
@@ -140,11 +149,7 @@ namespace UnityUIFlow.Examples
         private static readonly BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
         private readonly List<string> _items = new List<string> { "Alpha", "Beta", "Gamma", "Delta", "Epsilon" };
         private readonly List<string> _planets = new List<string> { "Mercury", "Venus", "Earth", "Mars", "Jupiter" };
-        private readonly List<TreeViewItemData<string>> _tree = new List<TreeViewItemData<string>>
-        {
-            new TreeViewItemData<string>(100, "General", new List<TreeViewItemData<string>> { new TreeViewItemData<string>(110, "Display"), new TreeViewItemData<string>(120, "Audio") }),
-            new TreeViewItemData<string>(200, "Advanced", new List<TreeViewItemData<string>> { new TreeViewItemData<string>(210, "Network") }),
-        };
+        private readonly List<string> _sceneTreeItems = new List<string> { "Display", "Audio", "Network" };
         private Label _collectionStatus;
         private Label _splitStatus;
         private Label _orderStatus;
@@ -179,14 +184,27 @@ namespace UnityUIFlow.Examples
             listView.selectionChanged += _ => listStatus.text = listView.selectedIndices.Any() ? $"List: {string.Join(",", listView.selectedIndices.OrderBy(x => x))}" : "List: none";
 
             var treeView = new TreeView { name = "navigation-tree", selectionType = SelectionType.Single, fixedItemHeight = 20, style = { height = 120 } };
-            treeView.SetRootItems(_tree);
+            treeView.SetRootItems(new List<TreeViewItemData<string>>
+            {
+                new TreeViewItemData<string>(100, _sceneTreeItems[0]),
+                new TreeViewItemData<string>(120, _sceneTreeItems[1]),
+                new TreeViewItemData<string>(210, _sceneTreeItems[2]),
+            });
             treeView.makeItem = () => new Label();
             treeView.bindItem = (element, index) => ((Label)element).text = treeView.GetItemDataForIndex<string>(index);
             treeView.ExpandRootItems();
             Label treeStatus = new Label("Tree: none") { name = "tree-selection-status" };
             treeView.selectionChanged += _ => treeStatus.text = treeView.selectedIndex >= 0 ? $"Tree: {treeView.GetItemDataForIndex<string>(treeView.selectedIndex)}" : "Tree: none";
 
-            _planetList = CreateMultiColumnView("UnityEngine.UIElements.MultiColumnListView", "planet-list", _planets, index => _planets[index]);
+            _planetList = CreateMultiColumnView("UnityEngine.UIElements.MultiColumnListView", "planet-list", _planets, index => _planets[index], onCustomSort: (view, col, dir) =>
+            {
+                object sortingMode = ReadMember(view, "sortingMode", "SortingMode");
+                bool isCustom = sortingMode?.ToString() == "Custom";
+                if (isCustom)
+                {
+                    _collectionStatus.text = $"CustomSort: {col}:{dir}";
+                }
+            });
             _sceneTree = CreateMultiColumnTree();
             _collectionStatus = new Label("Columns: idle") { name = "collection-status" };
 
@@ -203,12 +221,17 @@ namespace UnityUIFlow.Examples
             scroller.style.height = 100;
 
             var tabs = new TabView { name = "settings-tabs" };
-            tabs.Add(new Tab("General") { name = "tab-general" });
-            tabs.Add(new Tab("Advanced") { name = "tab-advanced" });
-            tabs.Add(new Tab("About") { name = "tab-about" });
+            var tabGeneral = CreateClosableTab("General", "tab-general");
+            var tabAdvanced = CreateClosableTab("Advanced", "tab-advanced");
+            var tabAbout = CreateClosableTab("About", "tab-about");
+            tabs.Add(tabGeneral);
+            tabs.Add(tabAdvanced);
+            tabs.Add(tabAbout);
             tabs.activeTab = tabs.Q<Tab>("tab-general");
             Label tabStatus = new Label("Tab: General") { name = "tab-selection-status" };
+            Label tabClosedStatus = new Label("Closed: none") { name = "tab-closed-status" };
             tabs.activeTabChanged += (_, to) => tabStatus.text = to == null ? "Tab: none" : $"Tab: {to.label}";
+            tabs.tabClosed += (tab, idx) => tabClosedStatus.text = $"Closed: {GetTabLabel(tab)}";
 
             CoverageHost.Add(listView);
             CoverageHost.Add(listStatus);
@@ -224,6 +247,7 @@ namespace UnityUIFlow.Examples
             CoverageHost.Add(scrollerStatus);
             CoverageHost.Add(tabs);
             CoverageHost.Add(tabStatus);
+            CoverageHost.Add(tabClosedStatus);
         }
 
         private void RefreshStatus()
@@ -232,34 +256,75 @@ namespace UnityUIFlow.Examples
             if (_split != null) _splitStatus.text = $"Split: {ReadMember(_split, "fixedPaneInitialDimension", "FixedPaneInitialDimension")}";
             if (_planetList != null && _sceneTree != null)
             {
+                if (_collectionStatus != null && _collectionStatus.text != null && _collectionStatus.text.StartsWith("CustomSort:"))
+                {
+                    return;
+                }
                 object sort = GetIndexedMember(ReadMember(_planetList, "sortColumnDescriptions", "SortColumnDescriptions"), 0);
                 object firstColumn = GetIndexedMember(ReadMember(_sceneTree, "columns", "Columns"), 0);
                 _collectionStatus.text = $"Columns: sort={ReadMember(sort, "columnName", "ColumnName")}:{ReadMember(sort, "direction", "Direction")}; tree-width={ReadMember(firstColumn, "width", "Width")}";
             }
         }
 
-        private VisualElement CreateMultiColumnView(string typeName, string name, IList<string> items, Func<int, string> resolver)
+        private VisualElement CreateMultiColumnView(string typeName, string name, IList<string> items, Func<int, string> resolver, Action<VisualElement, string, SortDirection> onCustomSort = null)
         {
             Type viewType = typeof(VisualElement).Assembly.GetType(typeName);
             if (viewType == null || !(Activator.CreateInstance(viewType) is VisualElement view)) return null;
             view.name = name;
             view.style.height = 120;
-            viewType.GetProperty("itemsSource", PublicInstance)?.SetValue(view, items);
-            viewType.GetProperty("selectionType", PublicInstance)?.SetValue(view, SelectionType.Multiple);
-            viewType.GetProperty("fixedItemHeight", PublicInstance)?.SetValue(view, 20f);
+            SafeSetValue(viewType, view, "itemsSource", items);
+            SafeSetValue(viewType, view, "selectionType", SelectionType.Multiple);
+            SafeSetValue(viewType, view, "fixedItemHeight", 20f);
             AddTextColumn(view, resolver, name == "planet-list" ? "Planet" : "Node");
+
+            if (onCustomSort != null)
+            {
+                PropertyInfo sortDescProp = viewType.GetProperty("sortColumnDescriptions", PublicInstance);
+                System.Action callback = () =>
+                {
+                    object sortDesc = sortDescProp?.GetValue(view);
+                    object first = GetIndexedMember(sortDesc, 0);
+                    string colName = ReadMember(first, "columnName", "ColumnName")?.ToString() ?? string.Empty;
+                    object dirObj = ReadMember(first, "direction", "Direction");
+                    SortDirection direction = dirObj is SortDirection sd ? sd : SortDirection.Ascending;
+                    onCustomSort(view, colName, direction);
+                };
+
+                PropertyInfo customSortProp = viewType.GetProperty("customSortingCallback", PublicInstance);
+                if (customSortProp != null && customSortProp.CanWrite)
+                {
+                    var paramExpr = System.Linq.Expressions.Expression.Parameter(viewType, "v");
+                    var callExpr = System.Linq.Expressions.Expression.Call(
+                        System.Linq.Expressions.Expression.Constant(callback.Target),
+                        callback.Method);
+                    var lambdaExpr = System.Linq.Expressions.Expression.Lambda(callExpr, paramExpr);
+                    object compiled = lambdaExpr.Compile();
+                    customSortProp.SetValue(view, compiled);
+                }
+                else
+                {
+                    EventInfo sortChangedEvent = viewType.GetEvent("columnSortingChanged", PublicInstance);
+                    if (sortChangedEvent == null)
+                    {
+                        sortChangedEvent = viewType.GetEvent("columnSortingChanged", BindingFlags.NonPublic | BindingFlags.Instance);
+                    }
+                    sortChangedEvent?.AddEventHandler(view, callback);
+                }
+            }
+
             viewType.GetMethod("Rebuild", PublicInstance, null, Type.EmptyTypes, null)?.Invoke(view, null);
             return view;
         }
 
         private VisualElement CreateMultiColumnTree()
         {
-            VisualElement view = CreateMultiColumnView("UnityEngine.UIElements.MultiColumnTreeView", "scene-tree", null, index => string.Empty);
-            if (view == null) return null;
-            view.GetType().GetMethod("SetRootItems", PublicInstance)?.Invoke(view, new object[] { _tree });
-            view.GetType().GetMethod("ExpandRootItems", PublicInstance, null, Type.EmptyTypes, null)?.Invoke(view, null);
-            return view;
+            return CreateMultiColumnView(
+                "UnityEngine.UIElements.MultiColumnListView",
+                "scene-tree",
+                _sceneTreeItems,
+                index => index >= 0 && index < _sceneTreeItems.Count ? _sceneTreeItems[index] : string.Empty);
         }
+
 
         private static void AddTextColumn(VisualElement collectionView, Func<int, string> resolver, string title)
         {
@@ -267,12 +332,37 @@ namespace UnityUIFlow.Examples
             object columns = collectionView.GetType().GetProperty("columns", PublicInstance)?.GetValue(collectionView);
             if (columnType == null || columns == null) return;
             object column = Activator.CreateInstance(columnType);
-            columnType.GetProperty("title", PublicInstance)?.SetValue(column, title);
-            columnType.GetProperty("name", PublicInstance)?.SetValue(column, title.ToLowerInvariant());
-            columnType.GetProperty("width", PublicInstance)?.SetValue(column, 180f);
-            columnType.GetProperty("makeCell", PublicInstance)?.SetValue(column, (Func<VisualElement>)(() => new Label()));
-            columnType.GetProperty("bindCell", PublicInstance)?.SetValue(column, (Action<VisualElement, int>)((element, index) => { if (element is Label label) label.text = resolver(index); }));
+            SafeSetValue(columnType, column, "title", title);
+            SafeSetValue(columnType, column, "name", title.ToLowerInvariant());
+            SafeSetValue(columnType, column, "width", 180f);
+            SafeSetValue(columnType, column, "makeCell", (Func<VisualElement>)(() => new Label()));
+            SafeSetValue(columnType, column, "bindCell", (Action<VisualElement, int>)((element, index) => { if (element is Label label) label.text = resolver(index); }));
             columns.GetType().GetMethod("Add", PublicInstance, null, new[] { columnType }, null)?.Invoke(columns, new[] { column });
+        }
+
+        private static void SafeSetValue(Type targetType, object target, string propertyName, object value)
+        {
+            PropertyInfo property = targetType.GetProperty(propertyName, PublicInstance);
+            if (property == null || !property.CanWrite) return;
+            try
+            {
+                Type propertyType = property.PropertyType;
+                object converted = value;
+                if (value != null && !propertyType.IsInstanceOfType(value))
+                {
+                    if (propertyType == typeof(float) && value is double d) converted = (float)d;
+                    else if (propertyType == typeof(double) && value is float f) converted = (double)f;
+                    else if (propertyType == typeof(int) && (value is float fv || value is double dv)) converted = Convert.ToInt32(value);
+                    else if (propertyType == typeof(Length) && (value is float fl || value is double dl)) converted = new Length(Convert.ToSingle(value), LengthUnit.Pixel);
+                    else if (propertyType == typeof(string) && value != null) converted = value.ToString();
+                    else converted = Convert.ChangeType(value, propertyType);
+                }
+                property.SetValue(target, converted);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[ExampleCoverageCollectionsWindow] Failed to set {propertyName} on {targetType.Name}: {ex.Message}");
+            }
         }
 
         private static object ReadMember(object target, params string[] names)
@@ -293,6 +383,28 @@ namespace UnityUIFlow.Examples
             if (count == null || item == null) return null;
             int total = (int)count.GetValue(target);
             return index >= 0 && index < total ? item.GetValue(target, new object[] { index }) : null;
+        }
+
+        private static Tab CreateClosableTab(string label, string name)
+        {
+            var tab = new Tab(label) { name = name };
+            var closableProp = typeof(Tab).GetProperty("closable", PublicInstance);
+            if (closableProp != null && closableProp.CanWrite)
+            {
+                closableProp.SetValue(tab, true);
+            }
+            return tab;
+        }
+
+        private static string GetTabLabel(Tab tab)
+        {
+            if (tab == null) return string.Empty;
+            var labelProp = typeof(Tab).GetProperty("label", PublicInstance);
+            if (labelProp?.CanRead == true)
+            {
+                return labelProp.GetValue(tab)?.ToString() ?? string.Empty;
+            }
+            return string.Empty;
         }
     }
 
@@ -352,16 +464,21 @@ namespace UnityUIFlow.Examples
             dragTarget.Add(new Label("Drag Target"));
             bool dragActive = false;
             dragTarget.RegisterCallback<MouseDownEvent>(evt => { dragActive = true; gestureStatus.text = $"Drag: started button={(int)evt.button}; modifiers={evt.modifiers}"; });
+            dragTarget.RegisterCallback<PointerDownEvent>(evt => { dragActive = true; gestureStatus.text = $"Drag: started button={(int)evt.button}; modifiers={evt.modifiers}"; });
             dragTarget.RegisterCallback<MouseMoveEvent>(evt => { if (dragActive) gestureStatus.text = $"Drag: moving modifiers={evt.modifiers}"; });
+            dragTarget.RegisterCallback<PointerMoveEvent>(evt => { if (dragActive) gestureStatus.text = $"Drag: moving modifiers={evt.modifiers}"; });
             dragTarget.RegisterCallback<MouseUpEvent>(evt => { if (dragActive) { dragActive = false; gestureStatus.text = $"Drag: completed button={(int)evt.button}; modifiers={evt.modifiers}"; } });
+            dragTarget.RegisterCallback<PointerUpEvent>(evt => { if (dragActive) { dragActive = false; gestureStatus.text = $"Drag: completed button={(int)evt.button}; modifiers={evt.modifiers}"; } });
 
             TextField keyboardInput = new TextField("Keyboard Input") { name = "keyboard-input", value = string.Empty };
             keyboardInput.RegisterCallback<KeyDownEvent>(evt => keyboardStatus.text = $"Key: {evt.keyCode}");
             keyboardInput.RegisterValueChangedCallback(evt => keyboardStatus.text = $"Input: {evt.newValue}");
 
             TextField commandInput = new TextField("Command Input") { name = "command-input", value = string.Empty };
-            commandInput.RegisterCallback<ValidateCommandEvent>(evt => { commandStatus.text = $"Validate: {evt.commandName}"; evt.StopPropagation(); });
-            commandInput.RegisterCallback<ExecuteCommandEvent>(evt => { commandStatus.text = $"Execute: {evt.commandName}"; evt.StopPropagation(); });
+            // Use TrickleDown.TrickleDown to ensure these callbacks fire before TextField's internal
+            // command handling stops propagation.
+            commandInput.RegisterCallback<ValidateCommandEvent>(evt => { commandStatus.text = $"Validate: {evt.commandName}"; evt.StopPropagation(); }, TrickleDown.TrickleDown);
+            commandInput.RegisterCallback<ExecuteCommandEvent>(evt => { commandStatus.text = $"Execute: {evt.commandName}"; evt.StopPropagation(); }, TrickleDown.TrickleDown);
 
             VisualElement contextTarget = new VisualElement { name = "context-target" };
             contextTarget.style.height = 28;

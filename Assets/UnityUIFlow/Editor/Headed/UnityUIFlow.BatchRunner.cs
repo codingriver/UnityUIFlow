@@ -133,7 +133,7 @@ namespace UnityUIFlow
             targetModeRow.style.alignItems = Align.Center;
             rootVisualElement.Add(targetModeRow);
 
-            _targetModeField = new EnumField("Target Mode", _state.TargetMode);
+            _targetModeField = new EnumField("Target Mode", _state.TargetMode) { name = "batch-target-mode" };
             _targetModeField.style.minWidth = 260;
             _targetModeField.RegisterValueChangedCallback(evt =>
             {
@@ -161,6 +161,7 @@ namespace UnityUIFlow
 
             _targetPathField = new TextField("YAML Target")
             {
+                name = "batch-target-path",
                 value = _state.TargetPath ?? string.Empty,
             };
             _targetPathField.style.flexGrow = 1;
@@ -180,6 +181,7 @@ namespace UnityUIFlow
 
             _reportPathField = new TextField("Report Path")
             {
+                name = "batch-report-path",
                 value = _state.ReportPath ?? "Reports/BatchRunner",
             };
             _reportPathField.style.flexGrow = 1;
@@ -198,14 +200,14 @@ namespace UnityUIFlow
             optionsGrid.style.marginTop = 10;
             rootVisualElement.Add(optionsGrid);
 
-            _headedToggle = CreateToggle("Headed", _state.Headed, value => _state.Headed = value);
-            _stopOnFirstFailureToggle = CreateToggle("Stop On First Failure", _state.StopOnFirstFailure, value => _state.StopOnFirstFailure = value);
-            _continueOnStepFailureToggle = CreateToggle("Continue On Step Failure", _state.ContinueOnStepFailure, value => _state.ContinueOnStepFailure = value);
-            _screenshotOnFailureToggle = CreateToggle("Screenshot On Failure", _state.ScreenshotOnFailure, value => _state.ScreenshotOnFailure = value);
-            _verboseLogToggle = CreateToggle("Verbose Log", _state.EnableVerboseLog, value => _state.EnableVerboseLog = value);
-            _requireOfficialHostToggle = CreateToggle("Require Official Host", _state.RequireOfficialHost, value => _state.RequireOfficialHost = value);
-            _requireOfficialPointerDriverToggle = CreateToggle("Require Official Pointer Driver", _state.RequireOfficialPointerDriver, value => _state.RequireOfficialPointerDriver = value);
-            _requireInputSystemKeyboardDriverToggle = CreateToggle("Require InputSystem Keyboard Driver", _state.RequireInputSystemKeyboardDriver, value => _state.RequireInputSystemKeyboardDriver = value);
+            _headedToggle = CreateToggle("Headed", "batch-headed-toggle", _state.Headed, value => _state.Headed = value);
+            _stopOnFirstFailureToggle = CreateToggle("Stop On First Failure", "batch-stop-on-first-failure-toggle", _state.StopOnFirstFailure, value => _state.StopOnFirstFailure = value);
+            _continueOnStepFailureToggle = CreateToggle("Continue On Step Failure", "batch-continue-on-step-failure-toggle", _state.ContinueOnStepFailure, value => _state.ContinueOnStepFailure = value);
+            _screenshotOnFailureToggle = CreateToggle("Screenshot On Failure", "batch-screenshot-on-failure-toggle", _state.ScreenshotOnFailure, value => _state.ScreenshotOnFailure = value);
+            _verboseLogToggle = CreateToggle("Verbose Log", "batch-verbose-log-toggle", _state.EnableVerboseLog, value => _state.EnableVerboseLog = value);
+            _requireOfficialHostToggle = CreateToggle("Require Official Host", "batch-require-official-host-toggle", _state.RequireOfficialHost, value => _state.RequireOfficialHost = value);
+            _requireOfficialPointerDriverToggle = CreateToggle("Require Official Pointer Driver", "batch-require-official-pointer-toggle", _state.RequireOfficialPointerDriver, value => _state.RequireOfficialPointerDriver = value);
+            _requireInputSystemKeyboardDriverToggle = CreateToggle("Require InputSystem Keyboard Driver", "batch-require-inputsystem-keyboard-toggle", _state.RequireInputSystemKeyboardDriver, value => _state.RequireInputSystemKeyboardDriver = value);
 
             optionsGrid.Add(_headedToggle);
             optionsGrid.Add(_stopOnFirstFailureToggle);
@@ -218,6 +220,7 @@ namespace UnityUIFlow
 
             _defaultTimeoutField = new IntegerField("Default Timeout (ms)")
             {
+                name = "batch-timeout",
                 value = _state.DefaultTimeoutMs,
             };
             _defaultTimeoutField.style.marginTop = 6;
@@ -235,33 +238,36 @@ namespace UnityUIFlow
             rootVisualElement.Add(actionRow);
 
             _runButton = CreateButton("Run", RunSelected);
+            _runButton.name = "batch-run-button";
             _cancelButton = CreateButton("Cancel", CancelRun);
+            _cancelButton.name = "batch-cancel-button";
             actionRow.Add(_runButton);
             actionRow.Add(_cancelButton);
 
-            _statusLabel = new Label();
-            _currentYamlLabel = new Label();
-            _currentCaseLabel = new Label();
-            _summaryLabel = new Label();
+            _statusLabel = new Label { name = "batch-status-label" };
+            _currentYamlLabel = new Label { name = "batch-current-yaml-label" };
+            _currentCaseLabel = new Label { name = "batch-current-case-label" };
+            _summaryLabel = new Label { name = "batch-summary-label" };
             rootVisualElement.Add(_statusLabel);
             rootVisualElement.Add(_currentYamlLabel);
             rootVisualElement.Add(_currentCaseLabel);
             rootVisualElement.Add(_summaryLabel);
 
-            _messageBox = new HelpBox(string.Empty, HelpBoxMessageType.None);
+            _messageBox = new HelpBox(string.Empty, HelpBoxMessageType.None) { name = "batch-message-box" };
             _messageBox.style.marginTop = 6;
             rootVisualElement.Add(_messageBox);
 
-            _resultsScrollView = new ScrollView(ScrollViewMode.Vertical);
+            _resultsScrollView = new ScrollView(ScrollViewMode.Vertical) { name = "batch-results-scroll" };
             _resultsScrollView.style.flexGrow = 1;
             _resultsScrollView.style.marginTop = 10;
             rootVisualElement.Add(_resultsScrollView);
         }
 
-        private Toggle CreateToggle(string label, bool currentValue, Action<bool> onChanged)
+        private Toggle CreateToggle(string label, string name, bool currentValue, Action<bool> onChanged)
         {
             var toggle = new Toggle(label)
             {
+                name = name,
                 value = currentValue,
             };
             toggle.style.minWidth = 220;
@@ -419,6 +425,21 @@ namespace UnityUIFlow
                     ApplyCaseCounters(result.Status);
                     _state.Cases.Add(BuildSnapshot(result, yamlPath, reportRoot, reportPaths));
                     _state.CurrentCaseName = null;
+                    _state.StatusText = result.Status == TestStatus.Passed
+                        ? $"Passed: {result.CaseName}"
+                        : $"Failed: {result.CaseName}";
+
+                    if (result.Status == TestStatus.Failed || result.Status == TestStatus.Error)
+                    {
+                        string failureMessage = BuildFailureSummary(result);
+                        _state.LastError = failureMessage;
+                        SetMessage(failureMessage, HelpBoxMessageType.Error);
+                    }
+                    else
+                    {
+                        SetMessage($"Completed case: {result.CaseName}", HelpBoxMessageType.Info);
+                    }
+
                     RefreshUi();
 
                     if (_state.StopOnFirstFailure && (result.Status == TestStatus.Failed || result.Status == TestStatus.Error))
@@ -444,14 +465,20 @@ namespace UnityUIFlow
                 reporter.WriteSuiteReport(suite);
                 new CiArtifactManifestWriter().Write(reportRoot);
 
-                _state.StatusText = cancellationToken.IsCancellationRequested ? "Aborted" : "Completed";
                 if (cancellationToken.IsCancellationRequested)
                 {
+                    _state.StatusText = "Aborted";
                     _state.LastError = "Execution was cancelled by user.";
                     SetMessage(_state.LastError, HelpBoxMessageType.Warning);
                 }
+                else if (suite.Failed > 0 || suite.Errors > 0)
+                {
+                    _state.StatusText = "Failed";
+                    SetMessage($"Completed {suite.Total} case(s): passed={suite.Passed}, failed={suite.Failed}, errors={suite.Errors}, skipped={suite.Skipped}.", HelpBoxMessageType.Error);
+                }
                 else
                 {
+                    _state.StatusText = "Completed";
                     SetMessage($"Completed {suite.Total} case(s).", HelpBoxMessageType.Info);
                 }
             }
@@ -489,6 +516,25 @@ namespace UnityUIFlow
                     _state.Skipped++;
                     break;
             }
+        }
+
+        private string BuildFailureSummary(TestResult result)
+        {
+            StepResult failedStep = result.StepResults?.FirstOrDefault(step => step.Status == TestStatus.Failed || step.Status == TestStatus.Error);
+            string detail = failedStep?.ErrorMessage ?? result.ErrorMessage ?? "Unknown failure.";
+            string code = failedStep?.ErrorCode ?? result.ErrorCode;
+            string stepName = failedStep?.DisplayName;
+
+            if (!string.IsNullOrWhiteSpace(stepName))
+            {
+                return string.IsNullOrWhiteSpace(code)
+                    ? $"Case {result.CaseName} failed at step '{stepName}': {detail}"
+                    : $"Case {result.CaseName} failed at step '{stepName}' ({code}): {detail}";
+            }
+
+            return string.IsNullOrWhiteSpace(code)
+                ? $"Case {result.CaseName} failed: {detail}"
+                : $"Case {result.CaseName} failed ({code}): {detail}";
         }
 
         private BatchRunnerCaseSnapshot BuildSnapshot(TestResult result, string yamlPath, string reportRoot, ReportPathBuilder reportPaths)
@@ -620,9 +666,11 @@ namespace UnityUIFlow
                 return;
             }
 
+            int index = 0;
             foreach (BatchRunnerCaseSnapshot snapshot in _state.Cases)
             {
                 var card = new VisualElement();
+                card.name = $"batch-result-card-{index}";
                 card.style.marginBottom = 8;
                 card.style.paddingLeft = 8;
                 card.style.paddingRight = 8;
@@ -656,7 +704,18 @@ namespace UnityUIFlow
                 }
 
                 card.Add(new Label($"Report: {snapshot.ReportMarkdownPath}"));
+                if (!string.IsNullOrWhiteSpace(snapshot.ReportMarkdownPath) && File.Exists(snapshot.ReportMarkdownPath))
+                {
+                    var openReportBtn = new Button(() => EditorUtility.OpenWithDefaultApp(snapshot.ReportMarkdownPath))
+                    {
+                        text = "Open Report",
+                        name = $"batch-result-card-open-report-{index}",
+                    };
+                    openReportBtn.style.width = 120;
+                    card.Add(openReportBtn);
+                }
                 _resultsScrollView.Add(card);
+                index++;
             }
         }
     }

@@ -20,7 +20,7 @@ namespace UnityUIFlow.Examples
 
         protected virtual string WindowTitle => GetType().Name;
 
-        public void PrepareForAutomatedTest()
+        public virtual void PrepareForAutomatedTest()
         {
             titleContent = new GUIContent(WindowTitle);
             minSize = new Vector2(420f, 260f);
@@ -596,6 +596,54 @@ namespace UnityUIFlow.Examples
             host.Add(treeStatus);
             host.Add(tabView);
             host.Add(tabStatus);
+        }
+    }
+
+    public sealed class ExampleBoundInferenceWindow : ExampleAcceptanceWindowBase
+    {
+        protected override string UxmlPath => "Assets/Examples/Uxml/ExampleBoundInferenceWindow.uxml";
+        protected override string WindowTitle => "Example Bound Inference";
+
+        private FloatField _floatField;
+        private TextField _textField;
+        private Toggle _toggle;
+        private EnumField _enumField;
+        private Label _status;
+
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+            EditorApplication.update -= PollStatus;
+            EditorApplication.update += PollStatus;
+        }
+
+        private void OnDisable()
+        {
+            EditorApplication.update -= PollStatus;
+        }
+
+        protected override void AfterBuild()
+        {
+            var host = rootVisualElement.Q<VisualElement>("inference-host");
+            _status = rootVisualElement.Q<Label>("status-label");
+
+            _floatField = new FloatField("Float") { name = "inferred-float", value = 0f };
+            _textField = new TextField("Text") { name = "inferred-text", value = "" };
+            _toggle = new Toggle("Toggle") { name = "inferred-toggle", value = false };
+            _enumField = new EnumField("Enum", DayOfWeek.Monday) { name = "inferred-enum", value = DayOfWeek.Monday };
+
+            host.Add(_floatField);
+            host.Add(_textField);
+            host.Add(_toggle);
+            host.Add(_enumField);
+
+            PollStatus();
+        }
+
+        private void PollStatus()
+        {
+            if (_status == null) return;
+            _status.text = $"F:{_floatField.value} T:{_textField.value} B:{_toggle.value} E:{_enumField.value}";
         }
     }
 }

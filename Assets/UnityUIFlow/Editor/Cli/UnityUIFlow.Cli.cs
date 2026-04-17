@@ -158,15 +158,14 @@ namespace UnityUIFlow
                 RequireOfficialPointerDriver = ReadBool(raw, environment, config, "unityUIFlow.requireOfficialPointerDriver", "requireOfficialPointerDriver", false),
                 RequireInputSystemKeyboardDriver = ReadBool(raw, environment, config, "unityUIFlow.requireInputSystemKeyboardDriver", "requireInputSystemKeyboardDriver", false),
                 EnableVerboseLog = ReadBool(raw, environment, config, "unityUIFlow.verbose", "verbose", false),
-                Batchmode = HasFlag(args, "-batchmode"),
                 Nographics = HasFlag(args, "-nographics"),
                 ConfigFile = configFile,
                 ParsedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             };
 
-            if (options.Batchmode)
+            if (HasFlag(args, "-batchmode"))
             {
-                options.Headed = false;
+                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, "-batchmode 模式已被禁用，请使用带窗口的编辑器模式执行测试。");
             }
 
             if (string.IsNullOrWhiteSpace(options.ScreenshotPath))
@@ -212,11 +211,6 @@ namespace UnityUIFlow
                 RequireOfficialPointerDriver = cliOptions.RequireOfficialPointerDriver,
                 RequireInputSystemKeyboardDriver = cliOptions.RequireInputSystemKeyboardDriver,
             };
-
-            if (cliOptions.Batchmode)
-            {
-                UnityEngine.Debug.Log("[UnityUIFlow] 批处理环境默认关闭 Headed 模式");
-            }
 
             options = UnityUIFlowProjectSettingsUtility.ApplyOverrides(options);
             options.Validate();

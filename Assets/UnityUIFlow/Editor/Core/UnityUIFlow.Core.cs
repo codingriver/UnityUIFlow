@@ -612,7 +612,6 @@ namespace UnityUIFlow
         public string ReportPath = "Reports";
         public bool ScreenshotOnFailure = true;
         public string ScreenshotPath;
-        public bool Batchmode;
         public bool Nographics;
         public int DefaultTimeoutMs = 3000;
         public bool StopOnFirstFailure;

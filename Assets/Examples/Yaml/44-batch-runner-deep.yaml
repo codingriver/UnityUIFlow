@@ -1,0 +1,48 @@
+name: Batch Runner Deep Interaction
+fixture:
+  host_window:
+    type: UnityUIFlow.BatchRunnerWindow
+    reopen_if_open: true
+steps:
+  - name: Set target mode to directory
+    action: set_value
+    selector: "#batch-target-mode"
+    value: "Directory"
+  - name: Set directory target
+    action: set_value
+    selector: "#batch-target-path"
+    value: "Assets/Examples/Yaml/_batch_deep"
+  - name: Set timeout
+    action: set_value
+    selector: "#batch-timeout"
+    value: "30000"
+  - name: Toggle headed off
+    action: click
+    selector: "#batch-headed-toggle"
+  - name: Run directory
+    action: click
+    selector: "#batch-run-button"
+  - name: Wait for completion
+    action: wait
+    duration: "30s"
+    timeout: "45s"
+  - name: Assert completed status
+    action: assert_text_contains
+    selector: "#batch-status-label"
+    expected: "Status: Completed"
+  - name: Assert 2 cases completed
+    action: assert_text_contains
+    selector: "#batch-message-box"
+    expected: "Completed 2 case(s)"
+  - name: Assert first result card exists
+    action: assert_visible
+    selector: "#batch-result-card-0"
+  - name: Assert second result card exists
+    action: assert_visible
+    selector: "#batch-result-card-1"
+  - name: Click open report on first card
+    action: click
+    selector: "#batch-result-card-open-report-0"
+  - name: Reset headed toggle
+    action: click
+    selector: "#batch-headed-toggle"

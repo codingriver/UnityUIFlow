@@ -1,0 +1,26 @@
+name: Edge Conditionals and Loop Boundaries
+fixture:
+  host_window:
+    type: UnityUIFlow.Examples.ExampleBasicLoginWindow
+    reopen_if_open: true
+steps:
+  - action: assert_not_visible
+    selector: "#nonexistent-element"
+    if:
+      not_exists: "#nonexistent-element"
+  - action: click
+    selector: "#login-button"
+    repeat_while:
+      not_visible: "#toast-message"
+      max_iterations: "3"
+  - action: assert_visible
+    selector: "#toast-message"
+  - action: wait
+    duration: "50ms"
+  - action: assert_text_contains
+    selector: "#status-label"
+    expected: "Missing credentials"
+    continue_on_step_failure: true
+  - action: assert_text
+    selector: "#status-label"
+    expected: "Missing credentials"

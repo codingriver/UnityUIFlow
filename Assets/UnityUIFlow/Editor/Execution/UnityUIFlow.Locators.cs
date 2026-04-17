@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
@@ -89,6 +90,61 @@ namespace UnityUIFlow
     }
 
     /// <summary>
+    /// Discovers visual elements in floating panels created by dropdowns, menus, and popups.
+    /// </summary>
+    internal static class FloatingPanelLocator
+    {
+        private static readonly MethodInfo GetPanelsMethod;
+        private static readonly PropertyInfo VisualTreeProperty;
+
+        static FloatingPanelLocator()
+        {
+            Type uieUtility = Type.GetType("UnityEngine.UIElements.UIElementsUtility, UnityEngine.UIElementsModule");
+            GetPanelsMethod = uieUtility?.GetMethod("GetPanels", BindingFlags.Static | BindingFlags.Public);
+
+            Type panelType = Type.GetType("UnityEngine.UIElements.Panel, UnityEngine.UIElementsModule");
+            VisualTreeProperty = panelType?.GetProperty("visualTree", BindingFlags.Public | BindingFlags.Instance);
+        }
+
+        public static bool IsAvailable => GetPanelsMethod != null && VisualTreeProperty != null;
+
+        public static IEnumerable<VisualElement> GetFloatingPanelRoots(VisualElement excludeRoot = null)
+        {
+            if (!IsAvailable)
+            {
+                yield break;
+            }
+
+            object panelsDict = GetPanelsMethod.Invoke(null, null);
+            if (panelsDict == null)
+            {
+                yield break;
+            }
+
+            var valuesProperty = panelsDict.GetType().GetProperty("Values");
+            System.Collections.IEnumerable values = valuesProperty?.GetValue(panelsDict) as System.Collections.IEnumerable;
+            if (values == null)
+            {
+                yield break;
+            }
+
+            foreach (object entry in values)
+            {
+                if (entry == null)
+                {
+                    continue;
+                }
+
+                VisualElement root = VisualTreeProperty.GetValue(entry) as VisualElement;
+                if (root != null && root != excludeRoot)
+                {
+                    yield return root;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Finds and waits for UI Toolkit elements.
     /// </summary>
     public sealed class ElementFinder
@@ -135,6 +191,39 @@ namespace UnityUIFlow
                     Element = element,
                     FoundAtMs = 0,
                 };
+            }
+
+            // Fallback: search in floating panels (dropdowns, menus, popups)
+            foreach (VisualElement floatingRoot in FloatingPanelLocator.GetFloatingPanelRoots(root))
+            {
+                element = TryFastPath(selector, floatingRoot, requireVisible);
+                if (element == null)
+                {
+                    foreach (VisualElement candidate in VisualElementQueryAdapter.QueryAll(floatingRoot))
+                    {
+                        if (!Matches(selector, candidate))
+                        {
+                            continue;
+                        }
+
+                        if (requireVisible && !ElementVisibilityEvaluator.IsVisible(candidate))
+                        {
+                            continue;
+                        }
+
+                        element = candidate;
+                        break;
+                    }
+                }
+
+                if (element != null)
+                {
+                    return new FindResult
+                    {
+                        Element = element,
+                        FoundAtMs = 0,
+                    };
+                }
             }
 
             return new FindResult();

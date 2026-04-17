@@ -326,3 +326,24 @@
   - `Assets/Tests/UnityUIFlow.LocatorsAndActionsTests.cs`
   - `cocs/M08-命令行与CI集成-需求文档.md`
   - `cocs/M12-官方UI测试框架与输入系统测试接入-需求文档.md`
+
+### RESOLVED-010: MCP `UNITY_NOT_CONNECTED` 误判修复（WebSocket 已连接但 `editor_state.connected` 返回 false）
+
+- **Status**: Resolved on 2026-04-17
+- **Root Cause**:
+  - `tool_facade.py::editor_state()` 原本只读取 `self.server.state.editor.connected`，该值依赖 Unity 侧发送的 `editor.state` 事件缓存。
+  - 当 MCP 服务器重启后，Unity 重新建立 WebSocket 并完成 `session.hello` 认证，但 `editor.state` 事件因未知原因未被发出（或未被服务器接收），导致 `state.editor.connected` 始终为 `False`。
+  - 此时 WebSocket 本身和 session manager 的心跳均正常（`unity_mcp_status.connected = true`），但 `unity_editor_state` 返回 `connected = false`，进而使得依赖 `editor_state` 判断连接状态的工具链误判为 `UNITY_NOT_CONNECTED`。
+- **Resolution**（双保险修复）：
+  1. **Python 服务器端**：在 `server.py::_handle_message` 处理 `session.hello` 成功时立即设置 `self.state.editor.connected = True`；在 WebSocket 断开时设置为 `False`。
+  2. **Python Tool Facade 端**：`tool_facade.py::editor_state()` 将 `connected` 字段改为 `s.connected or self.server.is_ready()`。这样即使 `editor.state` 事件丢失，只要 WebSocket/SessionManager 层确认连接 alive，就不会返回 `connected: false`。
+- **待进一步调查**（非阻塞）：
+  - Unity 侧 `UnityPilotBridge.cs` 在 `session.hello` 认证成功后通过 `_ = SendEditorStateEventAsync(token)` fire-and-forget 调用发送 `editor.state`。
+  - 但 `Logs/UnityPilot/unitypilot.log` 和 `log/mcp-server.log` 中均未见该事件的发送记录，说明该异步调用可能在某些情况下被静默取消、异常吞掉或尚未执行即被 domain reload 中断。
+  - 当前已在服务器层兜底，Unity 侧事件丢失不再影响功能；后续若需彻底根因，可单独调查 `SendEditorStateEventAsync` 的执行路径。
+- **References**:
+  - `D:/unitypilot/src/unitypilot_mcp/server.py`
+  - `D:/unitypilot/src/unitypilot_mcp/tool_facade.py`
+  - `Assets/unitypilot-editor/Editor/UnityPilotBridge.cs`
+  - `Logs/UnityPilot/unitypilot.log`
+  - `log/mcp-server.log`

@@ -11,3 +11,22 @@ steps:
     selector: "#layer-mask-selector"
     property: "value"
     expected: "1"
+  - action: toggle_mask_option
+    selector: "#layer-mask-selector"
+    index: "1"
+  - action: assert_property
+    selector: "#layer-mask-selector"
+    property: "value"
+    expected: "3"
+  - action: toggle_mask_option
+    selector: "#permissions-flags"
+    value: "Read"
+  - action: assert_value
+    selector: "#permissions-flags"
+    expected: "Read"
+  - action: toggle_mask_option
+    selector: "#feature-mask"
+    index: "1"
+  - action: assert_value
+    selector: "#feature-mask"
+    expected: "2"

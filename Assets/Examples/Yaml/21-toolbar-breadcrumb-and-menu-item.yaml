@@ -13,6 +13,9 @@ steps:
   - action: assert_text
     selector: "#toolbar-status"
     expected: "Toolbar: search=ship"
+  - action: read_breadcrumbs
+    selector: "#toolbar-breadcrumbs"
+    bag_key: "crumbs"
   - action: navigate_breadcrumb
     selector: "#toolbar-breadcrumbs"
     label: "Settings"

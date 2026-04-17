@@ -292,7 +292,12 @@ namespace UnityUIFlow
                 _dragStatus.text = "Drag: started";
                 _pointerStatus.text = $"Pointer: button={evt.button}, modifiers={evt.modifiers}";
             });
-
+            rootVisualElement.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                _dragStarted = true;
+                _dragStatus.text = "Drag: started";
+                _pointerStatus.text = $"Pointer: button={evt.button}, modifiers={evt.modifiers}";
+            });
             rootVisualElement.RegisterCallback<MouseMoveEvent>(evt =>
             {
                 if (_dragStarted && evt.mouseDelta.sqrMagnitude > 0f)
@@ -300,7 +305,13 @@ namespace UnityUIFlow
                     _dragStatus.text = "Drag: moving";
                 }
             });
-
+            rootVisualElement.RegisterCallback<PointerMoveEvent>(evt =>
+            {
+                if (_dragStarted && evt.deltaPosition.sqrMagnitude > 0f)
+                {
+                    _dragStatus.text = "Drag: moving";
+                }
+            });
             rootVisualElement.RegisterCallback<MouseUpEvent>(evt =>
             {
                 if (_dragStarted)
@@ -308,7 +319,15 @@ namespace UnityUIFlow
                     _dragStatus.text = "Drag: completed";
                     _dragStarted = false;
                 }
-
+                _pointerStatus.text = $"Pointer: button={evt.button}, modifiers={evt.modifiers}";
+            });
+            rootVisualElement.RegisterCallback<PointerUpEvent>(evt =>
+            {
+                if (_dragStarted)
+                {
+                    _dragStatus.text = "Drag: completed";
+                    _dragStarted = false;
+                }
                 _pointerStatus.text = $"Pointer: button={evt.button}, modifiers={evt.modifiers}";
             });
         }

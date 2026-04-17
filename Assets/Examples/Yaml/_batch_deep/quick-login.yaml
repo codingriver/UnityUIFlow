@@ -1,0 +1,17 @@
+name: Quick Login
+fixture:
+  host_window:
+    type: UnityUIFlow.Examples.ExampleBasicLoginWindow
+    reopen_if_open: true
+steps:
+  - action: type_text_fast
+    selector: "#username-input"
+    value: "batch"
+  - action: type_text_fast
+    selector: "#password-input"
+    value: "runner"
+  - action: click
+    selector: "#login-button"
+  - action: assert_text
+    selector: "#status-label"
+    expected: "Welcome batch"

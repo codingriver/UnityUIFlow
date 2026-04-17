@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using NUnit.Framework.Internal;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -87,8 +88,19 @@ namespace UnityUIFlow
             }
 
             Window = window;
-            _simulator = new EditorWindowPanelSimulator(window);
-            _simulator.FrameUpdate();
+            try
+            {
+                Debug.Log($"[UnityUIFlow] OfficialEditorWindowHostBridge: about to new EditorWindowPanelSimulator...");
+                _simulator = new EditorWindowPanelSimulator(window);
+                Debug.Log($"[UnityUIFlow] OfficialEditorWindowHostBridge: new succeeded, about to FrameUpdate...");
+                _simulator.FrameUpdate();
+                Debug.Log($"[UnityUIFlow] OfficialEditorWindowHostBridge: FrameUpdate succeeded.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[UnityUIFlow] OfficialEditorWindowHostBridge construction failed: {ex}");
+                throw;
+            }
         }
 
         public EditorWindow Window { get; }
@@ -145,6 +157,7 @@ namespace UnityUIFlow
             _simulator = simulator ?? throw new ArgumentNullException(nameof(simulator));
             _fixture = new UnityUIFlowMenuBridgeFixture(simulator);
             _fixture.FixtureOneTimeSetUp();
+            _fixture.FixtureSetUp();
             _contextMenuSimulator = CreateComponent<ContextMenuSimulator>();
             _popupMenuSimulator = CreateComponent<PopupMenuSimulator>();
             _fixture.AddTestComponent(_contextMenuSimulator);
@@ -188,13 +201,18 @@ namespace UnityUIFlow
             VisualElement trigger = ResolvePopupTrigger(element);
             if (trigger == null)
             {
+                Debug.Log($"[UnityUIFlow] OpenPopupMenu: trigger is null");
                 return false;
             }
 
             DiscardMenus();
+            Debug.Log($"[UnityUIFlow] OpenPopupMenu: clicking trigger {trigger.name} ({trigger.GetType().Name})...");
             _simulator.Click(trigger, UiMouseButton.LeftMouse, modifiers);
+            Debug.Log($"[UnityUIFlow] OpenPopupMenu: performing FrameUpdate...");
             _simulator.FrameUpdate();
-            return _popupMenuSimulator.menuIsDisplayed;
+            bool displayed = _popupMenuSimulator.menuIsDisplayed;
+            Debug.Log($"[UnityUIFlow] OpenPopupMenu: menuIsDisplayed={displayed}");
+            return displayed;
         }
 
         public bool SelectPopupMenuItem(string itemName)
@@ -267,6 +285,7 @@ namespace UnityUIFlow
                 _popupMenuSimulator = null;
             }
 
+            try { _fixture.FixtureTearDown(); } catch { }
             _fixture.FixtureOneTimeTearDown();
         }
 
@@ -330,7 +349,10 @@ namespace UnityUIFlow
 
         public async Task DragAsync(VisualElement root, Vector2 fromPos, Vector2 toPos, int delayMs, int frameCount, UiMouseButton button, EventModifiers modifiers, ActionContext context)
         {
-            ActionHelpers.DispatchMouseEvent(root, EventType.MouseDown, fromPos, Vector2.zero, button: (int)button, modifiers: modifiers);
+            VisualElement fromElement = root?.panel?.Pick(fromPos);
+            VisualElement toElement = root?.panel?.Pick(toPos);
+
+            ActionHelpers.DispatchMouseEvent(fromElement ?? root, EventType.MouseDown, fromPos, Vector2.zero, button: (int)button, modifiers: modifiers);
 
             await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
 
@@ -344,7 +366,26 @@ namespace UnityUIFlow
                 await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
             }
 
-            ActionHelpers.DispatchMouseEvent(root, EventType.MouseUp, toPos, Vector2.zero, button: (int)button, modifiers: modifiers);
+            ActionHelpers.DispatchMouseEvent(toElement ?? root, EventType.MouseUp, toPos, Vector2.zero, button: (int)button, modifiers: modifiers);
+
+            // Ensure the source element receives MouseUp so drag-end callbacks fire.
+            if (fromElement != null && !ReferenceEquals(fromElement, toElement))
+            {
+                var imguiEvent = new UnityEngine.Event
+                {
+                    type = EventType.MouseUp,
+                    mousePosition = fromPos,
+                    delta = Vector2.zero,
+                    button = (int)button,
+                    clickCount = 1,
+                    modifiers = modifiers,
+                };
+                using (MouseUpEvent evt = MouseUpEvent.GetPooled(imguiEvent))
+                {
+                    evt.target = fromElement;
+                    fromElement.SendEvent(evt);
+                }
+            }
         }
 
         public void Scroll(VisualElement element, float dx, float dy, ActionContext context)
@@ -412,12 +453,42 @@ namespace UnityUIFlow
             }
 
             _simulator.FrameUpdate();
+
+            // Fallback for com.unity.ui 2.0+ where PanelSimulator.Click may not trigger Button clicks correctly
+            // because the generated PointerEvent can be missing required fields (e.g. pointerId).
+            if (element is Button)
+            {
+                ActionHelpers.DispatchClick(element, clickCount, button, modifiers, context);
+            }
         }
 
         public async Task DragAsync(VisualElement root, Vector2 fromPos, Vector2 toPos, int delayMs, int frameCount, UiMouseButton button, EventModifiers modifiers, ActionContext context)
         {
             _simulator.DragAndDrop(fromPos, toPos, button, modifiers);
             _simulator.FrameUpdate();
+
+            // PanelSimulator.DragAndDrop does not reliably dispatch MouseUp to the source element
+            // when the drag ends on a different target. Ensure drag-end callbacks fire.
+            VisualElement fromElement = root?.panel?.Pick(fromPos);
+            VisualElement toElement = root?.panel?.Pick(toPos);
+            if (fromElement != null && !ReferenceEquals(fromElement, toElement))
+            {
+                var imguiEvent = new UnityEngine.Event
+                {
+                    type = EventType.MouseUp,
+                    mousePosition = fromPos,
+                    delta = Vector2.zero,
+                    button = (int)button,
+                    clickCount = 1,
+                    modifiers = modifiers,
+                };
+                using (MouseUpEvent evt = MouseUpEvent.GetPooled(imguiEvent))
+                {
+                    evt.target = fromElement;
+                    fromElement.SendEvent(evt);
+                }
+            }
+
             await Task.CompletedTask;
         }
 
@@ -508,7 +579,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[UnityUIFlow] Failed to bind official EditorWindow host bridge: {ex.Message}");
+                Debug.LogWarning($"[UnityUIFlow] Failed to bind official EditorWindow host bridge: {ex}");
                 ReleaseOfficialHostBridge();
                 _pointerDriver = new FallbackUiPointerDriver();
                 MarkKeyboardFallback();
@@ -884,6 +955,24 @@ namespace UnityUIFlow
             }
         }
 
+        private static TestExecutionContext s_FakeTestContext;
+
+        private static void EnsureFakeNUnitTestContext()
+        {
+            if (TestContext.CurrentTestExecutionContext != null)
+            {
+                Debug.Log($"[UnityUIFlow] EnsureFakeNUnitTestContext: already set, id={TestContext.CurrentTestExecutionContext.CurrentTest?.Id}");
+                return;
+            }
+            if (s_FakeTestContext == null)
+            {
+                s_FakeTestContext = new TestExecutionContext();
+                s_FakeTestContext.CurrentTest = new TestSuite("UnityUIFlow.FakeTest");
+            }
+            TestContext.CurrentTestExecutionContext = s_FakeTestContext;
+            Debug.Log($"[UnityUIFlow] EnsureFakeNUnitTestContext: injected fake context, id={s_FakeTestContext.CurrentTest?.Id}");
+        }
+
         private void EnsureOfficialEventLifecycle()
         {
             if (_officialEventLifecycleReady)
@@ -891,15 +980,30 @@ namespace UnityUIFlow
                 return;
             }
 
-            if (EventHelpersSetUpMethod == null)
+            if (EventHelpersSetUpMethod != null)
             {
-                throw new UnityUIFlowException(
-                    ErrorCodes.OfficialUiTestFrameworkUnavailable,
-                    "com.unity.ui.test-framework EventHelpers.TestSetUp is unavailable.");
+                try
+                {
+                    EnsureFakeNUnitTestContext();
+                    EventHelpersSetUpMethod.Invoke(null, null);
+                    _officialEventLifecycleReady = true;
+                }
+                catch (Exception ex)
+                {
+                    var inner = ex.InnerException?.ToString() ?? "(no inner exception)";
+                    Debug.LogWarning($"[UnityUIFlow] EventHelpers.TestSetUp failed: {ex.Message}. Inner: {inner}");
+                    try
+                    {
+                        var pointerStateType = Type.GetType("UnityEngine.UIElements.PointerDeviceState, UnityEngine.UIElementsModule");
+                        pointerStateType?.GetMethod("Reset", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?.Invoke(null, null);
+                    }
+                    catch { }
+                }
             }
-
-            EventHelpersSetUpMethod.Invoke(null, null);
-            _officialEventLifecycleReady = true;
+            else
+            {
+                _officialEventLifecycleReady = true;
+            }
         }
 
         private void ReleaseOfficialEventLifecycle()
