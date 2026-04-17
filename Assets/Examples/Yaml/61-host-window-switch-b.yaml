@@ -1,0 +1,8 @@
+name: Host Window Switch B
+fixture:
+  host_window:
+    type: SampleInteractionWindow
+    reopen_if_open: true
+steps:
+  - action: assert_visible
+    selector: '#interaction-root'

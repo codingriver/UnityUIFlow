@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine.TestTools;
 using UnityEngine.UIElements;
@@ -474,6 +475,141 @@ defaultTimeoutMs: 1500
             Assert.That(context.CurrentAttachments, Has.Count.EqualTo(10));
             Assert.That(context.CurrentAttachments[0], Is.EqualTo("attachment-0.png"));
             Assert.That(context.CurrentAttachments[9], Is.EqualTo("attachment-9.png"));
+        }
+
+        [Test]
+        public void ConfigFileLoader_ReturnsEmptyForMissingFile()
+        {
+            var loader = new ConfigFileLoader();
+            Dictionary<string, object> result = loader.Load(Path.Combine(Path.GetTempPath(), "nonexistent-config.json"));
+            Assert.That(result, Is.Empty);
+        }
+
+        [Test]
+        public void ConfigFileLoader_ThrowsOnInvalidYaml()
+        {
+            string tempDir = CreateTempDirectory();
+            string badPath = Path.Combine(tempDir, "bad-config.json");
+            File.WriteAllText(badPath, "{ not valid json");
+
+            UnityUIFlowException ex = Assert.Throws<UnityUIFlowException>(() => new ConfigFileLoader().Load(badPath));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ErrorCodes.CliConfigFileInvalid));
+        }
+
+        [Test]
+        public void JsonResultWriter_ProducesValidJson()
+        {
+            string tempDir = CreateTempDirectory();
+            string path = Path.Combine(tempDir, "case.json");
+            var result = new TestResult
+            {
+                CaseName = "Json Case",
+                Status = TestStatus.Passed,
+                StepResults = new List<StepResult>
+                {
+                    new StepResult { DisplayName = "Step1", Status = TestStatus.Passed },
+                },
+            };
+
+            new JsonResultWriter().WriteCaseJson(result, path);
+            string content = File.ReadAllText(path);
+            Assert.That(content, Does.Contain("\"CaseName\""));
+            Assert.That(content, Does.Contain("Json Case"));
+            Assert.That(content, Does.Contain("\"StepResults\""));
+        }
+
+        [Test]
+        public void CommandLineParser_ParsesNographicsFlag()
+        {
+            CliOptions options = new CommandLineOptionsParser().Parse(new[] { "Unity.exe", "-nographics" });
+            Assert.That(options.Nographics, Is.True);
+
+            CliOptions options2 = new CommandLineOptionsParser().Parse(new[] { "Unity.exe" });
+            Assert.That(options2.Nographics, Is.False);
+        }
+
+        [Test]
+        public void YamlTestCaseFilter_EmptyFilterMatchesAll()
+        {
+            Assert.That(YamlTestCaseFilter.Match(string.Empty, "case.yaml", "Case Name"), Is.True);
+            Assert.That(YamlTestCaseFilter.Match(null, "case.yaml", "Case Name"), Is.True);
+        }
+
+        [Test]
+        public void YamlTestCaseFilter_WildcardMatchesAny()
+        {
+            Assert.That(YamlTestCaseFilter.Match("*", "any.yaml", "Anything"), Is.True);
+            Assert.That(YamlTestCaseFilter.Match("A*", "alpha.yaml", "Beta"), Is.True);
+            Assert.That(YamlTestCaseFilter.Match("Z*", "alpha.yaml", "Beta"), Is.False);
+        }
+
+        [Test]
+        public void CommandLineParser_ResolvesComplexPriority()
+        {
+            string tempDir = CreateTempDirectory();
+            string configPath = Path.Combine(tempDir, ".unityuiflow.json");
+            File.WriteAllText(configPath, "headed: true\nreportPath: Config\ndefaultTimeoutMs: 2000");
+
+            var env = new Dictionary<string, string>
+            {
+                ["UNITY_UI_FLOW_CONFIG_FILE"] = configPath,
+                ["UNITY_UI_FLOW_HEADED"] = "false",
+                ["UNITY_UI_FLOW_REPORT_PATH"] = "Env",
+            };
+
+            string[] args = { "Unity.exe", "-unityUIFlow.headed", "true", "-unityUIFlow.reportPath", "Cli" };
+            CliOptions options = new CommandLineOptionsParser().Parse(args, env);
+
+            Assert.That(options.Headed, Is.True);
+            Assert.That(options.ReportPath, Is.EqualTo("Cli"));
+            Assert.That(options.DefaultTimeoutMs, Is.EqualTo(2000));
+        }
+
+        [Test]
+        public void ReportPathBuilder_BuildsExpectedPaths()
+        {
+            var builder = new ReportPathBuilder();
+            string root = CreateTempDirectory();
+            string screenshot = builder.BuildScreenshotPath(root, "Case/Name", 5, "tag");
+            Assert.That(Path.GetDirectoryName(screenshot), Is.EqualTo(root));
+            Assert.That(Path.GetFileName(screenshot), Does.StartWith("Case_Name-005-tag-"));
+
+            string md = builder.BuildCaseMarkdownPath(root, "Case|Name");
+            Assert.That(Path.GetFileName(md), Is.EqualTo("Case_Name.md"));
+
+            string suiteMd = builder.BuildSuiteMarkdownPath(root, "Suite");
+            Assert.That(Path.GetFileName(suiteMd), Is.EqualTo("suite-Suite.md"));
+        }
+
+        [UnityTest]
+        public IEnumerator CliEntry_RunAllAsync_RunsSingleYamlAndProducesArtifacts()
+        {
+            string tempDir = CreateTempDirectory();
+            string yamlPath = Path.Combine(tempDir, "cli-case.yaml");
+            File.WriteAllText(yamlPath, @"
+name: CLI Smoke
+fixture:
+  host_window:
+    type: SampleLoginWindow
+    reopen_if_open: true
+steps:
+  - action: wait
+    duration: '10ms'
+");
+
+            string[] args =
+            {
+                "Unity.exe",
+                "-unityUIFlow.yamlPath", yamlPath,
+                "-unityUIFlow.reportPath", tempDir,
+                "-unityUIFlow.headed", "false",
+            };
+
+            Task<int> task = UnityUIFlowCliEntry.RunAllAsync(args);
+            yield return UnityUIFlowTestTaskUtility.Await(task);
+
+            Assert.That(task.Result, Is.EqualTo(0));
+            Assert.That(File.Exists(Path.Combine(tempDir, "artifacts.json")), Is.True);
         }
 
         private static string CreateTempDirectory()

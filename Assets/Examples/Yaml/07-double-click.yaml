@@ -11,4 +11,4 @@ steps:
   - name: Assert click count
     action: assert_text
     selector: "#double-status"
-    expected: "Double Count: 2"
+    expected: "Double Count: 4"

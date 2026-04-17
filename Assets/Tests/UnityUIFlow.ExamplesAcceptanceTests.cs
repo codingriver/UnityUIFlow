@@ -199,5 +199,46 @@ steps:
                     ScreenshotOnFailure = true,
                 });
         }
+
+        [UnityTest]
+        public IEnumerator Example_EngineReliabilityCombo_RunsSuccessfully()
+        {
+            yield return RunExampleAndAssertPassed("58-engine-reliability.yaml");
+        }
+
+        [UnityTest]
+        public IEnumerator Example_NestedLoops_RunsSuccessfully()
+        {
+            yield return RunExampleAndAssertPassed("59-nested-loops.yaml");
+        }
+
+        [UnityTest]
+        public IEnumerator Example_HostWindowSwitch_RunsSuccessfully()
+        {
+            yield return RunExampleAndAssertPassed("60-host-window-switch.yaml");
+            yield return RunExampleAndAssertPassed("61-host-window-switch-b.yaml");
+        }
+
+        [UnityTest]
+        public IEnumerator HostWindowManager_CallsPrepareForAutomatedTest()
+        {
+            HostWindowDefinition definition = new HostWindowDefinition
+            {
+                Type = typeof(ExampleBasicLoginWindow).FullName,
+                ReopenIfOpen = true,
+            };
+
+            Task<(EditorWindow window, VisualElement root)> openTask = TestHostWindowManager.OpenAsync(definition);
+            EditorWindow window = null;
+            yield return UnityUIFlowTestTaskUtility.Await(openTask, tuple =>
+            {
+                window = tuple.window;
+            });
+
+            Assert.That(window, Is.Not.Null);
+            Assert.That(window.titleContent.text, Is.EqualTo(nameof(ExampleBasicLoginWindow)));
+            window.Close();
+            yield return null;
+        }
     }
 }

@@ -18,7 +18,7 @@ steps:
     repeat_while:
       condition:
         exists: "#toast-message"
-      max_iterations: 20
+      max_iterations: 40
       steps:
         - name: Wait a frame chunk
           action: wait

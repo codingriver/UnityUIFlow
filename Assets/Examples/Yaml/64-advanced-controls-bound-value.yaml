@@ -1,0 +1,14 @@
+name: Advanced Controls Bound Value
+fixture:
+  host_window:
+    type: AdvancedControlsWindow
+    reopen_if_open: true
+steps:
+  - action: set_bound_value
+    selector: '#property-title-field'
+    property: 'inspectorTitle'
+    value: 'Automated'
+  - action: assert_bound_value
+    selector: '#property-title-field'
+    property: 'inspectorTitle'
+    expected: 'Automated'

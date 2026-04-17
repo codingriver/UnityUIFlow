@@ -192,7 +192,7 @@ namespace UnityUIFlow.Examples
             saveButton.RegisterCallback<MouseUpEvent>(_ =>
             {
                 ShowToast();
-                _toastHideAtTime = EditorApplication.timeSinceStartup + 0.25d;
+                _toastHideAtTime = EditorApplication.timeSinceStartup + 2.0d;
             });
 
             resetButton.RegisterCallback<MouseUpEvent>(_ =>
@@ -317,7 +317,7 @@ namespace UnityUIFlow.Examples
             _count = 0;
             _status.text = "Double Count: 0";
 
-            button.RegisterCallback<MouseUpEvent>(_ =>
+            button.RegisterCallback<ClickEvent>(_ =>
             {
                 _count++;
                 _status.text = $"Double Count: {_count}";

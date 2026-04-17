@@ -64,7 +64,7 @@ namespace UnityUIFlow
     /// <summary>
     /// Manages screenshot capture and persistence.
     /// </summary>
-    public sealed class ScreenshotManager
+    public class ScreenshotManager
     {
         public const string SourceWindowReadScreenPixel = "window-readscreenpixel";
         public const string SourceFocusedWindowReadScreenPixel = "focused-window-readscreenpixel";
@@ -87,7 +87,7 @@ namespace UnityUIFlow
         /// <summary>
         /// Captures a screenshot asynchronously.
         /// </summary>
-        public async Task<string> CaptureAsync(string caseName, int stepIndex, string tag, CancellationToken cancellationToken)
+        public virtual async Task<string> CaptureAsync(string caseName, int stepIndex, string tag, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 

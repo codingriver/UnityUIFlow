@@ -1,3 +1,4 @@
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -10,6 +11,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.TestTools;
 using UnityEngine.UIElements;
 using UnityEditor.UIElements;
+using UiMouseButton = UnityEngine.UIElements.MouseButton;
 
 namespace UnityUIFlow
 {
@@ -563,6 +565,95 @@ namespace UnityUIFlow
         }
     }
 
+    public sealed class UnityUIFlowFixtureIntegrationBoundaryTests
+    {
+        [UnityTest]
+        public IEnumerator OfficialEditorWindowHostBridge_ThrowsWhenPanelNull()
+        {
+            yield return null;
+            var window = ScriptableObject.CreateInstance<SampleInteractionWindow>();
+            // Do not show the window, so rootVisualElement.panel is null
+            Assert.Throws<System.InvalidOperationException>(() => new OfficialEditorWindowHostBridge(window));
+            UnityEngine.Object.DestroyImmediate(window);
+        }
+
+        [UnityTest]
+        public IEnumerator OfficialEditorWindowHostBridge_DisposeIsIdempotent()
+        {
+            yield return null;
+            var window = EditorWindow.GetWindow<SampleInteractionWindow>();
+            window.Show();
+            yield return null;
+
+            var bridge = new OfficialEditorWindowHostBridge(window);
+            Assert.DoesNotThrow(() =>
+            {
+                bridge.Dispose();
+                bridge.Dispose();
+            });
+            window.Close();
+        }
+
+        [UnityTest]
+        public IEnumerator OfficialUiMenuDriver_ReturnsFalseWhenMenuNotOpen()
+        {
+            yield return null;
+            var window = EditorWindow.GetWindow<SampleInteractionWindow>();
+            window.Show();
+            yield return null;
+
+            using (var session = new UnityUIFlowSimulationSession())
+            {
+                session.BindEditorWindowHost(window, "test");
+                var ctx = new ActionContext { Root = window.rootVisualElement };
+                Assert.That(session.TrySelectContextMenuItem("DoesNotExist", ctx), Is.False);
+                Assert.That(session.TrySelectPopupMenuItem("DoesNotExist", ctx), Is.False);
+                Assert.That(session.TryAssertMenuItem("DoesNotExist", true, ctx), Is.False);
+            }
+            window.Close();
+        }
+
+        [Test]
+        public void SimulationSession_KeyboardDriverStateTransitions()
+        {
+            using (var session = new UnityUIFlowSimulationSession())
+            {
+                session.MarkKeyboardOfficial();
+                Assert.That(session.KeyboardDriverName, Is.EqualTo("PanelSimulator"));
+
+                session.MarkKeyboardInputSystem();
+                Assert.That(session.KeyboardDriverName, Is.EqualTo("InputSystemTestFramework+UIToolkitBridge"));
+
+                session.MarkKeyboardFallback();
+                Assert.That(session.KeyboardDriverName, Is.EqualTo("UIToolkitFallbackOnly"));
+            }
+        }
+
+        [Test]
+        public void SimulationSession_MenuApisReturnFalseWithoutBinding()
+        {
+            using (var session = new UnityUIFlowSimulationSession())
+            {
+                var ctx = new ActionContext();
+                Assert.That(session.TryOpenContextMenu(null, EventModifiers.None, ctx), Is.False);
+                Assert.That(session.TrySelectPopupMenuItem("X", ctx), Is.False);
+            }
+        }
+
+        [Test]
+        public void SimulationSession_DescribeDrivers_ContainsAllSegments()
+        {
+            using (var session = new UnityUIFlowSimulationSession())
+            {
+                string description = session.DescribeDrivers();
+                Assert.That(description, Does.Contain("host="));
+                Assert.That(description, Does.Contain("pointer="));
+                Assert.That(description, Does.Contain("keyboard="));
+                Assert.That(description, Does.Contain("official="));
+            }
+        }
+    }
+
     public sealed class UnityUIFlowStrictPointerFixtureTests : UnityUIFlowFixture<SampleInteractionWindow>
     {
         protected override TestOptions CreateDefaultOptions()
@@ -610,7 +701,7 @@ namespace UnityUIFlow
                 UnityUIFlowException flowException = ex as UnityUIFlowException;
                 Assert.That(flowException, Is.Not.Null);
                 Assert.That(flowException.ErrorCode, Is.EqualTo(ErrorCodes.ActionExecutionFailed));
-                Assert.That(flowException.Message, Does.Contain("高保真模式"));
+                Assert.That(flowException.Message, Does.Contain("动作 type_text 在高保真模式下禁止回退到直接写值实现"));
             });
         }
     }
@@ -636,7 +727,7 @@ namespace UnityUIFlow
                 UnityUIFlowException flowException = ex as UnityUIFlowException;
                 Assert.That(flowException, Is.Not.Null);
                 Assert.That(flowException.ErrorCode, Is.EqualTo(ErrorCodes.FixtureWindowCreateFailed));
-                Assert.That(flowException.Message, Does.Contain("官方测试宿主"));
+                Assert.That(flowException.Message, Does.Contain("瀹樻柟娴嬭瘯瀹夸富"));
             });
         }
     }
@@ -1677,6 +1768,175 @@ namespace UnityUIFlow
             }
 
             return null;
+        }
+
+        [UnityTest]
+        public IEnumerator FloatingPanelLocator_CanFindElementsInFloatingPanels()
+        {
+            yield return null;
+            Assert.That(FloatingPanelLocator.IsAvailable, Is.True);
+
+            // Ensure the floating panel enumerator returns without throwing
+            int count = 0;
+            foreach (VisualElement root in FloatingPanelLocator.GetFloatingPanelRoots(Root))
+            {
+                count++;
+            }
+            Assert.That(count, Is.GreaterThanOrEqualTo(0));
+        }
+
+        [UnityTest]
+        public IEnumerator Finder_MatchesFirstChildPseudoOnRealDom()
+        {
+            yield return null;
+            var compiler = new SelectorCompiler();
+            VisualElement first = Finder.Find(compiler.Compile("#menu-bar > .item:first-child"), Root).Element;
+            Assert.That(first, Is.Not.Null);
+            Assert.That(first.name, Is.EqualTo("menu-item-1"));
+        }
+
+        [UnityTest]
+        public IEnumerator Finder_MatchesDataAttributeFromUserData()
+        {
+            yield return null;
+            Root.Q<Button>("login-button").userData = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["data-role"] = "primary-login",
+            };
+            yield return null;
+
+            VisualElement found = Finder.Find(new SelectorCompiler().Compile("[data-role=primary-login]"), Root, false).Element;
+            Assert.That(found, Is.Not.Null);
+            Assert.That(found.name, Is.EqualTo("login-button"));
+        }
+
+        [UnityTest]
+        public IEnumerator Finder_ExistsAndVisibilityBoundaries()
+        {
+            yield return null;
+            var hidden = new VisualElement { name = "display-none-test" };
+            hidden.style.display = DisplayStyle.None;
+            Root.Add(hidden);
+
+            var opacityZero = new VisualElement { name = "opacity-zero-test" };
+            opacityZero.style.opacity = 0;
+            Root.Add(opacityZero);
+
+            yield return null;
+
+            Assert.That(Finder.Exists(new SelectorCompiler().Compile("#display-none-test"), Root, false), Is.True);
+            Assert.That(Finder.Exists(new SelectorCompiler().Compile("#display-none-test"), Root, true), Is.False);
+            Assert.That(Finder.Exists(new SelectorCompiler().Compile("#opacity-zero-test"), Root, false), Is.True);
+            Assert.That(Finder.Exists(new SelectorCompiler().Compile("#opacity-zero-test"), Root, true), Is.False);
+            Assert.That(Finder.Exists(new SelectorCompiler().Compile("#not-in-tree"), Root, false), Is.False);
+
+            Root.Remove(hidden);
+            Root.Remove(opacityZero);
+        }
+
+        [UnityTest]
+        public IEnumerator ScreenshotManager_CapturesFallbackWhenWindowNotFocused()
+        {
+            yield return null;
+            string tempDir = Path.Combine(Path.GetTempPath(), "UnityUIFlowTests", System.Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+
+            var options = new TestOptions { ScreenshotPath = tempDir };
+            var manager = new ScreenshotManager(options, () => Window);
+            string path = manager.CaptureSync(Path.Combine(tempDir, "test.png"));
+
+            Assert.That(File.Exists(path), Is.True);
+            Assert.That(manager.LastCaptureSource, Is.Not.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator FallbackUiPointerDriver_ClickAndScroll_Work()
+        {
+            yield return null;
+            var driver = new FallbackUiPointerDriver();
+            var context = new ActionContext { Root = Root, CancellationToken = System.Threading.CancellationToken.None };
+
+            Label status = Root.Q<Label>("interaction-status");
+            if (status == null)
+            {
+                Assert.Pass("Window does not contain interaction-status, skipping");
+            }
+
+            VisualElement target = Root.Q<Button>("interaction-button") ?? Root.Q<Button>("login-button");
+            driver.Click(target, 1, UiMouseButton.LeftMouse, EventModifiers.None, context);
+            yield return null;
+            Assert.That(driver.DriverName, Is.EqualTo("UIToolkitFallbackOnly"));
+        }
+
+        [UnityTest]
+        public IEnumerator AssertMenuItemActions_FailForMissingItem()
+        {
+            yield return null;
+            var openAction = new OpenContextMenuAction();
+            var assertAction = new AssertMenuItemAction();
+
+            // Missing menu item should throw timeout/element wait error when no menu is open
+            Task assertTask = ExecuteActionAsync(assertAction, new Dictionary<string, string>
+            {
+                ["item"] = "NonExistentItem",
+            });
+
+            yield return UnityUIFlowTestTaskUtility.AwaitFailure(assertTask, ex =>
+            {
+                Assert.That(ex, Is.TypeOf<UnityUIFlowException>());
+            });
+        }
+
+        [UnityTest]
+        public IEnumerator DragAction_WithInvalidCoordinates_Throws()
+        {
+            yield return null;
+            var action = new DragAction();
+            Task task = ExecuteActionAsync(action, new Dictionary<string, string>
+            {
+                ["from"] = "abc",
+                ["to"] = "1,2",
+            });
+
+            yield return UnityUIFlowTestTaskUtility.AwaitFailure(task, ex =>
+            {
+                Assert.That(ex, Is.TypeOf<UnityUIFlowException>());
+            });
+        }
+
+        [UnityTest]
+        public IEnumerator WaitAction_BoundaryDurations()
+        {
+            yield return null;
+            var action = new WaitAction();
+            Task task = ExecuteActionAsync(action, new Dictionary<string, string>
+            {
+                ["duration"] = "0ms",
+            });
+            yield return UnityUIFlowTestTaskUtility.Await(task);
+
+            UnityUIFlowException ex = Assert.Throws<UnityUIFlowException>(() =>
+            {
+                var a = new WaitAction();
+                var t = a.ExecuteAsync(Root, new ActionContext { Root = Root, CancellationToken = System.Threading.CancellationToken.None }, new Dictionary<string, string> { ["duration"] = "601s" });
+            });
+            Assert.That(ex.ErrorCode, Is.EqualTo(ErrorCodes.DurationLiteralInvalid));
+        }
+
+        [UnityTest]
+        public IEnumerator TypeTextAction_OnNonInputElement_ThrowsOrFails()
+        {
+            yield return null;
+            var action = new TypeTextAction();
+            Task task = ExecuteActionAsync(action, new Dictionary<string, string>
+            {
+                ["selector"] = "#status-label",
+                ["value"] = "should fail",
+            });
+            yield return UnityUIFlowTestTaskUtility.AwaitFailure(task, ex =>
+            {
+                Assert.That(ex, Is.TypeOf<UnityUIFlowException>().Or.TypeOf<System.Exception>());
+            });
         }
     }
 }

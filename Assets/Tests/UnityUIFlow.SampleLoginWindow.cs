@@ -245,7 +245,7 @@ namespace UnityUIFlow
                 _pointerStatus.text = $"Pointer: button={evt.button}, modifiers={evt.modifiers}";
             });
 
-            doubleClickButton.RegisterCallback<MouseUpEvent>(evt =>
+            doubleClickButton.RegisterCallback<ClickEvent>(evt =>
             {
                 _doubleClickCount++;
                 _doubleClickStatus.text = $"Double Clicks: {_doubleClickCount}";

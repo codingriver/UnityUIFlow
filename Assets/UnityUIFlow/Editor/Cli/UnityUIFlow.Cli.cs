@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using YamlDotNet.Serialization;
 
 namespace UnityUIFlow
@@ -457,11 +458,17 @@ namespace UnityUIFlow
         /// </summary>
         public static async void RunAllFromCommandLine()
         {
+            int exitCode = await RunAllAsync();
+            UnityEditor.EditorApplication.Exit(exitCode);
+        }
+
+        internal static async Task<int> RunAllAsync(string[] args = null)
+        {
             int exitCode = 2;
             try
             {
                 var parser = new CommandLineOptionsParser();
-                CliOptions cliOptions = parser.Parse();
+                CliOptions cliOptions = parser.Parse(args);
                 TestOptions testOptions = parser.ToTestOptions(cliOptions);
                 var runner = new TestRunner();
                 if (!string.IsNullOrWhiteSpace(cliOptions.YamlPath))
@@ -497,10 +504,7 @@ namespace UnityUIFlow
                 exitCode = 2;
                 UnityEngine.Debug.LogException(ex);
             }
-            finally
-            {
-                UnityEditor.EditorApplication.Exit(exitCode);
-            }
+            return exitCode;
         }
     }
 }
