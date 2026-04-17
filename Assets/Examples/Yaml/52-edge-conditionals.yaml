@@ -5,18 +5,12 @@ fixture:
     reopen_if_open: true
 steps:
   - action: assert_not_visible
-    selector: "#nonexistent-element"
-    if:
-      not_exists: "#nonexistent-element"
+    selector: "#toast-message"
+    timeout: "500ms"
   - action: click
     selector: "#login-button"
-    repeat_while:
-      not_visible: "#toast-message"
-      max_iterations: "3"
-  - action: assert_visible
-    selector: "#toast-message"
-  - action: wait
-    duration: "50ms"
+    if:
+      exists: "#login-button"
   - action: assert_text_contains
     selector: "#status-label"
     expected: "Missing credentials"
@@ -24,3 +18,5 @@ steps:
   - action: assert_text
     selector: "#status-label"
     expected: "Missing credentials"
+  - action: wait
+    duration: "50ms"

@@ -131,6 +131,45 @@ namespace UnityUIFlow
         }
 
         [UnityTest]
+        public IEnumerator AssertVisibleTextAndWaitActions_WorkOnLoginWindow()
+        {
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new AssertVisibleAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#login-button",
+            }));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new AssertTextAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#status-label",
+                ["expected"] = "Idle",
+            }));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new AssertTextContainsAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#status-label",
+                ["expected"] = "Id",
+            }));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new AssertNotVisibleAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#toast-message",
+            }));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new WaitAction(), new Dictionary<string, string>
+            {
+                ["duration"] = "50ms",
+            }));
+
+            Window.ShowToastForFrames(5);
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new WaitForElementAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#toast-message",
+                ["timeout"] = "1000ms",
+            }));
+        }
+
+        [UnityTest]
         public IEnumerator AssertionsAndSelectorsYaml_CompletesSuccessfully()
         {
             yield return UnityUIFlowTestTaskUtility.Await(ExecuteYamlStepsAsync(
@@ -399,6 +438,60 @@ namespace UnityUIFlow
 
             yield break;
         }
+
+        [UnityTest]
+        public IEnumerator TypeTextFastAction_WritesValueDirectly()
+        {
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new TypeTextFastAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#interaction-input",
+                ["value"] = "fast",
+            }));
+
+            Assert.That(Root.Q<TextField>("interaction-input").value, Is.EqualTo("fast"));
+        }
+
+        [UnityTest]
+        public IEnumerator PressKeyCombinationAction_SendsShortcut()
+        {
+            Window.FocusInput();
+            yield return null;
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new TypeTextAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#interaction-input",
+                ["value"] = "selectme",
+            }));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new PressKeyCombinationAction(), new Dictionary<string, string>
+            {
+                ["keys"] = "Ctrl+A",
+            }));
+
+            Assert.That(Root.Q<TextField>("interaction-input").value, Is.EqualTo("selectme"));
+        }
+
+        [UnityTest]
+        public IEnumerator AssertPropertyAction_ChecksElementProperty()
+        {
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new AssertPropertyAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#interaction-input",
+                ["property"] = "maxLength",
+                ["expected"] = "-1",
+            }));
+        }
+
+        [UnityTest]
+        public IEnumerator ScreenshotAction_CreatesAttachment()
+        {
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new ScreenshotAction(), new Dictionary<string, string>
+            {
+                ["name"] = "fixture-screenshot",
+            }));
+
+            Assert.That(LastActionContext.CurrentAttachments, Is.Not.Empty);
+        }
     }
 
     public sealed class UnityUIFlowOfficialIntegrationTests
@@ -617,6 +710,40 @@ namespace UnityUIFlow
             Assert.That(Root.Q<Toggle>("enabled-toggle").value, Is.True);
             Assert.That(Root.Q<MinMaxSlider>("range-slider").value.x, Is.EqualTo(10f).Within(0.001f));
             Assert.That(Root.Q<MinMaxSlider>("range-slider").value.y, Is.EqualTo(15f).Within(0.001f));
+        }
+
+        [UnityTest]
+        public IEnumerator ToggleMaskOptionAction_TogglesIndividualBits()
+        {
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new SetValueAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#feature-mask",
+                ["value"] = "0",
+            }));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new ToggleMaskOptionAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#feature-mask",
+                ["index"] = "1",
+            }));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new AssertValueAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#feature-mask",
+                ["expected"] = "2",
+            }));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new ToggleMaskOptionAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#feature-mask",
+                ["value"] = "Two",
+            }));
+
+            yield return UnityUIFlowTestTaskUtility.Await(ExecuteActionAsync(new AssertValueAction(), new Dictionary<string, string>
+            {
+                ["selector"] = "#feature-mask",
+                ["expected"] = "0",
+            }));
         }
 
         [UnityTest]

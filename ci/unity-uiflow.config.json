@@ -1,0 +1,6 @@
+{
+  "headed": false,
+  "reportPath": "./Reports",
+  "screenshotOnFailure": true,
+  "defaultTimeoutMs": 10000
+}
