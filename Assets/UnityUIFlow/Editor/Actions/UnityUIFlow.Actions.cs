@@ -162,6 +162,7 @@ namespace UnityUIFlow
         {
             if (!_actions.TryGetValue(actionName, out Type actionType))
             {
+                Debug.LogError($"[UnityUIFlow] 未找到动作 \"{actionName}\"，已注册动作数={_actions.Count}。可用动作：{string.Join(", ", _actions.Keys.Take(20))}");
                 throw new UnityUIFlowException(ErrorCodes.ActionNotFound, $"Action not found: {actionName}");
             }
 
@@ -171,6 +172,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
+                Debug.LogError($"[UnityUIFlow] 构造动作 \"{actionName}\" 失败: {ex.Message}");
                 throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"Failed to construct action {actionName}: {ex.Message}", ex);
             }
         }

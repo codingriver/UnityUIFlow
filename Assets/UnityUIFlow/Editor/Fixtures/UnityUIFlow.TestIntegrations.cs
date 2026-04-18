@@ -90,15 +90,13 @@ namespace UnityUIFlow
             Window = window;
             try
             {
-                Debug.Log($"[UnityUIFlow] OfficialEditorWindowHostBridge: about to new EditorWindowPanelSimulator...");
                 _simulator = new EditorWindowPanelSimulator(window);
-                Debug.Log($"[UnityUIFlow] OfficialEditorWindowHostBridge: new succeeded, about to FrameUpdate...");
                 _simulator.FrameUpdate();
-                Debug.Log($"[UnityUIFlow] OfficialEditorWindowHostBridge: FrameUpdate succeeded.");
+                Debug.Log($"[UnityUIFlow] 初始化官方测试宿主桥接 {window.GetType().Name} 成功");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[UnityUIFlow] OfficialEditorWindowHostBridge construction failed: {ex}");
+                Debug.LogError($"[UnityUIFlow] 初始化官方测试宿主桥接失败: {ex.Message}");
                 throw;
             }
         }
@@ -201,17 +199,22 @@ namespace UnityUIFlow
             VisualElement trigger = ResolvePopupTrigger(element);
             if (trigger == null)
             {
-                Debug.Log($"[UnityUIFlow] OpenPopupMenu: trigger is null");
+                Debug.LogWarning($"[UnityUIFlow] 打开弹出菜单失败: trigger 为空");
                 return false;
             }
 
             DiscardMenus();
-            Debug.Log($"[UnityUIFlow] OpenPopupMenu: clicking trigger {trigger.name} ({trigger.GetType().Name})...");
             _simulator.Click(trigger, UiMouseButton.LeftMouse, modifiers);
-            Debug.Log($"[UnityUIFlow] OpenPopupMenu: performing FrameUpdate...");
             _simulator.FrameUpdate();
             bool displayed = _popupMenuSimulator.menuIsDisplayed;
-            Debug.Log($"[UnityUIFlow] OpenPopupMenu: menuIsDisplayed={displayed}");
+            if (displayed)
+            {
+                Debug.Log($"[UnityUIFlow] 打开弹出菜单成功: trigger={trigger.name} ({trigger.GetType().Name})");
+            }
+            else
+            {
+                Debug.LogWarning($"[UnityUIFlow] 打开弹出菜单后菜单未显示: trigger={trigger.name}");
+            }
             return displayed;
         }
 

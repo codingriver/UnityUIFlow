@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace UnityUIFlow
@@ -149,6 +150,15 @@ namespace UnityUIFlow
     /// </summary>
     public sealed class ElementFinder
     {
+        public bool EnableVerboseLog { get; set; }
+
+        private static string RootInfo(VisualElement root)
+        {
+            if (root == null) return "(null)";
+            string name = string.IsNullOrEmpty(root.name) ? "" : $"#{root.name}";
+            return $"{root.GetType().Name}{name}";
+        }
+
         /// <summary>
         /// Finds the first matching element synchronously.
         /// </summary>
@@ -163,6 +173,9 @@ namespace UnityUIFlow
             {
                 throw new UnityUIFlowException(ErrorCodes.RootElementMissing, $"根节点不存在，无法查找 {selector.Raw}");
             }
+
+            if (EnableVerboseLog)
+                Debug.Log($"[UnityUIFlow][Locators] 查找元素 选择器={selector.Raw} 范围={RootInfo(root)} 要求可见={requireVisible}");
 
             VisualElement element = TryFastPath(selector, root, requireVisible);
             if (element == null)
@@ -186,6 +199,8 @@ namespace UnityUIFlow
 
             if (element != null)
             {
+                if (EnableVerboseLog)
+                    Debug.Log($"[UnityUIFlow][Locators] 找到元素 {ActionContext.ElementInfo(element)} 选择器={selector.Raw}");
                 return new FindResult
                 {
                     Element = element,
@@ -218,6 +233,8 @@ namespace UnityUIFlow
 
                 if (element != null)
                 {
+                    if (EnableVerboseLog)
+                        Debug.Log($"[UnityUIFlow][Locators] 找到元素(浮动面板) {ActionContext.ElementInfo(element)} 选择器={selector.Raw}");
                     return new FindResult
                     {
                         Element = element,
@@ -226,6 +243,8 @@ namespace UnityUIFlow
                 }
             }
 
+            if (EnableVerboseLog)
+                Debug.Log($"[UnityUIFlow][Locators] 未找到元素 选择器={selector.Raw} 范围={RootInfo(root)}");
             return new FindResult();
         }
 
@@ -286,7 +305,10 @@ namespace UnityUIFlow
         /// </summary>
         public bool Exists(SelectorExpression selector, VisualElement root, bool requireVisible = true)
         {
-            return Find(selector, root, requireVisible).Element != null;
+            bool exists = Find(selector, root, requireVisible).Element != null;
+            if (EnableVerboseLog)
+                Debug.Log($"[UnityUIFlow][Locators] 检查存在 选择器={selector?.Raw} => {exists}");
+            return exists;
         }
 
         private static VisualElement TryFastPath(SelectorExpression selector, VisualElement root, bool requireVisible)

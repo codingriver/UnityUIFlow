@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -35,6 +36,8 @@ namespace UnityUIFlow
         private EditorWindow _window;
         private VisualElement _overlayRoot;
         private VisualElement _marker;
+        private Label _label;
+        private IVisualElementScheduledItem _pulseAnimation;
 
         public void Attach(EditorWindow window)
         {
@@ -65,22 +68,46 @@ namespace UnityUIFlow
                 pickingMode = PickingMode.Ignore,
             };
             _marker.style.position = Position.Absolute;
-            _marker.style.backgroundColor = new Color(1f, 0f, 0f, 0.2f);
-            _marker.style.borderBottomColor = Color.red;
-            _marker.style.borderLeftColor = Color.red;
-            _marker.style.borderRightColor = Color.red;
-            _marker.style.borderTopColor = Color.red;
+            _marker.style.backgroundColor = new Color(1f, 0.84f, 0f, 0.25f);
+            _marker.style.borderBottomColor = new Color(1f, 0.65f, 0f, 1f);
+            _marker.style.borderLeftColor = new Color(1f, 0.65f, 0f, 1f);
+            _marker.style.borderRightColor = new Color(1f, 0.65f, 0f, 1f);
+            _marker.style.borderTopColor = new Color(1f, 0.65f, 0f, 1f);
             _marker.style.borderBottomWidth = 2;
             _marker.style.borderLeftWidth = 2;
             _marker.style.borderRightWidth = 2;
             _marker.style.borderTopWidth = 2;
             _marker.style.display = DisplayStyle.None;
 
+            _label = new Label
+            {
+                pickingMode = PickingMode.Ignore,
+            };
+            _label.style.position = Position.Absolute;
+            _label.style.backgroundColor = new Color(1f, 0.65f, 0f, 0.9f);
+            _label.style.color = Color.black;
+            _label.style.fontSize = 11;
+            _label.style.paddingLeft = 4;
+            _label.style.paddingRight = 4;
+            _label.style.paddingTop = 1;
+            _label.style.paddingBottom = 1;
+            _label.style.borderBottomLeftRadius = 2;
+            _label.style.borderBottomRightRadius = 2;
+            _label.style.borderTopLeftRadius = 2;
+            _label.style.borderTopRightRadius = 2;
+            _label.style.display = DisplayStyle.None;
+
             _overlayRoot.Add(_marker);
+            _overlayRoot.Add(_label);
             _window.rootVisualElement.Add(_overlayRoot);
         }
 
         public void Highlight(VisualElement target)
+        {
+            Highlight(target, "");
+        }
+
+        public void Highlight(VisualElement target, string labelText)
         {
             if (target == null || target.panel == null || _marker == null)
             {
@@ -94,18 +121,75 @@ namespace UnityUIFlow
             _marker.style.width = worldBound.width;
             _marker.style.height = worldBound.height;
             _marker.style.display = DisplayStyle.Flex;
+
+            if (!string.IsNullOrEmpty(labelText) && _label != null)
+            {
+                _label.text = labelText;
+                _label.style.left = worldBound.xMin;
+                _label.style.top = worldBound.yMin - 18;
+                _label.style.display = DisplayStyle.Flex;
+            }
+            else if (_label != null)
+            {
+                _label.style.display = DisplayStyle.None;
+            }
+
+            StopPulseAnimation();
+            StartPulseAnimation();
+        }
+
+        private void StartPulseAnimation()
+        {
+            if (_marker == null) return;
+            float baseAlpha = 0.25f;
+            float t = 0f;
+            _pulseAnimation = _marker.schedule.Execute(() =>
+            {
+                t += 0.15f;
+                float pulse = Mathf.Abs(Mathf.Sin(t));
+                float alpha = Mathf.Lerp(baseAlpha * 0.5f, baseAlpha * 1.5f, pulse);
+                Color c = _marker.style.backgroundColor.value;
+                _marker.style.backgroundColor = new Color(c.r, c.g, c.b, alpha);
+            }).Every(50);
+        }
+
+        private void StopPulseAnimation()
+        {
+            if (_pulseAnimation != null)
+            {
+                _pulseAnimation.Pause();
+                _pulseAnimation = null;
+            }
+
+            if (_marker != null)
+            {
+                Color c = _marker.style.backgroundColor.value;
+                _marker.style.backgroundColor = new Color(c.r, c.g, c.b, 0.25f);
+            }
         }
 
         public void Clear()
         {
+            StopPulseAnimation();
             if (_marker != null)
             {
                 _marker.style.display = DisplayStyle.None;
             }
+            if (_label != null)
+            {
+                _label.style.display = DisplayStyle.None;
+            }
+        }
+
+        public void ClearAfterDelay(int delayMs)
+        {
+            if (_marker == null) return;
+            _marker.schedule.Execute(() => Clear()).StartingIn(delayMs);
         }
 
         public void Detach()
         {
+            StopPulseAnimation();
             if (_overlayRoot != null && _overlayRoot.parent != null)
             {
                 _overlayRoot.parent.Remove(_overlayRoot);
@@ -113,7 +197,54 @@ namespace UnityUIFlow
 
             _overlayRoot = null;
             _marker = null;
+            _label = null;
             _window = null;
+        }
+    }
+
+    internal static class StepHighlighter
+    {
+        private static readonly System.Collections.Generic.Dictionary<IPanel, HighlightOverlayRenderer> s_renderers = new();
+
+        public static void Highlight(VisualElement element, string actionName, EditorWindow window)
+        {
+            if (element == null || window == null)
+                return;
+
+            IPanel panel = element.panel;
+            if (panel == null)
+                return;
+
+            if (!s_renderers.TryGetValue(panel, out HighlightOverlayRenderer renderer))
+            {
+                renderer = new HighlightOverlayRenderer();
+                s_renderers[panel] = renderer;
+            }
+
+            renderer.Attach(window);
+            renderer.Highlight(element, actionName);
+        }
+
+        public static void Clear(VisualElement element)
+        {
+            if (element?.panel == null)
+                return;
+
+            if (s_renderers.TryGetValue(element.panel, out HighlightOverlayRenderer renderer))
+            {
+                renderer.Clear();
+            }
+        }
+
+        public static void ClearAfterDelay(VisualElement element, int delayMs)
+        {
+            if (element?.panel == null)
+                return;
+
+            if (s_renderers.TryGetValue(element.panel, out HighlightOverlayRenderer renderer))
+            {
+                renderer.ClearAfterDelay(delayMs);
+            }
         }
     }
 

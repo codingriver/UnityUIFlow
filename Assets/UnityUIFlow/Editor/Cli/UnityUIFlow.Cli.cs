@@ -465,6 +465,8 @@ namespace UnityUIFlow
         internal static async Task<int> RunAllAsync(string[] args = null)
         {
             int exitCode = 2;
+            string configSource = args != null ? "命令行参数" : "默认配置";
+            UnityEngine.Debug.Log($"[UnityUIFlow] CLI 批量执行开始 配置来源={configSource}");
             try
             {
                 var parser = new CommandLineOptionsParser();
@@ -493,15 +495,17 @@ namespace UnityUIFlow
                     new CiArtifactManifestWriter().Write(testOptions.ReportOutputPath);
                     exitCode = result.ExitCode;
                 }
+                UnityEngine.Debug.Log($"[UnityUIFlow] CLI 执行完成 退出码={exitCode}");
             }
             catch (UnityUIFlowException ex)
             {
                 exitCode = ex.ErrorCode == ErrorCodes.CliTestsFailed ? 1 : 2;
-                UnityEngine.Debug.LogError($"[UnityUIFlow] {ex.ErrorCode}: {ex.Message}");
+                UnityEngine.Debug.LogError($"[UnityUIFlow] CLI 执行异常 退出码={exitCode} 错误码={ex.ErrorCode}: {ex.Message}");
             }
             catch (Exception ex)
             {
                 exitCode = 2;
+                UnityEngine.Debug.LogError($"[UnityUIFlow] CLI 执行异常 退出码={exitCode}: {ex.Message}");
                 UnityEngine.Debug.LogException(ex);
             }
             return exitCode;

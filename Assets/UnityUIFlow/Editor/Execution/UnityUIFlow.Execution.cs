@@ -233,11 +233,11 @@ namespace UnityUIFlow
             };
 
             bool verboseLog = context.Options?.EnableVerboseLog == true;
+            VisualElement highlightedElement = null;
 
             try
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
-                VisualElement highlightedElement = null;
                 ActionContext actionContext = null;
 
                 if (step.Condition != null && !context.Finder.Exists(step.Condition.SelectorExpression, context.Root, true))
@@ -251,18 +251,17 @@ namespace UnityUIFlow
                     return result;
                 }
 
+                string selectorInfo = step.Selector != null ? $" 选择器={step.Selector.Raw}" : "";
                 if (verboseLog)
-                    Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] 开始 \"{step.DisplayName}\" 动作={step.ActionName} 超时={step.TimeoutMs}ms");
+                    Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] 开始 \"{step.DisplayName}\" 动作={step.ActionName}{selectorInfo} 超时={step.TimeoutMs}ms");
 
                 HeadedRunEventBus.PublishStepStarted(step);
                 if (step.Selector != null)
                 {
                     highlightedElement = context.Finder.Find(step.Selector, context.Root, false).Element;
-                    if (highlightedElement != null)
+                    if (highlightedElement != null && context.Options?.Headed == true && context.ManagedWindow != null)
                     {
-                        if (verboseLog)
-                            Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] 预查找元素 {step.Selector.Raw} => {ActionContext.ElementInfo(highlightedElement)}");
-                        HeadedRunEventBus.PublishHighlightedElement(step, highlightedElement);
+                        StepHighlighter.Highlight(highlightedElement, step.ActionName, context.ManagedWindow);
                     }
                 }
 
@@ -417,12 +416,18 @@ namespace UnityUIFlow
 
             if (verboseLog)
             {
-                string statusMark = result.Status == TestStatus.Passed ? "✓" : result.Status == TestStatus.Skipped ? "⊘" : "✗";
+                string statusText = result.Status == TestStatus.Passed ? "通过" : result.Status == TestStatus.Skipped ? "跳过" : "失败";
                 string errorDetail = string.IsNullOrWhiteSpace(result.ErrorMessage) ? string.Empty : $" | {result.ErrorCode}: {result.ErrorMessage}";
-                Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] {statusMark} \"{step.DisplayName}\" {result.DurationMs}ms{errorDetail}");
+                string screenshotDetail = string.IsNullOrWhiteSpace(result.ScreenshotPath) ? string.Empty : $" | 截图={result.ScreenshotPath}";
+                string driverDetail = string.IsNullOrWhiteSpace(result.DriverDetails) ? string.Empty : $" | 驱动={result.DriverDetails}";
+                Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] {statusText} \"{step.DisplayName}\" {result.DurationMs}ms{errorDetail}{screenshotDetail}{driverDetail}");
             }
 
             VisualElement completedElement = step.Selector != null ? context.Finder.Find(step.Selector, context.Root, false).Element : null;
+            if (context.Options?.Headed == true && highlightedElement != null)
+            {
+                StepHighlighter.ClearAfterDelay(highlightedElement, 800);
+            }
             HeadedRunEventBus.PublishStepCompleted(step, result, completedElement);
             return result;
         }
@@ -517,8 +522,15 @@ namespace UnityUIFlow
                 return suiteResult;
             }
 
+            if (options.EnableVerboseLog)
+                Debug.Log($"[UnityUIFlow] 开始执行测试套件 目录={directory} 文件数={yamlFiles.Length}");
+
+            int fileIndex = 0;
             foreach (string yamlFile in yamlFiles)
             {
+                fileIndex++;
+                if (options.EnableVerboseLog)
+                    Debug.Log($"[UnityUIFlow] 进度 [{fileIndex}/{yamlFiles.Length}] {yamlFile}");
                 TestResult testResult;
                 try
                 {
@@ -569,6 +581,8 @@ namespace UnityUIFlow
 
             suiteResult.EndedAtUtc = DateTimeOffset.UtcNow.ToString("O");
             suiteResult.ExitCode = ExitCodeResolver.Resolve(suiteResult);
+            if (options.EnableVerboseLog)
+                Debug.Log($"[UnityUIFlow] 套件完成 通过={suiteResult.Passed} 失败={suiteResult.Failed} 错误={suiteResult.Errors} 跳过={suiteResult.Skipped} 总计={suiteResult.Total}");
             var reporter = new MarkdownReporter(new ReporterOptions
             {
                 ReportRootPath = options.ReportOutputPath,
@@ -578,10 +592,12 @@ namespace UnityUIFlow
             try
             {
                 reporter.WriteSuiteReport(suiteResult);
+                if (options.EnableVerboseLog)
+                    Debug.Log($"[UnityUIFlow] 套件报告已生成 {options.ReportOutputPath}");
             }
             catch (Exception reportException)
             {
-                Debug.LogError($"[UnityUIFlow] {ErrorCodes.ReportWriteFailed}: {reportException.Message}");
+                Debug.LogError($"[UnityUIFlow] {ErrorCodes.ReportWriteFailed}: {reportException.Message} 路径={options.ReportOutputPath}");
             }
 
             return suiteResult;
@@ -593,8 +609,11 @@ namespace UnityUIFlow
             options.Validate();
             if (options.RetryCount.HasValue)
             {
-                Debug.LogWarning($"[UnityUIFlow] RetryCount={options.RetryCount.Value} 在 V1 中仅记录 Warning 并忽略");
+                Debug.LogWarning($"[UnityUIFlow] RetryCount={options.RetryCount.Value} 在 V1 中不支持，已忽略。如需重试请在调用方实现。");
             }
+
+            if (options.EnableVerboseLog)
+                Debug.Log($"[UnityUIFlow] 解析用例 \"{definition.Name}\" YAML={definition.SourceFile ?? "inline"}");
 
             VisualElement root = rootOverride;
             EditorWindow managedWindow = null;
@@ -629,11 +648,13 @@ namespace UnityUIFlow
                     $"正式验收模式下未能创建官方测试宿主：{definition.Fixture?.HostWindow?.Type ?? definition.Name}");
             }
 
+            var finder = new ElementFinder();
+            if (options != null) finder.EnableVerboseLog = options.EnableVerboseLog;
             var context = new ExecutionContext
             {
                 Root = root,
                 ManagedWindow = managedWindow,
-                Finder = new ElementFinder(),
+                Finder = finder,
                 Options = options,
                 Reporter = new MarkdownReporter(reportOptions),
                 ScreenshotManager = new ScreenshotManager(options, () => ResolveScreenshotWindow(managedWindow, root)),
@@ -642,6 +663,12 @@ namespace UnityUIFlow
                 SimulationSession = simulationSession,
                 CaseName = definition.Name,
             };
+
+            if (options.EnableVerboseLog)
+            {
+                string driverSummary = simulationSession.DescribeDrivers() ?? "unavailable";
+                Debug.Log($"[UnityUIFlow] 绑定驱动 {driverSummary}");
+            }
             context.CancellationToken = context.RuntimeController.CancellationToken;
             onContextReady?.Invoke(context);
 
@@ -666,6 +693,8 @@ namespace UnityUIFlow
             {
                 var planBuilder = new ExecutionPlanBuilder(_selectorCompiler, _actionRegistry);
                 ExecutionPlan plan = planBuilder.Build(definition, options);
+                if (options.EnableVerboseLog)
+                    Debug.Log($"[UnityUIFlow] 构建执行计划 步骤数={plan.Steps.Count}");
                 bool abortMainFlow = false;
 
                 for (int index = 0; index < plan.Steps.Count; index++)
@@ -744,10 +773,12 @@ namespace UnityUIFlow
                 try
                 {
                     context.Reporter.WriteCaseReport(result);
+                    if (options.EnableVerboseLog)
+                        Debug.Log($"[UnityUIFlow] 用例报告已生成 {options.ReportOutputPath}");
                 }
                 catch (Exception reportException)
                 {
-                    Debug.LogError($"[UnityUIFlow] {ErrorCodes.ReportWriteFailed}: {reportException.Message}");
+                    Debug.LogError($"[UnityUIFlow] {ErrorCodes.ReportWriteFailed}: {reportException.Message} 路径={options.ReportOutputPath}");
                 }
 
                 context.Dispose();
@@ -755,7 +786,8 @@ namespace UnityUIFlow
 
                 if (options.EnableVerboseLog)
                 {
-                    Debug.Log($"[UnityUIFlow] 用例 \"{definition.Name}\" 完成 状态={result.Status} 耗时={result.DurationMs}ms");
+                    string stepSummary = $"通过={result.StepResults.Count(s => s.Status == TestStatus.Passed)} 失败={result.StepResults.Count(s => s.Status == TestStatus.Failed)} 错误={result.StepResults.Count(s => s.Status == TestStatus.Error)} 跳过={result.StepResults.Count(s => s.Status == TestStatus.Skipped)}";
+                    Debug.Log($"[UnityUIFlow] 用例 \"{definition.Name}\" 完成 状态={result.Status} 耗时={result.DurationMs}ms | {stepSummary}");
                 }
             }
 

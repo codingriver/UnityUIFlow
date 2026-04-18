@@ -100,12 +100,14 @@ namespace UnityUIFlow
             if (preferred == null || preferred != EditorWindow.focusedWindow)
             {
                 LastCaptureSource = "skipped-unfocused";
+                Debug.LogWarning($"[UnityUIFlow] 截图跳过：窗口未聚焦 (preferred={preferred?.GetType().Name}, focused={EditorWindow.focusedWindow?.GetType().Name})");
                 return null;
             }
 
             string path = _pathBuilder.BuildScreenshotPath(_options.ScreenshotPath, caseName, stepIndex, tag);
             await EditorAsyncUtility.NextFrameAsync(cancellationToken);
             CaptureSync(path);
+            Debug.Log($"[UnityUIFlow] 截图已保存 {path}");
             return path;
         }
 
@@ -128,6 +130,7 @@ namespace UnityUIFlow
                 else
                 {
                     LastCaptureSource = SourceFallbackTexture;
+                    Debug.LogWarning($"[UnityUIFlow] 截图回退到纹理模式: {Path.GetFileName(filePath)}");
                     Texture2D fallbackTexture = CreateFallbackTexture();
                     try
                     {
