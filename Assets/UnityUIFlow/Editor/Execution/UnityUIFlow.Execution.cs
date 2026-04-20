@@ -540,7 +540,9 @@ namespace UnityUIFlow
                         continue;
                     }
 
-                    testResult = await RunDefinitionAsync(definition, options, rootOverride);
+                    var caseOptions = options.Clone();
+                    caseOptions.GenerateSingleReport = false;
+                    testResult = await RunDefinitionAsync(definition, caseOptions, rootOverride);
                 }
                 catch (Exception ex)
                 {
@@ -773,6 +775,10 @@ namespace UnityUIFlow
                 try
                 {
                     context.Reporter.WriteCaseReport(result);
+                    if (options.GenerateSingleReport)
+                    {
+                        context.Reporter.WriteSingleReport(result);
+                    }
                     if (options.EnableVerboseLog)
                         Debug.Log($"[UnityUIFlow] 用例报告已生成 {options.ReportOutputPath}");
                 }

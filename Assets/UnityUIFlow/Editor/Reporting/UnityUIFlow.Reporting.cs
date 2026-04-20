@@ -36,20 +36,17 @@ namespace UnityUIFlow
 
         public string BuildCaseMarkdownPath(string rootPath, string caseName)
         {
-            return Path.Combine(rootPath, $"{UnityUIFlowUtility.SanitizeFileName(caseName)}.md");
+            return Path.Combine(rootPath, "Cases", $"{UnityUIFlowUtility.SanitizeFileName(caseName)}.md");
         }
 
         public string BuildCaseJsonPath(string rootPath, string caseName)
         {
-            return Path.Combine(rootPath, $"{UnityUIFlowUtility.SanitizeFileName(caseName)}.json");
+            return Path.Combine(rootPath, "Cases", $"{UnityUIFlowUtility.SanitizeFileName(caseName)}.json");
         }
 
         public string BuildSuiteMarkdownPath(string rootPath, string suiteName)
         {
-            string fileName = string.IsNullOrWhiteSpace(suiteName)
-                ? "suite-report.md"
-                : $"suite-{UnityUIFlowUtility.SanitizeFileName(suiteName)}.md";
-            return Path.Combine(rootPath, fileName);
+            return Path.Combine(rootPath, "full_reports.md");
         }
 
         public string BuildSuiteJsonPath(string rootPath, string suiteName)
@@ -57,7 +54,22 @@ namespace UnityUIFlow
             string fileName = string.IsNullOrWhiteSpace(suiteName)
                 ? "suite-report.json"
                 : $"suite-{UnityUIFlowUtility.SanitizeFileName(suiteName)}.json";
-            return Path.Combine(rootPath, fileName);
+            return Path.Combine(rootPath, "Cases", fileName);
+        }
+
+        public string BuildSingleReportMarkdownPath(string rootPath)
+        {
+            return Path.Combine(rootPath, "single_reports.md");
+        }
+
+        public string BuildSingleReportJsonPath(string rootPath)
+        {
+            return Path.Combine(rootPath, "Cases", "single-report.json");
+        }
+
+        public string BuildArtifactsPath(string rootPath)
+        {
+            return Path.Combine(rootPath, "Artifacts", "artifacts.json");
         }
     }
 
@@ -398,6 +410,8 @@ namespace UnityUIFlow
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _pathBuilder.EnsureDirectory(_options.ReportRootPath);
             _pathBuilder.EnsureDirectory(_options.ScreenshotRootPath);
+            _pathBuilder.EnsureDirectory(Path.Combine(_options.ReportRootPath, "Cases"));
+            _pathBuilder.EnsureDirectory(Path.Combine(_options.ReportRootPath, "Artifacts"));
         }
 
         public void RecordAction(string stepId, string actionName, string message)
@@ -505,14 +519,17 @@ namespace UnityUIFlow
         }
 
         /// <summary>
-        /// Writes suite summary artifacts.
+        /// Writes suite summary artifacts (full_reports.md).
         /// </summary>
         public void WriteSuiteReport(TestSuiteResult result)
         {
             string markdownPath = _pathBuilder.BuildSuiteMarkdownPath(_options.ReportRootPath, _options.SuiteName);
             string jsonPath = _pathBuilder.BuildSuiteJsonPath(_options.ReportRootPath, _options.SuiteName);
             var markdown = new StringBuilder();
-            markdown.AppendLine($"# Suite Report: {_options.SuiteName ?? "suite-report"}");
+            markdown.AppendLine("# Full Suite Report");
+            markdown.AppendLine();
+            markdown.AppendLine($"**Started At**: {result.StartedAtUtc}");
+            markdown.AppendLine($"**Ended At**: {result.EndedAtUtc}");
             markdown.AppendLine();
             markdown.AppendLine($"**Total**: {result.Total} | **Passed**: {result.Passed} | **Failed**: {result.Failed} | **Errors**: {result.Errors} | **Skipped**: {result.Skipped}");
             markdown.AppendLine();
@@ -524,11 +541,47 @@ namespace UnityUIFlow
             foreach (TestResult caseResult in result.CaseResults)
             {
                 string caseFileName = Path.GetFileName(_pathBuilder.BuildCaseMarkdownPath(_options.ReportRootPath, caseResult.CaseName));
-                markdown.AppendLine($"| {caseResult.CaseName} | {caseResult.Status} | {caseResult.DurationMs} | [{caseFileName}]({caseFileName}) |");
+                markdown.AppendLine($"| {caseResult.CaseName} | {caseResult.Status} | {caseResult.DurationMs} | [Cases/{caseFileName}](Cases/{caseFileName}) |");
             }
 
             File.WriteAllText(markdownPath, markdown.ToString(), Encoding.UTF8);
             _jsonWriter.WriteSuiteJson(result, jsonPath);
+        }
+
+        /// <summary>
+        /// Writes single test report (single_reports.md).
+        /// </summary>
+        public void WriteSingleReport(TestResult result)
+        {
+            string markdownPath = _pathBuilder.BuildSingleReportMarkdownPath(_options.ReportRootPath);
+            string jsonPath = _pathBuilder.BuildSingleReportJsonPath(_options.ReportRootPath);
+            var markdown = new StringBuilder();
+            markdown.AppendLine($"# Single Test Report: {result.CaseName}");
+            markdown.AppendLine();
+            markdown.AppendLine($"**Status**: {result.Status}");
+            markdown.AppendLine($"**Started At**: {result.StartedAtUtc}");
+            markdown.AppendLine($"**Ended At**: {result.EndedAtUtc}");
+            markdown.AppendLine($"**Duration**: {result.DurationMs}ms");
+            markdown.AppendLine();
+            markdown.AppendLine("## Step Details");
+            markdown.AppendLine();
+            markdown.AppendLine("| Step | Status | Duration(ms) | Driver | Driver Details | Error Code | Screenshot Source | Screenshot |");
+            markdown.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- |");
+
+            if (_buffer.TryGetValue(result.CaseName, out List<StepReportEntry> entries))
+            {
+                foreach (StepReportEntry entry in entries)
+                {
+                    string screenshot = string.IsNullOrWhiteSpace(entry.ScreenshotPath)
+                        ? string.Empty
+                        : $"[View]({entry.ScreenshotPath.Replace('\\', '/')})";
+                    string details = string.IsNullOrWhiteSpace(entry.DriverDetails) ? string.Empty : entry.DriverDetails.Replace("|", "/");
+                    markdown.AppendLine($"| {entry.StepName} | {entry.Status} | {entry.DurationMs} | {BuildDriverSummary(entry.Attachments)} | {details} | {entry.ErrorCode ?? string.Empty} | {entry.ScreenshotSource ?? string.Empty} | {screenshot} |");
+                }
+            }
+
+            File.WriteAllText(markdownPath, markdown.ToString(), Encoding.UTF8);
+            _jsonWriter.WriteCaseJson(result, jsonPath);
         }
 
         private static void ValidateCaseName(string caseName)

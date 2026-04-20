@@ -115,18 +115,76 @@ namespace UnityUIFlow
                 return;
             }
 
+            if (_window == null || _window.rootVisualElement == null)
+            {
+                Clear();
+                return;
+            }
+
+            // Convert world-bound (panel coordinates) to rootVisualElement local space.
+            // This fixes offset caused by rootVisualElement borders / toolbar insets.
             Rect worldBound = target.worldBound;
-            _marker.style.left = worldBound.xMin;
-            _marker.style.top = worldBound.yMin;
-            _marker.style.width = worldBound.width;
-            _marker.style.height = worldBound.height;
+            Vector2 localTopLeft = _window.rootVisualElement.WorldToLocal(worldBound.position);
+
+            _marker.style.left = localTopLeft.x;
+            _marker.style.top = localTopLeft.y;
+            // In UIToolkit default box model borders are drawn outside the content box.
+            // Shrink content size so the total visual rect matches the target exactly.
+            _marker.style.width = Mathf.Max(0f, worldBound.width - 4f);
+            _marker.style.height = Mathf.Max(0f, worldBound.height - 4f);
             _marker.style.display = DisplayStyle.Flex;
 
             if (!string.IsNullOrEmpty(labelText) && _label != null)
             {
                 _label.text = labelText;
-                _label.style.left = worldBound.xMin;
-                _label.style.top = worldBound.yMin - 18;
+                _label.style.left = localTopLeft.x;
+                _label.style.top = localTopLeft.y - 18;
+                _label.style.display = DisplayStyle.Flex;
+            }
+            else if (_label != null)
+            {
+                _label.style.display = DisplayStyle.None;
+            }
+
+            StopPulseAnimation();
+            StartPulseAnimation();
+        }
+
+        /// <summary>
+        /// Highlights a IMGUI control by its window-local rect.
+        /// The rect is in EditorWindow client-area coordinates.
+        /// </summary>
+        public void HighlightRect(Rect windowLocalRect, string labelText)
+        {
+            if (_marker == null)
+            {
+                Clear();
+                return;
+            }
+
+            if (_window == null || _window.rootVisualElement == null)
+            {
+                Clear();
+                return;
+            }
+
+            // Convert window-local coordinates to rootVisualElement local space.
+            // Window-local (0,0) is the client-area top-left, which equals the panel origin.
+            // rootVisualElement local space may be inset by borders.
+            Vector2 panelPos = _window.rootVisualElement.LocalToWorld(Vector2.zero) + windowLocalRect.position;
+            Vector2 localTopLeft = _window.rootVisualElement.WorldToLocal(panelPos);
+
+            _marker.style.left = localTopLeft.x;
+            _marker.style.top = localTopLeft.y;
+            _marker.style.width = Mathf.Max(0f, windowLocalRect.width - 4f);
+            _marker.style.height = Mathf.Max(0f, windowLocalRect.height - 4f);
+            _marker.style.display = DisplayStyle.Flex;
+
+            if (!string.IsNullOrEmpty(labelText) && _label != null)
+            {
+                _label.text = labelText;
+                _label.style.left = localTopLeft.x;
+                _label.style.top = localTopLeft.y - 18;
                 _label.style.display = DisplayStyle.Flex;
             }
             else if (_label != null)
@@ -225,6 +283,28 @@ namespace UnityUIFlow
             renderer.Highlight(element, actionName);
         }
 
+        /// <summary>
+        /// Highlights an IMGUI control by its window-local rect.
+        /// </summary>
+        public static void HighlightRect(Rect windowLocalRect, string labelText, EditorWindow window)
+        {
+            if (window == null)
+                return;
+
+            IPanel panel = window.rootVisualElement?.panel;
+            if (panel == null)
+                return;
+
+            if (!s_renderers.TryGetValue(panel, out HighlightOverlayRenderer renderer))
+            {
+                renderer = new HighlightOverlayRenderer();
+                s_renderers[panel] = renderer;
+            }
+
+            renderer.Attach(window);
+            renderer.HighlightRect(windowLocalRect, labelText);
+        }
+
         public static void Clear(VisualElement element)
         {
             if (element?.panel == null)
@@ -244,6 +324,24 @@ namespace UnityUIFlow
             if (s_renderers.TryGetValue(element.panel, out HighlightOverlayRenderer renderer))
             {
                 renderer.ClearAfterDelay(delayMs);
+            }
+        }
+
+        /// <summary>
+        /// Clears highlight for the given window's panel.
+        /// </summary>
+        public static void Clear(EditorWindow window)
+        {
+            if (window == null)
+                return;
+
+            IPanel panel = window.rootVisualElement?.panel;
+            if (panel == null)
+                return;
+
+            if (s_renderers.TryGetValue(panel, out HighlightOverlayRenderer renderer))
+            {
+                renderer.Clear();
             }
         }
     }

@@ -131,7 +131,137 @@
 
 ---
 
-## 6. 按交互类型的覆盖总结
+## 6. IMGUI 自动化支持（新增）
+
+> 自 2026-04-17 起，UnityUIFlow 新增对 IMGUI（Immediate Mode GUI）的自动化测试能力。该能力通过反射 Unity 内部 `GUILayoutUtility` 状态、注入 `OnGUI` 钩子、发送 `UnityEngine.Event` 事件实现。
+
+### 6.1 设计原理
+
+IMGUI 与 UIToolkit 是两套独立的渲染体系：
+- UIToolkit 保留 `VisualElement` 树，可通过选择器遍历定位。
+- IMGUI 每帧通过 `OnGUI()` 回调即时绘制，无持久树结构。
+
+因此，IMGUI 自动化不走 `ElementFinder` + `VisualElement` 路径，而是建立了一套平行子系统：
+
+```
+YAML imgui_* 动作
+    ↓
+ImguiSelectorCompiler（编译 gui(button, text="OK") 语法）
+    ↓
+ImguiExecutionBridge（注入 IMGUIContainer.onGUIHandler 钩子）
+    ↓
+OnGUI 执行 → ImguiSnapshotCapture（反射 GUILayoutUtility.current.topLevel.entries）
+    ↓
+ImguiElementLocator（基于快照匹配选择器）
+    ↓
+Event 注入（MouseDown/Up/ScrollWheel/KeyDown/Up）或断言
+```
+
+### 6.2 支持的 IMGUI 控件（Tier 1）
+
+| 控件 | IMGUI API | 选择器示例 | 可用动作 |
+|------|-----------|-----------|---------|
+| Button | `GUILayout.Button` | `gui(button)` / `gui(button, text="Save")` | click、double_click、right_click、hover、assert_text、assert_visible |
+| TextField | `EditorGUILayout.TextField` | `gui(textfield, index=0)` | type、focus、press_key、assert_visible |
+| Label | `GUILayout.Label` | `gui(label, index=2)` | assert_text、assert_visible |
+| Toggle | `EditorGUILayout.Toggle` | `gui(toggle, text="Enabled")` | click、assert_value、assert_visible |
+| Popup/Dropdown | `EditorGUILayout.Popup` | `gui(dropdown, index=0)` | click、select_option、assert_value、assert_visible |
+| Toolbar | `GUILayout.Toolbar` | `gui(toolbar, index=0)` | click、assert_visible |
+| Slider | `EditorGUILayout.Slider` | `gui(slider, index=0)` | press_key（方向键）、assert_visible |
+| ScrollView | `GUILayout.BeginScrollView` | `gui(scroller)` | scroll、assert_visible |
+| Group | `GUILayout.BeginVertical/Horizontal` | `gui(group="Settings")` | 作为路径容器使用 |
+
+### 6.3 IMGUI 动作列表（15 个）
+
+| 动作 | 说明 |
+|------|------|
+| `imgui_click` | 左键点击控件中心 |
+| `imgui_double_click` | 快速双击 |
+| `imgui_right_click` | 右键点击（button=1） |
+| `imgui_hover` | 发送 MouseMove 到控件中心 |
+| `imgui_type` | 逐字符输入文本（Event 队列） |
+| `imgui_focus` | 点击控件以获取焦点 |
+| `imgui_scroll` | 发送 ScrollWheel 事件 |
+| `imgui_select_option` | Dropdown 展开 + 方向键导航 + 回车确认 |
+| `imgui_press_key` | 发送单按键（KeyDown + KeyUp） |
+| `imgui_press_key_combination` | 发送组合键（Ctrl+A、Shift+Tab 等） |
+| `imgui_read_value` | 读取控件文本/值，存入 `SharedBag` |
+| `imgui_assert_text` | 断言 Label/Button 文本 |
+| `imgui_assert_visible` | 断言控件存在且尺寸 > 0 |
+| `imgui_assert_value` | 尽力断言值（依赖 text/style 推断） |
+| `imgui_wait` | 轮询等待控件出现在快照中 |
+
+### 6.4 选择器语法
+
+```yaml
+# 基本类型匹配
+gui(button)
+gui(textfield, index=2)
+gui(toggle, text="Enabled")
+
+# 组路径限定
+gui(group="Settings" > button, text="Apply")
+
+# ControlName 匹配（需要被测代码配合 GUI.SetNextControlName）
+gui(textfield, control_name="username-field")
+
+# 焦点匹配
+gui(focused)
+```
+
+### 6.5 被测代码的可测试性改造（推荐）
+
+为了让选择器更稳定，建议在 IMGUI 代码中为关键控件设置 `ControlName`：
+
+```csharp
+GUI.SetNextControlName("save-button");
+if (GUILayout.Button("Save")) { /* ... */ }
+
+GUI.SetNextControlName("username-field");
+_username = GUILayout.TextField(_username);
+```
+
+YAML 中即可精确匹配：
+```yaml
+- imgui_click: { selector: "gui(button, control_name=\"save-button\")" }
+- imgui_type: { selector: "gui(textfield, control_name=\"username-field\")", text: "admin" }
+```
+
+### 6.6 已知限制
+
+| 限制 | 说明 |
+|------|------|
+| 反射依赖 | `ImguiSnapshotCapture` 反射 `GUILayoutUtility.current` 等内部字段，Unity 版本升级可能破坏兼容性 |
+| 布局重排 | 窗口 resize 后 `index` 选择器可能失效，建议优先使用 `text` 或 `control_name` |
+| 浮窗菜单 | `GenericMenu` / `EditorUtility.DisplayDialog` 等独立浮窗不在 GUILayout 树内，无法定位 |
+| 值断言 | Toggle/Slider 的真实值不存储在 `GUILayoutEntry` 中，`imgui_assert_value` 为尽力推断 |
+| 复杂自定义绘制 | `GUI.DrawTexture`、`Handles` 等纯绘制控件无 `GUILayoutEntry`，无法定位 |
+
+### 6.7 与 UIToolkit 混用
+
+IMGUI 动作与 UIToolkit 动作可在同一 YAML 中混用：
+
+```yaml
+steps:
+  # UIToolkit 部分
+  - click: { selector: "#open-settings" }
+
+  # IMGUI 部分（设置面板是 IMGUI 的）
+  - imgui_type:
+      selector: "gui(textfield, control_name=\"project-name\")"
+      text: "TestProject"
+  - imgui_click:
+      selector: "gui(button, text=\"Save\")"
+
+  # 回到 UIToolkit
+  - assert_text:
+      selector: "#status-label"
+      text: "Saved"
+```
+
+---
+
+## 7. 按交互类型的覆盖总结
 
 | 交互类型 | V1 覆盖范围 | 未覆盖范围 |
 | --- | --- | --- |

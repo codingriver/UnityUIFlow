@@ -16,7 +16,7 @@ namespace UnityUIFlow
     }
 
     [Serializable]
-    internal sealed class BatchRunnerCaseSnapshot
+    internal sealed class BatchRunnerCaseItem
     {
         public string YamlPath;
         public string CaseName;
@@ -28,6 +28,8 @@ namespace UnityUIFlow
         public string FailedStepError;
         public string ReportMarkdownPath;
         public string ReportJsonPath;
+        public bool IsChecked = true;
+        public bool IsRunning;
     }
 
     [Serializable]
@@ -57,7 +59,7 @@ namespace UnityUIFlow
         public int Skipped;
         public string StartedAtUtc;
         public string EndedAtUtc;
-        public List<BatchRunnerCaseSnapshot> Cases = new List<BatchRunnerCaseSnapshot>();
+        public List<BatchRunnerCaseItem> Cases = new List<BatchRunnerCaseItem>();
     }
 
     public sealed class BatchRunnerWindow : EditorWindow
@@ -65,6 +67,7 @@ namespace UnityUIFlow
         private readonly BatchRunnerViewState _state = new BatchRunnerViewState();
         private CancellationTokenSource _runCts;
         private ExecutionContext _activeContext;
+        private HighlightOverlayRenderer _overlayRenderer;
 
         private EnumField _targetModeField;
         private TextField _targetPathField;
@@ -78,20 +81,25 @@ namespace UnityUIFlow
         private Toggle _requireOfficialPointerDriverToggle;
         private Toggle _requireInputSystemKeyboardDriverToggle;
         private IntegerField _defaultTimeoutField;
-        private Button _runButton;
+        private Button _runAllButton;
+        private Button _runSelectedButton;
+        private Button _rerunFailedButton;
         private Button _cancelButton;
+        private Button _selectAllButton;
+        private Button _selectNoneButton;
+        private Button _selectFailedButton;
         private Label _statusLabel;
         private Label _currentYamlLabel;
         private Label _currentCaseLabel;
         private Label _summaryLabel;
         private HelpBox _messageBox;
-        private ScrollView _resultsScrollView;
+        private ListView _caseListView;
 
         [MenuItem("UnityUIFlow/Batch Runner", priority = 101)]
         public static void Open()
         {
             BatchRunnerWindow window = GetWindow<BatchRunnerWindow>();
-            window.titleContent = new GUIContent("UIFlow Batch");
+            window.titleContent = new GUIContent("UIFlow Test Runner");
             window.minSize = new Vector2(620f, 420f);
             window.Show();
         }
@@ -111,13 +119,38 @@ namespace UnityUIFlow
                 _state.ReportPath = "Reports/BatchRunner";
             }
 
+            _overlayRenderer = new HighlightOverlayRenderer();
+            SubscribeEvents();
             BuildUi();
             RefreshUi();
         }
 
         private void OnDisable()
         {
+            UnsubscribeEvents();
+            _overlayRenderer?.Detach();
+            _overlayRenderer = null;
             BatchRunnerPreferences.Save(_state);
+        }
+
+        private void SubscribeEvents()
+        {
+            HeadedRunEventBus.RunAttached += OnRunAttached;
+            HeadedRunEventBus.StepStarted += OnStepStarted;
+            HeadedRunEventBus.StepCompleted += OnStepCompleted;
+            HeadedRunEventBus.HighlightedElementChanged += OnHighlightedElementChanged;
+            HeadedRunEventBus.Failure += OnFailure;
+            HeadedRunEventBus.RunFinished += OnRunFinished;
+        }
+
+        private void UnsubscribeEvents()
+        {
+            HeadedRunEventBus.RunAttached -= OnRunAttached;
+            HeadedRunEventBus.StepStarted -= OnStepStarted;
+            HeadedRunEventBus.StepCompleted -= OnStepCompleted;
+            HeadedRunEventBus.HighlightedElementChanged -= OnHighlightedElementChanged;
+            HeadedRunEventBus.Failure -= OnFailure;
+            HeadedRunEventBus.RunFinished -= OnRunFinished;
         }
 
         private void BuildUi()
@@ -237,12 +270,30 @@ namespace UnityUIFlow
             actionRow.style.marginBottom = 8;
             rootVisualElement.Add(actionRow);
 
-            _runButton = CreateButton("Run", RunSelected);
-            _runButton.name = "batch-run-button";
+            _runAllButton = CreateButton("Run All", RunAll);
+            _runAllButton.name = "batch-run-all-button";
+            _runSelectedButton = CreateButton("Run Selected", RunSelected);
+            _runSelectedButton.name = "batch-run-selected-button";
+            _rerunFailedButton = CreateButton("Rerun Failed", RunFailed);
+            _rerunFailedButton.name = "batch-rerun-failed-button";
             _cancelButton = CreateButton("Cancel", CancelRun);
             _cancelButton.name = "batch-cancel-button";
-            actionRow.Add(_runButton);
+            actionRow.Add(_runAllButton);
+            actionRow.Add(_runSelectedButton);
+            actionRow.Add(_rerunFailedButton);
             actionRow.Add(_cancelButton);
+
+            var selectionRow = new VisualElement();
+            selectionRow.style.flexDirection = FlexDirection.Row;
+            selectionRow.style.marginBottom = 4;
+            rootVisualElement.Add(selectionRow);
+
+            _selectAllButton = CreateButton("Select All", SelectAll);
+            _selectNoneButton = CreateButton("Select None", SelectNone);
+            _selectFailedButton = CreateButton("Select Failed", SelectFailed);
+            selectionRow.Add(_selectAllButton);
+            selectionRow.Add(_selectNoneButton);
+            selectionRow.Add(_selectFailedButton);
 
             _statusLabel = new Label { name = "batch-status-label" };
             _currentYamlLabel = new Label { name = "batch-current-yaml-label" };
@@ -257,10 +308,20 @@ namespace UnityUIFlow
             _messageBox.style.marginTop = 6;
             rootVisualElement.Add(_messageBox);
 
-            _resultsScrollView = new ScrollView(ScrollViewMode.Vertical) { name = "batch-results-scroll" };
-            _resultsScrollView.style.flexGrow = 1;
-            _resultsScrollView.style.marginTop = 10;
-            rootVisualElement.Add(_resultsScrollView);
+            _caseListView = new ListView
+            {
+                name = "batch-case-list",
+                selectionType = SelectionType.Single,
+                reorderable = false,
+                showBorder = true,
+                showAlternatingRowBackgrounds = AlternatingRowBackground.ContentOnly,
+                fixedItemHeight = 28,
+                style = { flexGrow = 1, marginTop = 8 },
+            };
+            _caseListView.itemsSource = _state.Cases;
+            _caseListView.makeItem = MakeCaseListItem;
+            _caseListView.bindItem = BindCaseListItem;
+            rootVisualElement.Add(_caseListView);
         }
 
         private Toggle CreateToggle(string label, string name, bool currentValue, Action<bool> onChanged)
@@ -289,14 +350,127 @@ namespace UnityUIFlow
             return button;
         }
 
-        private async void RunSelected()
+        private VisualElement MakeCaseListItem()
         {
-            if (_state.IsRunning)
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.paddingLeft = 4;
+            row.style.paddingRight = 4;
+
+            var checkToggle = new Toggle { name = "case-check" };
+            checkToggle.style.marginRight = 4;
+            checkToggle.style.marginLeft = 2;
+
+            var statusLabel = new Label { name = "case-status" };
+            statusLabel.style.width = 20;
+            statusLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            statusLabel.style.marginRight = 4;
+
+            var nameLabel = new Label { name = "case-name" };
+            nameLabel.style.flexGrow = 1;
+            nameLabel.style.unityTextAlign = TextAnchor.MiddleLeft;
+
+            var durationLabel = new Label { name = "case-duration" };
+            durationLabel.style.width = 70;
+            durationLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+            durationLabel.style.color = new Color(0.6f, 0.6f, 0.6f);
+
+            row.Add(checkToggle);
+            row.Add(statusLabel);
+            row.Add(nameLabel);
+            row.Add(durationLabel);
+
+            return row;
+        }
+
+        private void BindCaseListItem(VisualElement element, int index)
+        {
+            if (index < 0 || index >= _state.Cases.Count)
             {
-                SetMessage("A batch execution is already running.", HelpBoxMessageType.Warning);
                 return;
             }
 
+            BatchRunnerCaseItem item = _state.Cases[index];
+
+            var checkToggle = element.Q<Toggle>("case-check");
+            checkToggle.SetValueWithoutNotify(item.IsChecked);
+            checkToggle.RegisterValueChangedCallback(evt => item.IsChecked = evt.newValue);
+
+            var statusLabel = element.Q<Label>("case-status");
+            statusLabel.text = GetStatusIcon(item.Status);
+            statusLabel.style.color = GetStatusColor(item.Status);
+
+            var nameLabel = element.Q<Label>("case-name");
+            nameLabel.text = item.CaseName;
+            if (item.IsRunning)
+            {
+                nameLabel.style.color = new Color(0.3f, 0.5f, 1f);
+                nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            }
+            else
+            {
+                nameLabel.style.color = Color.white;
+                nameLabel.style.unityFontStyleAndWeight = FontStyle.Normal;
+            }
+
+            var durationLabel = element.Q<Label>("case-duration");
+            durationLabel.text = item.DurationMs > 0 ? $"{item.DurationMs}ms" : string.Empty;
+        }
+
+        private static string GetStatusIcon(TestStatus status)
+        {
+            switch (status)
+            {
+                case TestStatus.Passed: return "●";
+                case TestStatus.Failed: return "●";
+                case TestStatus.Error: return "●";
+                case TestStatus.Skipped: return "○";
+                default: return " ";
+            }
+        }
+
+        private static Color GetStatusColor(TestStatus status)
+        {
+            switch (status)
+            {
+                case TestStatus.Passed: return new Color(0.2f, 0.8f, 0.2f);
+                case TestStatus.Failed: return new Color(0.9f, 0.2f, 0.2f);
+                case TestStatus.Error: return new Color(0.8f, 0.1f, 0.1f);
+                case TestStatus.Skipped: return new Color(0.5f, 0.5f, 0.5f);
+                default: return Color.gray;
+            }
+        }
+
+        private void SelectAll()
+        {
+            foreach (BatchRunnerCaseItem item in _state.Cases)
+            {
+                item.IsChecked = true;
+            }
+            _caseListView?.Rebuild();
+        }
+
+        private void SelectNone()
+        {
+            foreach (BatchRunnerCaseItem item in _state.Cases)
+            {
+                item.IsChecked = false;
+            }
+            _caseListView?.Rebuild();
+        }
+
+        private void SelectFailed()
+        {
+            foreach (BatchRunnerCaseItem item in _state.Cases)
+            {
+                item.IsChecked = item.Status == TestStatus.Failed || item.Status == TestStatus.Error;
+            }
+            _caseListView?.Rebuild();
+        }
+
+        private async void RunAll()
+        {
             List<string> yamlPaths;
             try
             {
@@ -308,7 +482,66 @@ namespace UnityUIFlow
                 return;
             }
 
-            _runCts = new CancellationTokenSource();
+            await ExecuteBatchAsync(yamlPaths, _ => true, _runCts?.Token ?? default);
+        }
+
+        private async void RunSelected()
+        {
+            if (_state.Cases.Count == 0)
+            {
+                SetMessage("No cases loaded. Please run 'Run All' first or set a valid target.", HelpBoxMessageType.Warning);
+                return;
+            }
+
+            List<string> selectedPaths = _state.Cases
+                .Where(c => c.IsChecked)
+                .Select(c => c.YamlPath)
+                .Distinct()
+                .Select(p => Path.GetFullPath(p))
+                .ToList();
+
+            if (selectedPaths.Count == 0)
+            {
+                SetMessage("No cases selected.", HelpBoxMessageType.Warning);
+                return;
+            }
+
+            await ExecuteBatchAsync(selectedPaths, _ => true, _runCts?.Token ?? default);
+        }
+
+        private async void RunFailed()
+        {
+            if (_state.Cases.Count == 0)
+            {
+                SetMessage("No cases loaded. Please run 'Run All' first.", HelpBoxMessageType.Warning);
+                return;
+            }
+
+            List<string> failedPaths = _state.Cases
+                .Where(c => c.Status == TestStatus.Failed || c.Status == TestStatus.Error)
+                .Select(c => c.YamlPath)
+                .Distinct()
+                .Select(p => Path.GetFullPath(p))
+                .ToList();
+
+            if (failedPaths.Count == 0)
+            {
+                SetMessage("No failed cases to rerun.", HelpBoxMessageType.Info);
+                return;
+            }
+
+            await ExecuteBatchAsync(failedPaths, _ => true, _runCts?.Token ?? default);
+        }
+
+        private async System.Threading.Tasks.Task ExecuteBatchAsync(List<string> yamlPaths, Func<string, bool> filter, CancellationToken cancellationToken)
+        {
+            if (_state.IsRunning)
+            {
+                SetMessage("A batch execution is already running.", HelpBoxMessageType.Warning);
+                return;
+            }
+
+            _runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _activeContext = null;
             _state.IsRunning = true;
             _state.StatusText = "Running";
@@ -322,38 +555,37 @@ namespace UnityUIFlow
             _state.Failed = 0;
             _state.Errors = 0;
             _state.Skipped = 0;
+
+            // Reset case states for this run: keep existing items if they match, otherwise rebuild
+            var existingCases = new Dictionary<string, BatchRunnerCaseItem>(StringComparer.OrdinalIgnoreCase);
+            foreach (BatchRunnerCaseItem existing in _state.Cases)
+            {
+                existingCases[existing.YamlPath] = existing;
+            }
             _state.Cases.Clear();
+
+            foreach (string yamlPath in yamlPaths)
+            {
+                string relPath = BatchRunnerPathUtility.MakeProjectRelative(yamlPath);
+                if (existingCases.TryGetValue(relPath, out BatchRunnerCaseItem existing))
+                {
+                    existing.Status = TestStatus.None;
+                    existing.DurationMs = 0;
+                    existing.ErrorCode = null;
+                    existing.ErrorMessage = null;
+                    existing.IsRunning = false;
+                    _state.Cases.Add(existing);
+                }
+                else
+                {
+                    _state.Cases.Add(new BatchRunnerCaseItem { YamlPath = relPath, IsChecked = true });
+                }
+            }
+
             BatchRunnerPreferences.Save(_state);
             SetMessage($"Queued {yamlPaths.Count} YAML file(s).", HelpBoxMessageType.Info);
             RefreshUi();
 
-            try
-            {
-                await ExecuteBatchAsync(yamlPaths, _runCts.Token);
-            }
-            finally
-            {
-                _runCts?.Dispose();
-                _runCts = null;
-                _activeContext = null;
-            }
-        }
-
-        private void CancelRun()
-        {
-            if (!_state.IsRunning)
-            {
-                SetMessage("No active batch execution.", HelpBoxMessageType.Info);
-                return;
-            }
-
-            _runCts?.Cancel();
-            _activeContext?.RuntimeController?.Stop();
-            SetMessage("Cancellation requested.", HelpBoxMessageType.Warning);
-        }
-
-        private async System.Threading.Tasks.Task ExecuteBatchAsync(List<string> yamlPaths, CancellationToken cancellationToken)
-        {
             string reportRoot = string.IsNullOrWhiteSpace(_state.ReportPath) ? "Reports/BatchRunner" : _state.ReportPath;
             string screenshotRoot = Path.Combine(reportRoot, "Screenshots");
             var suite = new TestSuiteResult
@@ -367,13 +599,21 @@ namespace UnityUIFlow
             {
                 foreach (string yamlPath in yamlPaths)
                 {
-                    if (cancellationToken.IsCancellationRequested)
+                    if (_runCts.Token.IsCancellationRequested)
                     {
                         break;
                     }
 
                     _state.CurrentYamlPath = BatchRunnerPathUtility.MakeProjectRelative(yamlPath);
                     _state.CurrentCaseName = null;
+
+                    BatchRunnerCaseItem caseItem = _state.Cases.FirstOrDefault(c =>
+                        StringComparer.OrdinalIgnoreCase.Equals(c.YamlPath, _state.CurrentYamlPath));
+                    if (caseItem != null)
+                    {
+                        caseItem.IsRunning = true;
+                    }
+
                     RefreshUi();
 
                     TestResult result;
@@ -423,7 +663,25 @@ namespace UnityUIFlow
 
                     suite.CaseResults.Add(result);
                     ApplyCaseCounters(result.Status);
-                    _state.Cases.Add(BuildSnapshot(result, yamlPath, reportRoot, reportPaths));
+
+                    if (caseItem != null)
+                    {
+                        caseItem.IsRunning = false;
+                        caseItem.CaseName = result.CaseName;
+                        caseItem.Status = result.Status;
+                        caseItem.DurationMs = result.DurationMs;
+                        caseItem.ErrorCode = result.ErrorCode;
+                        caseItem.ErrorMessage = result.ErrorMessage;
+                        caseItem.FailedStepName = result.StepResults?.FirstOrDefault(s => s.Status == TestStatus.Failed || s.Status == TestStatus.Error)?.DisplayName;
+                        caseItem.FailedStepError = result.StepResults?.FirstOrDefault(s => s.Status == TestStatus.Failed || s.Status == TestStatus.Error)?.ErrorMessage;
+                        caseItem.ReportMarkdownPath = BatchRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseMarkdownPath(reportRoot, result.CaseName));
+                        caseItem.ReportJsonPath = BatchRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseJsonPath(reportRoot, result.CaseName));
+                    }
+                    else
+                    {
+                        _state.Cases.Add(BuildSnapshot(result, yamlPath, reportRoot, reportPaths));
+                    }
+
                     _state.CurrentCaseName = null;
                     _state.StatusText = result.Status == TestStatus.Passed
                         ? $"Passed: {result.CaseName}"
@@ -465,7 +723,7 @@ namespace UnityUIFlow
                 reporter.WriteSuiteReport(suite);
                 new CiArtifactManifestWriter().Write(reportRoot);
 
-                if (cancellationToken.IsCancellationRequested)
+                if (_runCts.Token.IsCancellationRequested)
                 {
                     _state.StatusText = "Aborted";
                     _state.LastError = "Execution was cancelled by user.";
@@ -494,9 +752,25 @@ namespace UnityUIFlow
                 _state.EndedAtUtc = DateTimeOffset.UtcNow.ToString("O");
                 _state.CurrentYamlPath = null;
                 _state.CurrentCaseName = null;
+                _runCts?.Dispose();
+                _runCts = null;
+                _activeContext = null;
                 BatchRunnerPreferences.Save(_state);
                 RefreshUi();
             }
+        }
+
+        private void CancelRun()
+        {
+            if (!_state.IsRunning)
+            {
+                SetMessage("No active batch execution.", HelpBoxMessageType.Info);
+                return;
+            }
+
+            _runCts?.Cancel();
+            _activeContext?.RuntimeController?.Stop();
+            SetMessage("Cancellation requested.", HelpBoxMessageType.Warning);
         }
 
         private void ApplyCaseCounters(TestStatus status)
@@ -537,10 +811,10 @@ namespace UnityUIFlow
                 : $"Case {result.CaseName} failed ({code}): {detail}";
         }
 
-        private BatchRunnerCaseSnapshot BuildSnapshot(TestResult result, string yamlPath, string reportRoot, ReportPathBuilder reportPaths)
+        private BatchRunnerCaseItem BuildSnapshot(TestResult result, string yamlPath, string reportRoot, ReportPathBuilder reportPaths)
         {
             StepResult failedStep = result.StepResults?.FirstOrDefault(step => step.Status == TestStatus.Failed || step.Status == TestStatus.Error);
-            return new BatchRunnerCaseSnapshot
+            return new BatchRunnerCaseItem
             {
                 YamlPath = BatchRunnerPathUtility.MakeProjectRelative(yamlPath),
                 CaseName = result.CaseName,
@@ -552,6 +826,7 @@ namespace UnityUIFlow
                 FailedStepError = failedStep?.ErrorMessage,
                 ReportMarkdownPath = BatchRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseMarkdownPath(reportRoot, result.CaseName)),
                 ReportJsonPath = BatchRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseJsonPath(reportRoot, result.CaseName)),
+                IsChecked = true,
             };
         }
 
@@ -638,9 +913,19 @@ namespace UnityUIFlow
             _currentCaseLabel.text = $"Current Case: {(_state.CurrentCaseName ?? "-")}";
             _summaryLabel.text = $"Summary: total={_state.Total} passed={_state.Passed} failed={_state.Failed} errors={_state.Errors} skipped={_state.Skipped}";
 
-            if (_runButton != null)
+            if (_runAllButton != null)
             {
-                _runButton.SetEnabled(!_state.IsRunning);
+                _runAllButton.SetEnabled(!_state.IsRunning);
+            }
+
+            if (_runSelectedButton != null)
+            {
+                _runSelectedButton.SetEnabled(!_state.IsRunning && _state.Cases.Any(c => c.IsChecked));
+            }
+
+            if (_rerunFailedButton != null)
+            {
+                _rerunFailedButton.SetEnabled(!_state.IsRunning && _state.Cases.Any(c => c.Status == TestStatus.Failed || c.Status == TestStatus.Error));
             }
 
             if (_cancelButton != null)
@@ -648,75 +933,66 @@ namespace UnityUIFlow
                 _cancelButton.SetEnabled(_state.IsRunning);
             }
 
-            RenderCaseResults();
+            _caseListView?.Rebuild();
             Repaint();
         }
 
-        private void RenderCaseResults()
+        // ── HeadedRunEventBus handlers ──
+
+        private void OnRunAttached(RuntimeController controller, string caseName)
         {
-            if (_resultsScrollView == null)
+            if (_activeContext?.RuntimeController != controller)
             {
                 return;
             }
 
-            _resultsScrollView.Clear();
-            if (_state.Cases.Count == 0)
+            _state.CurrentCaseName = caseName;
+            RefreshUi();
+        }
+
+        private void OnStepStarted(ExecutableStep step)
+        {
+            // Optional: could show current step name in a sub-label
+        }
+
+        private void OnStepCompleted(ExecutableStep step, StepResult result, VisualElement element)
+        {
+            if (element != null)
             {
-                _resultsScrollView.Add(new Label("No case results yet."));
+                _overlayRenderer.Highlight(element);
+            }
+            else if (result.Status != TestStatus.Failed)
+            {
+                _overlayRenderer.Clear();
+            }
+        }
+
+        private void OnHighlightedElementChanged(ExecutableStep step, VisualElement element)
+        {
+            if (element == null)
+            {
                 return;
             }
 
-            int index = 0;
-            foreach (BatchRunnerCaseSnapshot snapshot in _state.Cases)
+            EditorWindow targetWindow = Resources.FindObjectsOfTypeAll<EditorWindow>()
+                .FirstOrDefault(w => w != null && w.rootVisualElement?.panel == element.panel);
+
+            if (targetWindow != null && targetWindow != this)
             {
-                var card = new VisualElement();
-                card.name = $"batch-result-card-{index}";
-                card.style.marginBottom = 8;
-                card.style.paddingLeft = 8;
-                card.style.paddingRight = 8;
-                card.style.paddingTop = 6;
-                card.style.paddingBottom = 6;
-                card.style.borderLeftWidth = 2;
-                card.style.borderRightWidth = 2;
-                card.style.borderTopWidth = 2;
-                card.style.borderBottomWidth = 2;
-                card.style.borderLeftColor = new Color(0.22f, 0.22f, 0.22f);
-                card.style.borderRightColor = new Color(0.22f, 0.22f, 0.22f);
-                card.style.borderTopColor = new Color(0.22f, 0.22f, 0.22f);
-                card.style.borderBottomColor = new Color(0.22f, 0.22f, 0.22f);
-
-                card.Add(new Label($"{snapshot.CaseName} [{snapshot.Status}] {snapshot.DurationMs}ms"));
-                card.Add(new Label($"YAML: {snapshot.YamlPath}"));
-
-                if (!string.IsNullOrWhiteSpace(snapshot.ErrorMessage))
-                {
-                    card.Add(new Label($"Error: {snapshot.ErrorCode} {snapshot.ErrorMessage}"));
-                }
-
-                if (!string.IsNullOrWhiteSpace(snapshot.FailedStepName))
-                {
-                    card.Add(new Label($"Failed Step: {snapshot.FailedStepName}"));
-                }
-
-                if (!string.IsNullOrWhiteSpace(snapshot.FailedStepError))
-                {
-                    card.Add(new Label($"Step Error: {snapshot.FailedStepError}"));
-                }
-
-                card.Add(new Label($"Report: {snapshot.ReportMarkdownPath}"));
-                if (!string.IsNullOrWhiteSpace(snapshot.ReportMarkdownPath) && File.Exists(snapshot.ReportMarkdownPath))
-                {
-                    var openReportBtn = new Button(() => EditorUtility.OpenWithDefaultApp(snapshot.ReportMarkdownPath))
-                    {
-                        text = "Open Report",
-                        name = $"batch-result-card-open-report-{index}",
-                    };
-                    openReportBtn.style.width = 120;
-                    card.Add(openReportBtn);
-                }
-                _resultsScrollView.Add(card);
-                index++;
+                _overlayRenderer.Attach(targetWindow);
             }
+
+            _overlayRenderer.Highlight(element);
+        }
+
+        private void OnFailure(ExecutableStep step, StepResult result)
+        {
+            // Error is already captured in RunFileAsync result handling
+        }
+
+        private void OnRunFinished(TestResult result)
+        {
+            _overlayRenderer.Clear();
         }
     }
 

@@ -77,6 +77,43 @@
 | `assert_property` | `selector`、`property`、`expected` | 断言属性值 |
 | `screenshot` | 可选 `tag` | 生成截图附件 |
 
+## IMGUI 动作速查（新增）
+
+> 适用于 `EditorGUILayout` / `GUILayout` 绘制的 IMGUI 控件。选择器语法与 UIToolkit 完全不同。
+
+### 动作
+
+| 动作 | 关键参数 | 说明 |
+| --- | --- | --- |
+| `imgui_click` | `selector` | 左键点击控件中心 |
+| `imgui_double_click` | `selector` | 快速双击 |
+| `imgui_right_click` | `selector` | 右键点击 |
+| `imgui_hover` | `selector` | 悬停（MouseMove） |
+| `imgui_type` | `selector`、`text` | 逐字符输入 |
+| `imgui_focus` | `selector` | 点击获取焦点 |
+| `imgui_scroll` | `selector`（可选）、`delta` | 滚轮事件 |
+| `imgui_select_option` | `selector`、`option` 或 `index` | Dropdown 键盘导航选择 |
+| `imgui_press_key` | `key`，可选 `selector` | 单按键 |
+| `imgui_press_key_combination` | `keys`，可选 `selector` | 组合键（如 `Ctrl+A`） |
+| `imgui_read_value` | `selector`、`bag_key` | 读取值存入 SharedBag |
+| `imgui_assert_text` | `selector`、`text` | 断言文本 |
+| `imgui_assert_visible` | `selector` | 断言可见 |
+| `imgui_assert_value` | `selector`、`expected` | 尽力断言值 |
+| `imgui_wait` | `selector`、`timeout` | 轮询等待控件出现 |
+
+### 选择器语法
+
+| 语法 | 含义 |
+| --- | --- |
+| `gui(button)` | 匹配第一个 Button |
+| `gui(button, text="OK")` | 匹配文本为 OK 的 Button |
+| `gui(textfield, index=2)` | 匹配第 3 个 TextField |
+| `gui(toggle, text="Enabled")` | 匹配 label 为 Enabled 的 Toggle |
+| `gui(group="Settings")` | 匹配 Settings 组 |
+| `gui(group="Settings" > button, text="Apply")` | 在 Settings 组内匹配 Apply 按钮 |
+| `gui(textfield, control_name="username")` | 匹配 ControlName 为 username 的 TextField |
+| `gui(focused)` | 匹配当前焦点控件 |
+
 ## 选择器速查
 
 | 语法 | 含义 |

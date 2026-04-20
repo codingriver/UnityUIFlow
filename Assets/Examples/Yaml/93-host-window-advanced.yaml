@@ -1,0 +1,102 @@
+name: Host Window Advanced Switching
+description: |
+ Tests advanced host window switching scenarios:
+ - Opening multiple different windows in sequence
+ - Reopening the same window with reopen_if_open
+ - Cross-window data consistency via SharedBag
+
+fixture:
+ host_window:
+   type: UnityUIFlow.Examples.ExampleBasicLoginWindow
+   reopen_if_open: true
+
+steps:
+ # 鈹€鈹€ Window 1: Basic Login 鈹€鈹€
+ - name: Enter data in login window
+   action: type_text
+   selector: "#username-input"
+   text: "window_switch_test"
+
+ - name: Read username to bag
+   action: read_value
+   selector: "#username-input"
+   bag_key: "cross_window_user"
+
+ # 鈹€鈹€ Switch to Selectors Window 鈹€鈹€
+ - name: Open selectors window
+   action: execute_command
+   command: "UnityUIFlow/Examples/Selectors Window"
+
+ - name: Wait for selectors window
+   action: wait_for_element
+   selector: "#selector-status"
+   timeout: "3s"
+
+ - name: Assert selectors window loaded
+   action: assert_text
+   selector: "#selector-status"
+   text: "Ready"
+
+ - name: Click inspect button in selectors window
+   action: click
+   selector: "#inspect-button"
+
+ # 鈹€鈹€ Switch back to Login Window 鈹€鈹€
+ - name: Reopen login window
+   action: execute_command
+   command: "UnityUIFlow/Examples/Basic Login Window"
+
+ - name: Wait for login window
+   action: wait_for_element
+   selector: "#username-input"
+   timeout: "3s"
+
+ - name: Assert username persisted (reopen_if_open)
+   action: assert_text
+   selector: "#username-input"
+   text: "window_switch_test"
+
+ # 鈹€鈹€ Switch to Wait For Element Window 鈹€鈹€
+ - name: Open wait window
+   action: execute_command
+   command: "UnityUIFlow/Examples/Wait For Element Window"
+
+ - name: Wait for wait window
+   action: wait_for_element
+   selector: "#start-button"
+   timeout: "3s"
+
+ - name: Click start to trigger delayed element
+   action: click
+   selector: "#start-button"
+
+ - name: Wait for delayed message
+   action: wait_for_element
+   selector: "#delayed-message"
+   timeout: "5s"
+
+ - name: Assert delayed message visible
+   action: assert_text
+   selector: "#delayed-message"
+   text: "I appeared after a delay!"
+
+ # 鈹€鈹€ Final: back to login and cleanup 鈹€鈹€
+ - name: Reopen login window for cleanup
+   action: execute_command
+   command: "UnityUIFlow/Examples/Basic Login Window"
+
+ - name: Clear username
+   action: focus
+   selector: "#username-input"
+
+ - name: Select all
+   action: press_key_combination
+   keys: "Ctrl+A"
+
+ - name: Delete
+   action: press_key
+   key: Delete
+
+ - name: Final screenshot
+   action: screenshot
+   tag: "host_window_advanced_final"

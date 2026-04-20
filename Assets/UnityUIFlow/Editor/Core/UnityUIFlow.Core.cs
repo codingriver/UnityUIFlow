@@ -9,6 +9,7 @@ namespace UnityUIFlow
     /// </summary>
     public static class ErrorCodes
     {
+        public const string AssertionFailed = "ASSERTION_FAILED";
         public const string ActionExecutionFailed = "ACTION_EXECUTION_FAILED";
         public const string ActionNameConflict = "ACTION_NAME_CONFLICT";
         public const string ActionNotFound = "ACTION_NOT_FOUND";
@@ -51,7 +52,9 @@ namespace UnityUIFlow
         public const string ScreenshotSaveFailed = "SCREENSHOT_SAVE_FAILED";
         public const string SelectorCompileError = "SELECTOR_COMPILE_ERROR";
         public const string SelectorEmpty = "SELECTOR_EMPTY";
+        public const string SelectorInvalid = "SELECTOR_INVALID";
         public const string SelectorSyntaxInvalid = "SELECTOR_SYNTAX_INVALID";
+        public const string ElementNotFound = "ELEMENT_NOT_FOUND";
         public const string StepExecutionException = "STEP_EXECUTION_EXCEPTION";
         public const string StepTimeout = "STEP_TIMEOUT";
         public const string TestCaseFileNotFound = "TEST_CASE_FILE_NOT_FOUND";
@@ -96,6 +99,7 @@ namespace UnityUIFlow
     /// </summary>
     public enum TestStatus
     {
+        None,
         Passed,
         Failed,
         Error,
@@ -212,6 +216,11 @@ namespace UnityUIFlow
         public int PreStepDelayMs = 0;
 
         /// <summary>
+        /// When true, RunFileAsync generates single_reports.md after each case.
+        /// Suite runs disable this to avoid overwriting.        /// </summary>
+        public bool GenerateSingleReport = true;
+
+        /// <summary>
         /// Creates a defensive copy.
         /// </summary>
         public TestOptions Clone()
@@ -232,6 +241,7 @@ namespace UnityUIFlow
                 RequireInputSystemKeyboardDriver = RequireInputSystemKeyboardDriver,
                 EnableVerboseLog = EnableVerboseLog,
                 PreStepDelayMs = PreStepDelayMs,
+                GenerateSingleReport = GenerateSingleReport,
             };
         }
 

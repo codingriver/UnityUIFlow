@@ -1,0 +1,1377 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace UnityUIFlow
+{
+    [Serializable]
+    internal sealed class TestRunnerCaseItem
+    {
+        public string YamlPath;
+        public string CaseName;
+        public TestStatus Status;
+        public int DurationMs;
+        public string ErrorCode;
+        public string ErrorMessage;
+        public string FailedStepName;
+        public string FailedStepError;
+        public string ReportMarkdownPath;
+        public string ReportJsonPath;
+        public bool IsChecked = true;
+        public bool IsRunning;
+        public List<StepResult> StepResults = new List<StepResult>();
+
+        // Grouping
+        public bool IsGroupHeader;
+        public bool IsExpanded = true;
+        public int ChildCount;
+        public bool GroupMixedChecked;
+
+
+    }
+
+    [Serializable]
+    internal sealed class TestRunnerViewState
+    {
+        public string TargetDirectory = "Assets/Examples/Yaml";
+        public string ReportPath = "Reports/TestRunner";
+        public string SearchFilter = string.Empty;
+        public bool Headed = true;
+        public bool StopOnFirstFailure;
+        public bool ContinueOnStepFailure;
+        public bool ScreenshotOnFailure = true;
+        public bool EnableVerboseLog;
+        public bool RequireOfficialHost;
+        public bool RequireOfficialPointerDriver;
+        public bool RequireInputSystemKeyboardDriver;
+        public int DefaultTimeoutMs = 3000;
+        public bool IsRunning;
+        public string StatusText = "Idle";
+        public string CurrentYamlPath;
+        public string CurrentCaseName;
+        public int Total;
+        public int Passed;
+        public int Failed;
+        public int Errors;
+        public int Skipped;
+        public List<TestRunnerCaseItem> Cases = new List<TestRunnerCaseItem>();
+    }
+
+    public sealed class TestRunnerWindow : EditorWindow
+    {
+        private readonly TestRunnerViewState _state = new TestRunnerViewState();
+        private CancellationTokenSource _runCts;
+        private ExecutionContext _activeContext;
+        private HighlightOverlayRenderer _overlayRenderer;
+
+        // Left panel
+        private TextField _searchField;
+        private Button _runAllButton;
+        private Button _runSelectedButton;
+        private Button _rerunFailedButton;
+        private Button _cancelButton;
+        private Button _refreshButton;
+        private Button _selectAllButton;
+        private Button _selectNoneButton;
+        private Button _selectFailedButton;
+        private Label _statsLabel;
+        private ListView _caseListView;
+
+        // Right panel (details)
+        private VisualElement _detailNameRow;
+        private VisualElement _detailPathRow;
+        private VisualElement _detailStatusRow;
+        private VisualElement _detailDurationRow;
+        private Label _detailErrorLabel;
+        private VisualElement _detailStepsContainer;
+        private Button _detailOpenReportButton;
+        private Button _detailOpenYamlButton;
+
+        // Bottom status
+        private Label _statusLabel;
+        private Label _currentCaseLabel;
+
+        [MenuItem("UnityUIFlow/Test Runner", priority = 102)]
+        public static void Open()
+        {
+            TestRunnerWindow window = GetWindow<TestRunnerWindow>();
+            window.titleContent = new GUIContent("UIFlow Test Runner");
+            window.minSize = new Vector2(900f, 600f);
+            window.Show();
+        }
+
+        private void OnEnable()
+        {
+            TestRunnerPreferences.Load(_state);
+            if (string.IsNullOrWhiteSpace(_state.TargetDirectory))
+            {
+                _state.TargetDirectory = "Assets/Examples/Yaml";
+            }
+
+            if (string.IsNullOrWhiteSpace(_state.ReportPath))
+            {
+                _state.ReportPath = "Reports/TestRunner";
+            }
+
+            _overlayRenderer = new HighlightOverlayRenderer();
+            SubscribeEvents();
+            BuildUi();
+            RefreshCaseList();
+            RefreshUi();
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribeEvents();
+            _overlayRenderer?.Detach();
+            _overlayRenderer = null;
+            TestRunnerPreferences.Save(_state);
+        }
+
+        private void SubscribeEvents()
+        {
+            HeadedRunEventBus.RunAttached += OnRunAttached;
+            HeadedRunEventBus.StepStarted += OnStepStarted;
+            HeadedRunEventBus.StepCompleted += OnStepCompleted;
+            HeadedRunEventBus.HighlightedElementChanged += OnHighlightedElementChanged;
+            HeadedRunEventBus.Failure += OnFailure;
+            HeadedRunEventBus.RunFinished += OnRunFinished;
+        }
+
+        private void UnsubscribeEvents()
+        {
+            HeadedRunEventBus.RunAttached -= OnRunAttached;
+            HeadedRunEventBus.StepStarted -= OnStepStarted;
+            HeadedRunEventBus.StepCompleted -= OnStepCompleted;
+            HeadedRunEventBus.HighlightedElementChanged -= OnHighlightedElementChanged;
+            HeadedRunEventBus.Failure -= OnFailure;
+            HeadedRunEventBus.RunFinished -= OnRunFinished;
+        }
+
+        private void BuildUi()
+        {
+            rootVisualElement.Clear();
+            rootVisualElement.style.flexDirection = FlexDirection.Column;
+
+            // ── Top Toolbar ──
+            var toolbar = new VisualElement();
+            toolbar.name = "test-runner-toolbar";
+            toolbar.style.flexDirection = FlexDirection.Row;
+            toolbar.style.alignItems = Align.Center;
+            toolbar.style.paddingLeft = 12;
+            toolbar.style.paddingRight = 12;
+            toolbar.style.paddingTop = 16;
+            toolbar.style.paddingBottom = 16;
+            toolbar.style.height = 72;
+            toolbar.style.borderBottomWidth = 1;
+            toolbar.style.borderBottomColor = new Color(0.15f, 0.15f, 0.15f);
+            toolbar.style.backgroundColor = new Color(0.22f, 0.22f, 0.22f);
+            rootVisualElement.Add(toolbar);
+
+            _runAllButton = CreateToolbarButton("Run All", RunAll);
+            _runSelectedButton = CreateToolbarButton("Run Selected", RunSelected);
+            _rerunFailedButton = CreateToolbarButton("Rerun Failed", RunFailed);
+            _cancelButton = CreateToolbarButton("Cancel", CancelRun);
+            _refreshButton = CreateToolbarButton("Refresh", RefreshCaseList);
+            var clearButton = CreateToolbarButton("Clear Results", ClearResults);
+            toolbar.Add(_runAllButton);
+            toolbar.Add(_runSelectedButton);
+            toolbar.Add(_rerunFailedButton);
+            toolbar.Add(_cancelButton);
+            toolbar.Add(_refreshButton);
+            toolbar.Add(clearButton);
+
+            toolbar.Add(new VisualElement { style = { flexGrow = 1 } });
+
+            _statsLabel = new Label("分组: 0  用例: 0  通过: 0  失败: 0  错误: 0  跳过: 0") { name = "test-runner-stats" };
+            _statsLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+            _statsLabel.style.color = new Color(0.7f, 0.7f, 0.7f);
+            toolbar.Add(_statsLabel);
+
+            // ── Split View (Left list + Right details) ──
+            var splitView = new TwoPaneSplitView(0, 320, TwoPaneSplitViewOrientation.Horizontal);
+            splitView.name = "test-runner-split";
+            splitView.style.flexGrow = 1;
+            rootVisualElement.Add(splitView);
+
+            // Left: Case list
+            var leftPanel = new VisualElement();
+            leftPanel.name = "test-runner-left";
+            leftPanel.style.flexDirection = FlexDirection.Column;
+            leftPanel.style.minWidth = 200;
+
+            // Selection toolbar
+            var selectionBar = new VisualElement();
+            selectionBar.style.flexDirection = FlexDirection.Row;
+            selectionBar.style.alignItems = Align.Center;
+            selectionBar.style.paddingLeft = 8;
+            selectionBar.style.paddingRight = 8;
+            selectionBar.style.paddingTop = 6;
+            selectionBar.style.paddingBottom = 6;
+            selectionBar.style.borderBottomWidth = 1;
+            selectionBar.style.borderBottomColor = new Color(0.18f, 0.18f, 0.18f);
+            leftPanel.Add(selectionBar);
+
+            _selectAllButton = CreateSmallButton("Select All", SelectAll);
+            _selectNoneButton = CreateSmallButton("Select None", SelectNone);
+            _selectFailedButton = CreateSmallButton("Select Failed", SelectFailed);
+            selectionBar.Add(_selectAllButton);
+            selectionBar.Add(_selectNoneButton);
+            selectionBar.Add(_selectFailedButton);
+
+            selectionBar.Add(new VisualElement { style = { flexGrow = 1 } });
+
+            var timeoutField = new IntegerField("Timeout(ms)")
+            {
+                name = "test-runner-timeout",
+                value = _state.DefaultTimeoutMs,
+            };
+            timeoutField.style.width = 90;
+            timeoutField.SetEnabled(!_state.IsRunning);
+            timeoutField.RegisterValueChangedCallback(evt =>
+            {
+                _state.DefaultTimeoutMs = Mathf.Clamp(evt.newValue, 100, 600000);
+                TestRunnerPreferences.Save(_state);
+            });
+            selectionBar.Add(timeoutField);
+
+            _searchField = new TextField { name = "test-runner-search" };
+            _searchField.style.width = 160;
+            _searchField.tooltip = "Search by case name or YAML path";
+            _searchField.SetValueWithoutNotify(_state.SearchFilter);
+            _searchField.RegisterValueChangedCallback(evt =>
+            {
+                _state.SearchFilter = evt.newValue ?? string.Empty;
+                RefreshCaseList();
+            });
+            selectionBar.Add(_searchField);
+
+            _caseListView = new ListView
+            {
+                name = "test-runner-list",
+                selectionType = SelectionType.Single,
+                reorderable = false,
+                showBorder = false,
+                showAlternatingRowBackgrounds = AlternatingRowBackground.ContentOnly,
+                fixedItemHeight = 26,
+                style = { flexGrow = 1 },
+            };
+            _caseListView.makeItem = MakeCaseListItem;
+            _caseListView.bindItem = BindCaseListItem;
+            _caseListView.selectionChanged += OnSelectionChanged;
+            _caseListView.RegisterCallback<KeyDownEvent>(OnListKeyDown);
+            leftPanel.Add(_caseListView);
+            splitView.Add(leftPanel);
+
+            // Right: Details panel
+            var rightPanel = new VisualElement();
+            rightPanel.name = "test-runner-right";
+            rightPanel.style.flexDirection = FlexDirection.Column;
+            rightPanel.style.paddingLeft = 12;
+            rightPanel.style.paddingRight = 12;
+            rightPanel.style.paddingTop = 12;
+            rightPanel.style.paddingBottom = 12;
+            rightPanel.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f);
+
+            var detailTitle = new Label("Test Details") { name = "test-runner-detail-title" };
+            detailTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+            detailTitle.style.fontSize = 14;
+            detailTitle.style.marginBottom = 10;
+            rightPanel.Add(detailTitle);
+
+            _detailNameRow = CreateDetailRow("Name:", "-");
+            _detailPathRow = CreateDetailRow("YAML Path:", "-");
+            _detailStatusRow = CreateDetailRow("Status:", "-");
+            _detailDurationRow = CreateDetailRow("Duration:", "-");
+            rightPanel.Add(_detailNameRow);
+            rightPanel.Add(_detailPathRow);
+            rightPanel.Add(_detailStatusRow);
+            rightPanel.Add(_detailDurationRow);
+
+            var errorTitle = new Label("Error") { name = "test-runner-error-title" };
+            errorTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+            errorTitle.style.marginTop = 12;
+            errorTitle.style.marginBottom = 4;
+            rightPanel.Add(errorTitle);
+
+            _detailErrorLabel = new Label("No error") { name = "test-runner-error" };
+            _detailErrorLabel.style.whiteSpace = WhiteSpace.Normal;
+            _detailErrorLabel.style.color = new Color(0.9f, 0.3f, 0.3f);
+            rightPanel.Add(_detailErrorLabel);
+
+            var stepsTitle = new Label("Steps") { name = "test-runner-steps-title" };
+            stepsTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+            stepsTitle.style.marginTop = 12;
+            stepsTitle.style.marginBottom = 4;
+            rightPanel.Add(stepsTitle);
+
+            _detailStepsContainer = new VisualElement { name = "test-runner-steps" };
+            _detailStepsContainer.style.flexGrow = 1;
+            rightPanel.Add(_detailStepsContainer);
+
+            var actionRow = new VisualElement();
+            actionRow.style.flexDirection = FlexDirection.Row;
+            actionRow.style.marginTop = 10;
+            rightPanel.Add(actionRow);
+
+            _detailOpenYamlButton = new Button(() =>
+            {
+                var selected = GetSelectedItem();
+                if (selected != null && File.Exists(selected.YamlPath))
+                {
+                    AssetDatabase.OpenAsset(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(selected.YamlPath));
+                }
+            })
+            { text = "Open YAML" };
+            _detailOpenYamlButton.style.marginRight = 6;
+
+            _detailOpenReportButton = new Button(() =>
+            {
+                var selected = GetSelectedItem();
+                if (selected != null && !string.IsNullOrWhiteSpace(selected.ReportMarkdownPath) && File.Exists(selected.ReportMarkdownPath))
+                {
+                    EditorUtility.OpenWithDefaultApp(selected.ReportMarkdownPath);
+                }
+            })
+            { text = "Open Report" };
+            _detailOpenReportButton.style.marginRight = 6;
+
+            actionRow.Add(_detailOpenYamlButton);
+            actionRow.Add(_detailOpenReportButton);
+            splitView.Add(rightPanel);
+
+            // ── Progress Bar ──
+            var progressBar = new ProgressBar { name = "test-runner-progress" };
+            progressBar.style.height = 18;
+            progressBar.style.marginTop = 0;
+            progressBar.style.marginBottom = 0;
+            progressBar.lowValue = 0;
+            progressBar.highValue = 100;
+            progressBar.value = 0;
+            rootVisualElement.Add(progressBar);
+
+            // ── Bottom Status Bar ──
+            var statusBar = new VisualElement();
+            statusBar.name = "test-runner-status-bar";
+            statusBar.style.flexDirection = FlexDirection.Row;
+            statusBar.style.alignItems = Align.Center;
+            statusBar.style.height = 36;
+            statusBar.style.paddingLeft = 12;
+            statusBar.style.paddingRight = 12;
+            statusBar.style.paddingTop = 0;
+            statusBar.style.paddingBottom = 0;
+            statusBar.style.borderTopWidth = 1;
+            statusBar.style.borderTopColor = new Color(0.15f, 0.15f, 0.15f);
+            statusBar.style.backgroundColor = new Color(0.22f, 0.22f, 0.22f);
+            rootVisualElement.Add(statusBar);
+
+            _statusLabel = new Label("Status: Idle") { name = "test-runner-status" };
+            _statusLabel.style.fontSize = 13;
+            _currentCaseLabel = new Label("Current: -") { name = "test-runner-current" };
+            _currentCaseLabel.style.fontSize = 13;
+            statusBar.Add(_statusLabel);
+            statusBar.Add(new VisualElement { style = { width = 20 } });
+            statusBar.Add(_currentCaseLabel);
+        }
+
+        private Button CreateToolbarButton(string text, Action onClick)
+        {
+            var btn = new Button(onClick) { text = text };
+            btn.style.marginRight = 8;
+            btn.style.height = 36;
+            btn.style.fontSize = 14;
+            return btn;
+        }
+
+        private Button CreateSmallButton(string text, Action onClick)
+        {
+            var btn = new Button(onClick) { text = text };
+            btn.style.marginRight = 4;
+            btn.style.height = 20;
+            btn.style.fontSize = 10;
+            return btn;
+        }
+
+        private VisualElement CreateDetailRow(string label, string value)
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.marginBottom = 4;
+
+            var labelElem = new Label(label);
+            labelElem.style.width = 80;
+            labelElem.style.color = new Color(0.6f, 0.6f, 0.6f);
+            labelElem.style.minWidth = 80;
+
+            var valueElem = new Label(value);
+            valueElem.style.flexGrow = 1;
+            valueElem.style.whiteSpace = WhiteSpace.Normal;
+
+            row.Add(labelElem);
+            row.Add(valueElem);
+            return row;
+        }
+
+        // ── ListView item rendering ──
+
+        private VisualElement MakeCaseListItem()
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.paddingLeft = 4;
+            row.style.paddingRight = 4;
+            row.style.height = 26;
+
+            var expandLabel = new Label { name = "case-expand" };
+            expandLabel.style.width = 16;
+            expandLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+
+            var checkToggle = new Toggle { name = "case-check" };
+            checkToggle.style.marginRight = 4;
+            checkToggle.style.marginLeft = 2;
+            checkToggle.style.width = 18;
+
+            var statusLabel = new Label { name = "case-status" };
+            statusLabel.style.width = 18;
+            statusLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            statusLabel.style.marginRight = 2;
+
+            var nameLabel = new Label { name = "case-name" };
+            nameLabel.style.flexGrow = 1;
+            nameLabel.style.unityTextAlign = TextAnchor.MiddleLeft;
+            nameLabel.style.textOverflow = TextOverflow.Ellipsis;
+
+            var countLabel = new Label { name = "case-count" };
+            countLabel.style.width = 45;
+            countLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+            countLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
+            countLabel.style.fontSize = 11;
+
+            var durationLabel = new Label { name = "case-duration" };
+            durationLabel.style.width = 55;
+            durationLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+            durationLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
+            durationLabel.style.fontSize = 10;
+
+            row.Add(expandLabel);
+            row.Add(checkToggle);
+            row.Add(statusLabel);
+            row.Add(nameLabel);
+            row.Add(countLabel);
+            row.Add(durationLabel);
+
+            row.RegisterCallback<PointerDownEvent>(OnCaseItemPointerDown);
+
+            checkToggle.RegisterValueChangedCallback(evt =>
+            {
+                int idx = (int)(row.userData ?? -1);
+                if (idx < 0) return;
+                var filtered = GetFilteredCases();
+                if (idx >= filtered.Count) return;
+                var item = filtered[idx];
+                item.IsChecked = evt.newValue;
+                _caseListView?.Rebuild();
+            });
+
+            return row;
+        }
+
+        private void OnCaseItemPointerDown(PointerDownEvent evt)
+        {
+            // Single flat list; no expansion needed
+        }
+
+        private void OnListKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode != KeyCode.Space || _state.IsRunning) return;
+            evt.StopPropagation();
+
+            var selected = GetSelectedItem();
+            if (selected == null) return;
+
+            selected.IsChecked = !selected.IsChecked;
+            _caseListView?.Rebuild();
+        }
+
+        private void BindCaseListItem(VisualElement element, int index)
+        {
+            element.userData = index;
+            var filtered = GetFilteredCases();
+            if (index < 0 || index >= filtered.Count)
+            {
+                return;
+            }
+
+            TestRunnerCaseItem item = filtered[index];
+
+            var expandLabel = element.Q<Label>("case-expand");
+            var checkToggle = element.Q<Toggle>("case-check");
+            var statusLabel = element.Q<Label>("case-status");
+            var nameLabel = element.Q<Label>("case-name");
+            var countLabel = element.Q<Label>("case-count");
+            var durationLabel = element.Q<Label>("case-duration");
+
+            if (item.IsGroupHeader)
+            {
+                expandLabel.style.visibility = Visibility.Hidden;
+
+                checkToggle.style.visibility = Visibility.Visible;
+                checkToggle.SetValueWithoutNotify(item.IsChecked);
+                checkToggle.showMixedValue = item.GroupMixedChecked;
+                checkToggle.SetEnabled(!_state.IsRunning);
+
+                statusLabel.style.visibility = Visibility.Hidden;
+
+                nameLabel.text = item.CaseName;
+                nameLabel.style.color = new Color(0.9f, 0.9f, 0.9f);
+                nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+                nameLabel.style.marginLeft = 0;
+
+                countLabel.style.visibility = Visibility.Hidden;
+
+                durationLabel.style.visibility = Visibility.Hidden;
+            }
+            else
+            {
+                expandLabel.style.visibility = Visibility.Hidden;
+
+                checkToggle.style.visibility = Visibility.Visible;
+                checkToggle.SetValueWithoutNotify(item.IsChecked);
+                checkToggle.showMixedValue = false;
+                checkToggle.SetEnabled(!_state.IsRunning);
+
+                statusLabel.style.visibility = Visibility.Visible;
+                statusLabel.text = GetStatusIcon(item.Status, item.IsRunning);
+                statusLabel.style.color = GetStatusColor(item.Status, item.IsRunning);
+
+                nameLabel.text = item.CaseName ?? Path.GetFileNameWithoutExtension(item.YamlPath);
+                nameLabel.style.marginLeft = 8;
+                if (item.IsRunning)
+                {
+                    nameLabel.style.color = new Color(0.4f, 0.7f, 1f);
+                    nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+                }
+                else if (item.Status == TestStatus.Failed || item.Status == TestStatus.Error)
+                {
+                    nameLabel.style.color = new Color(1f, 0.35f, 0.35f);
+                    nameLabel.style.unityFontStyleAndWeight = FontStyle.Normal;
+                }
+                else if (item.Status == TestStatus.Passed)
+                {
+                    nameLabel.style.color = new Color(0.5f, 1f, 0.5f);
+                    nameLabel.style.unityFontStyleAndWeight = FontStyle.Normal;
+                }
+                else
+                {
+                    nameLabel.style.color = new Color(0.7f, 0.7f, 0.7f);
+                    nameLabel.style.unityFontStyleAndWeight = FontStyle.Normal;
+                }
+
+                countLabel.style.visibility = Visibility.Hidden;
+
+                durationLabel.style.visibility = Visibility.Visible;
+                durationLabel.text = item.DurationMs > 0 ? $"{item.DurationMs}ms" : string.Empty;
+            }
+        }
+
+        private static string GetStatusIcon(TestStatus status, bool isRunning)
+        {
+            if (isRunning) return "◐";
+            switch (status)
+            {
+                case TestStatus.Passed: return "●";
+                case TestStatus.Failed: return "●";
+                case TestStatus.Error: return "●";
+                case TestStatus.Skipped: return "○";
+                case TestStatus.None: return "○";
+                default: return "○";
+            }
+        }
+
+        private static Color GetStatusColor(TestStatus status, bool isRunning)
+        {
+            if (isRunning) return new Color(0.3f, 0.6f, 1f);
+            switch (status)
+            {
+                case TestStatus.Passed: return new Color(0.3f, 0.9f, 0.3f);
+                case TestStatus.Failed: return new Color(0.95f, 0.3f, 0.3f);
+                case TestStatus.Error: return new Color(0.9f, 0.15f, 0.15f);
+                case TestStatus.Skipped: return new Color(0.5f, 0.5f, 0.5f);
+                case TestStatus.None: return new Color(0.45f, 0.45f, 0.45f);
+                default: return new Color(0.45f, 0.45f, 0.45f);
+            }
+        }
+
+        // ── Group check state helpers ──
+
+        private void SetGroupChecks(string yamlPath, bool value)
+        {
+            foreach (var item in _state.Cases)
+            {
+                if (StringComparer.OrdinalIgnoreCase.Equals(item.YamlPath, yamlPath))
+                {
+                    item.IsChecked = value;
+                }
+            }
+        }
+
+        private void RefreshGroupCheckState(string yamlPath)
+        {
+            // No-op: flat list, each item manages its own check state
+        }
+
+        private void RefreshAllGroupCheckStates()
+        {
+            // No-op: flat list
+        }
+
+        // ── Selection & Filtering ──
+
+        private List<TestRunnerCaseItem> GetFilteredCases()
+        {
+            if (string.IsNullOrWhiteSpace(_state.SearchFilter))
+            {
+                return _state.Cases.ToList();
+            }
+
+            string filter = _state.SearchFilter.Trim();
+            return _state.Cases.Where(c =>
+                (c.CaseName ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        private TestRunnerCaseItem GetSelectedItem()
+        {
+            var filtered = GetFilteredCases();
+            int index = _caseListView?.selectedIndex ?? -1;
+            if (index >= 0 && index < filtered.Count)
+            {
+                return filtered[index];
+            }
+            return null;
+        }
+
+        private void OnSelectionChanged(IEnumerable<object> selection)
+        {
+            RefreshDetailPanel();
+        }
+
+        private void RefreshDetailPanel()
+        {
+            var selected = GetSelectedItem();
+            if (selected == null)
+            {
+                SetDetailValue(_detailNameRow, "-");
+                SetDetailValue(_detailPathRow, "-");
+                SetDetailValue(_detailStatusRow, "-");
+                SetDetailValue(_detailDurationRow, "-");
+                _detailErrorLabel.text = "No error";
+                _detailStepsContainer.Clear();
+                _detailOpenYamlButton.SetEnabled(false);
+                _detailOpenReportButton.SetEnabled(false);
+                return;
+            }
+
+            // Resolve the actual test case name from YAML
+            string caseNameFromYaml = Path.GetFileNameWithoutExtension(selected.YamlPath);
+            try
+            {
+                var parser = new YamlTestCaseParser();
+                TestCaseDefinition definition = parser.ParseFile(selected.YamlPath);
+                if (!string.IsNullOrWhiteSpace(definition.Name))
+                {
+                    caseNameFromYaml = definition.Name;
+                }
+            }
+            catch
+            {
+                // Fallback to file name
+            }
+
+            SetDetailValue(_detailNameRow, caseNameFromYaml);
+            SetDetailValue(_detailPathRow, selected.YamlPath);
+            SetDetailValue(_detailStatusRow, selected.Status.ToString());
+            SetDetailValue(_detailDurationRow, selected.DurationMs > 0 ? $"{selected.DurationMs}ms" : "-");
+
+            if (!string.IsNullOrWhiteSpace(selected.ErrorMessage))
+            {
+                string errorText = selected.ErrorMessage;
+                if (!string.IsNullOrWhiteSpace(selected.FailedStepName))
+                {
+                    errorText = $"Step '{selected.FailedStepName}': {errorText}";
+                }
+                _detailErrorLabel.text = errorText;
+            }
+            else
+            {
+                _detailErrorLabel.text = "No error";
+            }
+
+            _detailStepsContainer.Clear();
+            RenderStepDetails(selected);
+
+            _detailOpenYamlButton.SetEnabled(File.Exists(selected.YamlPath));
+            _detailOpenReportButton.SetEnabled(!string.IsNullOrWhiteSpace(selected.ReportMarkdownPath) && File.Exists(selected.ReportMarkdownPath));
+        }
+
+        private void RenderStepDetails(TestRunnerCaseItem selected)
+        {
+            var stepInfos = new List<(string Name, string Phase)>();
+            try
+            {
+                var parser = new YamlTestCaseParser();
+                TestCaseDefinition definition = parser.ParseFile(selected.YamlPath);
+                if (definition.Fixture?.Setup != null)
+                {
+                    foreach (var step in definition.Fixture.Setup)
+                    {
+                        stepInfos.Add((step.Name ?? step.Action ?? "setup", "Setup"));
+                    }
+                }
+                if (definition.Steps != null)
+                {
+                    foreach (var step in definition.Steps)
+                    {
+                        stepInfos.Add((step.Name ?? step.Action ?? "step", "Main"));
+                    }
+                }
+            }
+            catch
+            {
+                _detailStepsContainer.Add(new Label("Unable to parse step definitions from YAML."));
+                return;
+            }
+
+            if (stepInfos.Count == 0)
+            {
+                _detailStepsContainer.Add(new Label("No steps defined in this test case."));
+                return;
+            }
+
+            // Build a lookup from step display name to result
+            var resultByName = new Dictionary<string, StepResult>(StringComparer.OrdinalIgnoreCase);
+            var resultByIndex = new List<StepResult>();
+            if (selected.StepResults != null)
+            {
+                foreach (var sr in selected.StepResults)
+                {
+                    if (!string.IsNullOrWhiteSpace(sr.DisplayName))
+                    {
+                        resultByName[sr.DisplayName] = sr;
+                    }
+                    resultByIndex.Add(sr);
+                }
+            }
+
+            for (int i = 0; i < stepInfos.Count; i++)
+            {
+                var (name, phase) = stepInfos[i];
+                string displayName = string.IsNullOrWhiteSpace(name) ? $"{phase} step {i + 1}" : name;
+
+                // Try to find matching result by name, then by index
+                StepResult result = null;
+                if (!string.IsNullOrWhiteSpace(name) && resultByName.ContainsKey(name))
+                {
+                    result = resultByName[name];
+                }
+                else if (i < resultByIndex.Count)
+                {
+                    result = resultByIndex[i];
+                }
+
+                var stepRow = new VisualElement();
+                stepRow.style.flexDirection = FlexDirection.Row;
+                stepRow.style.marginBottom = 2;
+                stepRow.style.alignItems = Align.Center;
+
+                var icon = new Label(result != null ? GetStatusIcon(result.Status, false) : "○");
+                icon.style.width = 16;
+                icon.style.color = result != null ? GetStatusColor(result.Status, false) : new Color(0.45f, 0.45f, 0.45f);
+
+                var nameLabel = new Label(displayName);
+                nameLabel.style.flexGrow = 1;
+                nameLabel.style.color = result != null ? new Color(0.8f, 0.8f, 0.8f) : new Color(0.5f, 0.5f, 0.5f);
+
+                var durLabel = new Label(result != null && result.DurationMs > 0 ? $"{result.DurationMs}ms" : "");
+                durLabel.style.width = 50;
+                durLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
+                durLabel.style.fontSize = 10;
+                durLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+
+                stepRow.Add(icon);
+                stepRow.Add(nameLabel);
+                stepRow.Add(durLabel);
+                _detailStepsContainer.Add(stepRow);
+            }
+        }
+
+        private static void SetDetailValue(VisualElement row, string value)
+        {
+            // Row is [Label, Label]; set the second child
+            if (row.childCount > 1 && row.ElementAt(1) is Label valueLabel)
+            {
+                valueLabel.text = value;
+            }
+        }
+
+        // ── Case discovery ──
+
+        private void RefreshCaseList()
+        {
+            string directory = _state.TargetDirectory;
+            if (!Directory.Exists(directory))
+            {
+                _state.Cases.Clear();
+                _caseListView.itemsSource = GetFilteredCases();
+                _caseListView.Rebuild();
+                RefreshUi();
+                return;
+            }
+
+            var yamlFiles = Directory.GetFiles(directory, "*.yaml", SearchOption.TopDirectoryOnly)
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Preserve existing items when possible
+            var existingGroups = new Dictionary<string, TestRunnerCaseItem>(StringComparer.OrdinalIgnoreCase);
+            var existingChildren = new Dictionary<string, List<TestRunnerCaseItem>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in _state.Cases)
+            {
+                string key = TestRunnerPathUtility.MakeProjectRelative(item.YamlPath);
+                if (item.IsGroupHeader)
+                {
+                    existingGroups[key] = item;
+                }
+                else
+                {
+                    if (!existingChildren.ContainsKey(key))
+                        existingChildren[key] = new List<TestRunnerCaseItem>();
+                    existingChildren[key].Add(item);
+                }
+            }
+
+            // Preserve expanded states
+            var expandedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in _state.Cases)
+            {
+                if (item.IsGroupHeader && item.IsExpanded)
+                {
+                    expandedGroups.Add(item.YamlPath);
+                }
+            }
+
+            _state.Cases.Clear();
+            var parser = new YamlTestCaseParser();
+            foreach (string yamlPath in yamlFiles)
+            {
+                string rel = TestRunnerPathUtility.MakeProjectRelative(yamlPath);
+                string fileName = Path.GetFileName(yamlPath);
+
+                if (existingGroups.TryGetValue(rel, out var oldGroup))
+                {
+                    _state.Cases.Add(oldGroup);
+                    continue;
+                }
+
+                // Parse YAML to get case name
+                string caseName = Path.GetFileNameWithoutExtension(yamlPath);
+                try
+                {
+                    TestCaseDefinition definition = parser.ParseFile(yamlPath);
+                    if (!string.IsNullOrWhiteSpace(definition.Name))
+                    {
+                        caseName = definition.Name;
+                    }
+                }
+                catch
+                {
+                    // Fallback to file name if parse fails
+                }
+
+                // One item per file, displaying file name; case name shown in detail panel
+                _state.Cases.Add(new TestRunnerCaseItem
+                {
+                    YamlPath = rel,
+                    CaseName = fileName,
+                    IsGroupHeader = true,
+                    IsChecked = true,
+                });
+            }
+
+            _caseListView.itemsSource = GetFilteredCases();
+            _caseListView.Rebuild();
+            RefreshUi();
+        }
+
+        // ── Selection actions ──
+
+        private void SelectAll()
+        {
+            foreach (var item in _state.Cases) item.IsChecked = true;
+            RefreshAllGroupCheckStates();
+            _caseListView?.Rebuild();
+        }
+
+        private void SelectNone()
+        {
+            foreach (var item in _state.Cases) item.IsChecked = false;
+            RefreshAllGroupCheckStates();
+            _caseListView?.Rebuild();
+        }
+
+        private void SelectFailed()
+        {
+            foreach (var item in _state.Cases)
+                item.IsChecked = item.Status == TestStatus.Failed || item.Status == TestStatus.Error;
+            _caseListView?.Rebuild();
+        }
+
+        // ── Execution ──
+
+        private void ClearResults()
+        {
+            foreach (var item in _state.Cases)
+            {
+                item.Status = default;
+                item.DurationMs = 0;
+                item.ErrorCode = null;
+                item.ErrorMessage = null;
+                item.FailedStepName = null;
+                item.FailedStepError = null;
+                item.ReportMarkdownPath = null;
+                item.ReportJsonPath = null;
+                item.IsRunning = false;
+                item.StepResults.Clear();
+            }
+
+            _state.Passed = 0;
+            _state.Failed = 0;
+            _state.Errors = 0;
+            _state.Skipped = 0;
+            _state.StatusText = "Idle";
+
+            RefreshUi();
+            RefreshDetailPanel();
+        }
+
+        private async void RunAll()
+        {
+            await RunFilteredAsync(c => true);
+        }
+
+        private async void RunSelected()
+        {
+            var selectedPaths = _state.Cases
+                .Where(c => c.IsChecked)
+                .Select(c => c.YamlPath)
+                .Distinct()
+                .Select(p => Path.GetFullPath(p))
+                .ToList();
+
+            if (selectedPaths.Count == 0)
+            {
+                ShowNotification(new GUIContent("No cases selected."));
+                return;
+            }
+
+            await ExecuteBatchAsync(selectedPaths, _ => true);
+        }
+
+        private async void RunFailed()
+        {
+            var failedPaths = _state.Cases
+                .Where(c => c.Status == TestStatus.Failed || c.Status == TestStatus.Error)
+                .Select(c => c.YamlPath)
+                .Distinct()
+                .Select(p => Path.GetFullPath(p))
+                .ToList();
+
+            if (failedPaths.Count == 0)
+            {
+                ShowNotification(new GUIContent("No failed cases to rerun."));
+                return;
+            }
+
+            await ExecuteBatchAsync(failedPaths, _ => true);
+        }
+
+        private async System.Threading.Tasks.Task RunFilteredAsync(Func<TestRunnerCaseItem, bool> filter)
+        {
+            var yamlPaths = _state.Cases
+                .Where(filter)
+                .Select(c => c.YamlPath)
+                .Distinct()
+                .Select(p => Path.GetFullPath(p))
+                .ToList();
+
+            if (yamlPaths.Count == 0)
+            {
+                ShowNotification(new GUIContent("No YAML cases found."));
+                return;
+            }
+
+            await ExecuteBatchAsync(yamlPaths, _ => true);
+        }
+
+        private async System.Threading.Tasks.Task ExecuteBatchAsync(List<string> yamlPaths, Func<string, bool> filter)
+        {
+            if (_state.IsRunning)
+            {
+                ShowNotification(new GUIContent("A test run is already in progress."));
+                return;
+            }
+
+            _runCts = new CancellationTokenSource();
+            _state.IsRunning = true;
+            _state.StatusText = "Running";
+            _state.Total = yamlPaths.Count;
+            _state.Passed = 0;
+            _state.Failed = 0;
+            _state.Errors = 0;
+            _state.Skipped = 0;
+            _state.CurrentYamlPath = null;
+            _state.CurrentCaseName = null;
+
+            // Reset states for files in this run
+            foreach (var item in _state.Cases)
+            {
+                if (item.IsGroupHeader) continue;
+                if (yamlPaths.Any(p => StringComparer.OrdinalIgnoreCase.Equals(p, Path.GetFullPath(item.YamlPath))))
+                {
+                    item.Status = TestStatus.None;
+                    item.DurationMs = 0;
+                    item.ErrorCode = null;
+                    item.ErrorMessage = null;
+                    item.IsRunning = false;
+                    item.StepResults.Clear();
+                }
+            }
+
+            RefreshUi();
+
+            string reportRoot = string.IsNullOrWhiteSpace(_state.ReportPath) ? "Reports/TestRunner" : _state.ReportPath;
+            string screenshotRoot = Path.Combine(reportRoot, "Screenshots");
+            var suite = new TestSuiteResult { StartedAtUtc = DateTimeOffset.UtcNow.ToString("O") };
+            var runner = new TestRunner();
+            var reportPaths = new ReportPathBuilder();
+
+            try
+            {
+                foreach (string yamlPath in yamlPaths)
+                {
+                    if (_runCts.Token.IsCancellationRequested) break;
+
+                    _state.CurrentYamlPath = TestRunnerPathUtility.MakeProjectRelative(yamlPath);
+                    _state.CurrentCaseName = null;
+
+                    var caseItem = _state.Cases.FirstOrDefault(c =>
+                        StringComparer.OrdinalIgnoreCase.Equals(c.YamlPath, _state.CurrentYamlPath));
+                    if (caseItem != null) caseItem.IsRunning = true;
+                    RefreshUi();
+
+                    TestResult result;
+                    try
+                    {
+                        result = await runner.RunFileAsync(
+                            yamlPath,
+                            new TestOptions
+                            {
+                                Headed = _state.Headed,
+                                DebugOnFailure = false,
+                                ReportOutputPath = reportRoot,
+                                ScreenshotPath = screenshotRoot,
+                                ScreenshotOnFailure = _state.ScreenshotOnFailure,
+                                StopOnFirstFailure = _state.StopOnFirstFailure,
+                                ContinueOnStepFailure = _state.ContinueOnStepFailure,
+                                DefaultTimeoutMs = _state.DefaultTimeoutMs,
+                                RequireOfficialHost = _state.RequireOfficialHost,
+                                RequireOfficialPointerDriver = _state.RequireOfficialPointerDriver,
+                                RequireInputSystemKeyboardDriver = _state.RequireInputSystemKeyboardDriver,
+                                EnableVerboseLog = _state.EnableVerboseLog,
+                            },
+                            null,
+                            context =>
+                            {
+                                _activeContext = context;
+                                _state.CurrentCaseName = context.CaseName;
+                                if (caseItem != null) caseItem.CaseName = context.CaseName;
+                                RefreshUi();
+                            });
+                    }
+                    catch (Exception ex)
+                    {
+                        result = new TestResult
+                        {
+                            CaseName = Path.GetFileNameWithoutExtension(yamlPath),
+                            Status = TestStatus.Error,
+                            StartedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+                            EndedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+                            ErrorCode = ex is UnityUIFlowException flowEx ? flowEx.ErrorCode : ErrorCodes.CliExecutionError,
+                            ErrorMessage = ex.Message,
+                        };
+                    }
+                    finally
+                    {
+                        _activeContext = null;
+                    }
+
+                    suite.CaseResults.Add(result);
+                    ApplyCounters(result.Status);
+
+                    if (caseItem != null)
+                    {
+                        caseItem.IsRunning = false;
+                        caseItem.CaseName = result.CaseName;
+                        caseItem.Status = result.Status;
+                        caseItem.DurationMs = result.DurationMs;
+                        caseItem.ErrorCode = result.ErrorCode;
+                        caseItem.ErrorMessage = result.ErrorMessage;
+                        caseItem.StepResults = result.StepResults ?? new List<StepResult>();
+                        var failedStep = result.StepResults?.FirstOrDefault(s => s.Status == TestStatus.Failed || s.Status == TestStatus.Error);
+                        caseItem.FailedStepName = failedStep?.DisplayName;
+                        caseItem.FailedStepError = failedStep?.ErrorMessage;
+                        caseItem.ReportMarkdownPath = TestRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseMarkdownPath(reportRoot, result.CaseName));
+                        caseItem.ReportJsonPath = TestRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseJsonPath(reportRoot, result.CaseName));
+                    }
+
+                    _state.CurrentCaseName = null;
+                    _state.StatusText = result.Status == TestStatus.Passed
+                        ? $"Passed: {result.CaseName}"
+                        : $"Failed: {result.CaseName}";
+                    RefreshUi();
+
+                    if (_state.StopOnFirstFailure && (result.Status == TestStatus.Failed || result.Status == TestStatus.Error))
+                        break;
+                }
+
+                suite.Total = suite.CaseResults.Count;
+                suite.Passed = _state.Passed;
+                suite.Failed = _state.Failed;
+                suite.Errors = _state.Errors;
+                suite.Skipped = _state.Skipped;
+                suite.EndedAtUtc = DateTimeOffset.UtcNow.ToString("O");
+                suite.ExitCode = ExitCodeResolver.Resolve(suite);
+
+                var reporter = new MarkdownReporter(new ReporterOptions
+                {
+                    ReportRootPath = reportRoot,
+                    ScreenshotRootPath = screenshotRoot,
+                    SuiteName = "test-runner",
+                });
+                reporter.WriteSuiteReport(suite);
+                new CiArtifactManifestWriter().Write(reportRoot);
+
+                _state.StatusText = _runCts.Token.IsCancellationRequested ? "Aborted"
+                    : suite.Failed > 0 || suite.Errors > 0 ? "Failed"
+                    : "Completed";
+            }
+            catch (Exception ex)
+            {
+                _state.StatusText = "Failed";
+                Debug.LogError($"[UnityUIFlow] Test Runner batch error: {ex.Message}");
+            }
+            finally
+            {
+                _state.IsRunning = false;
+                _state.CurrentYamlPath = null;
+                _state.CurrentCaseName = null;
+                _runCts?.Dispose();
+                _runCts = null;
+                _activeContext = null;
+                RefreshUi();
+                RefreshDetailPanel();
+            }
+        }
+
+        private void CancelRun()
+        {
+            if (!_state.IsRunning)
+            {
+                ShowNotification(new GUIContent("No active test run."));
+                return;
+            }
+            _runCts?.Cancel();
+            _activeContext?.RuntimeController?.Stop();
+            ShowNotification(new GUIContent("Cancellation requested."));
+        }
+
+        private void ApplyCounters(TestStatus status)
+        {
+            switch (status)
+            {
+                case TestStatus.Passed: _state.Passed++; break;
+                case TestStatus.Failed: _state.Failed++; break;
+                case TestStatus.Error: _state.Errors++; break;
+                case TestStatus.Skipped: _state.Skipped++; break;
+            }
+        }
+
+        private void RefreshUi()
+        {
+            if (_statusLabel == null) return;
+
+            _statusLabel.text = $"Status: {_state.StatusText}";
+            _currentCaseLabel.text = $"Current: {(_state.CurrentCaseName ?? "-")}";
+            int totalCases = _state.Cases.Count;
+            _statsLabel.text = $"用例: {totalCases}  通过: {_state.Passed}  失败: {_state.Failed}  错误: {_state.Errors}  跳过: {_state.Skipped}";
+
+            _runAllButton?.SetEnabled(!_state.IsRunning);
+            _runSelectedButton?.SetEnabled(!_state.IsRunning && _state.Cases.Any(c => c.IsChecked));
+            _rerunFailedButton?.SetEnabled(!_state.IsRunning && _state.Cases.Any(c => c.Status == TestStatus.Failed || c.Status == TestStatus.Error));
+            _cancelButton?.SetEnabled(_state.IsRunning);
+            _refreshButton?.SetEnabled(!_state.IsRunning);
+
+            var timeoutField = rootVisualElement.Q<IntegerField>("test-runner-timeout");
+            timeoutField?.SetEnabled(!_state.IsRunning);
+
+            // Update progress bar
+            var progressBar = rootVisualElement.Q<ProgressBar>("test-runner-progress");
+            if (progressBar != null)
+            {
+                if (_state.IsRunning && _state.Total > 0)
+                {
+                    int completed = _state.Passed + _state.Failed + _state.Errors + _state.Skipped;
+                    progressBar.value = (float)completed / _state.Total * 100f;
+                    progressBar.title = $"{completed} / {_state.Total}";
+                }
+                else
+                {
+                    progressBar.value = 0;
+                    progressBar.title = string.Empty;
+                }
+            }
+
+            _caseListView?.Rebuild();
+            Repaint();
+        }
+
+        // ── HeadedRunEventBus handlers ──
+
+        private void OnRunAttached(RuntimeController controller, string caseName)
+        {
+            _state.CurrentCaseName = caseName;
+            RefreshUi();
+        }
+
+        private void OnStepStarted(ExecutableStep step)
+        {
+            _state.StatusText = $"Running: {step.DisplayName}";
+            _state.CurrentCaseName = step.DisplayName;
+            RefreshUi();
+        }
+
+        private void OnStepCompleted(ExecutableStep step, StepResult result, VisualElement element)
+        {
+            if (element != null)
+            {
+                var targetWindow = Resources.FindObjectsOfTypeAll<EditorWindow>()
+                    .FirstOrDefault(w => w != null && w.rootVisualElement?.panel == element.panel);
+                if (targetWindow != null)
+                    _overlayRenderer.Attach(targetWindow);
+                _overlayRenderer.Highlight(element);
+            }
+            else if (result.Status != TestStatus.Failed)
+            {
+                _overlayRenderer.Clear();
+            }
+
+            // Update current case item with step result for real-time UI refresh
+            var caseItem = _state.Cases.FirstOrDefault(c =>
+                StringComparer.OrdinalIgnoreCase.Equals(c.YamlPath, _state.CurrentYamlPath));
+            if (caseItem != null)
+            {
+                if (caseItem.StepResults == null)
+                    caseItem.StepResults = new List<StepResult>();
+                var existing = caseItem.StepResults.FirstOrDefault(s => s.StepId == result.StepId);
+                if (existing != null)
+                    caseItem.StepResults.Remove(existing);
+                caseItem.StepResults.Add(result);
+            }
+
+            _state.StatusText = result.Status == TestStatus.Passed
+                ? $"Step passed: {step.DisplayName}"
+                : $"Step {result.Status}: {step.DisplayName}";
+            RefreshUi();
+            RefreshDetailPanel();
+        }
+
+        private void OnHighlightedElementChanged(ExecutableStep step, VisualElement element)
+        {
+            if (element == null) return;
+            var targetWindow = Resources.FindObjectsOfTypeAll<EditorWindow>()
+                .FirstOrDefault(w => w != null && w.rootVisualElement?.panel == element.panel);
+            if (targetWindow != null && targetWindow != this)
+                _overlayRenderer.Attach(targetWindow);
+            _overlayRenderer.Highlight(element);
+        }
+
+        private void OnFailure(ExecutableStep step, StepResult result)
+        {
+            _state.StatusText = $"Step Failed: {step.DisplayName}";
+            RefreshUi();
+            RefreshDetailPanel();
+        }
+
+        private void OnRunFinished(TestResult result)
+        {
+            _overlayRenderer.Clear();
+            RefreshUi();
+            RefreshDetailPanel();
+        }
+    }
+
+    internal static class TestRunnerPathUtility
+    {
+        public static string MakeProjectRelative(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return path;
+            string fullPath = Path.GetFullPath(path);
+            string projectRoot = UnityUIFlowUtility.AppendDirectorySeparator(Path.GetFullPath(Directory.GetCurrentDirectory()));
+            if (fullPath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
+                return fullPath.Substring(projectRoot.Length).Replace('\\', '/');
+            return fullPath;
+        }
+    }
+
+    internal static class TestRunnerPreferences
+    {
+        private const string Prefix = "UnityUIFlow.TestRunner.";
+
+        public static void Load(TestRunnerViewState state)
+        {
+            state.TargetDirectory = EditorPrefs.GetString(Prefix + nameof(TestRunnerViewState.TargetDirectory), "Assets/Examples/Yaml");
+            state.ReportPath = EditorPrefs.GetString(Prefix + nameof(TestRunnerViewState.ReportPath), "Reports/TestRunner");
+            state.SearchFilter = EditorPrefs.GetString(Prefix + nameof(TestRunnerViewState.SearchFilter), string.Empty);
+            state.Headed = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.Headed), true);
+            state.StopOnFirstFailure = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.StopOnFirstFailure), false);
+            state.ContinueOnStepFailure = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.ContinueOnStepFailure), false);
+            state.ScreenshotOnFailure = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.ScreenshotOnFailure), true);
+            state.EnableVerboseLog = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.EnableVerboseLog), UnityUIFlowMenuItems.IsVerboseLogEnabled);
+            state.RequireOfficialHost = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.RequireOfficialHost), UnityUIFlowProjectSettings.instance.RequireOfficialHostByDefault);
+            state.RequireOfficialPointerDriver = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.RequireOfficialPointerDriver), UnityUIFlowProjectSettings.instance.RequireOfficialPointerDriverByDefault);
+            state.RequireInputSystemKeyboardDriver = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.RequireInputSystemKeyboardDriver), UnityUIFlowProjectSettings.instance.RequireInputSystemKeyboardDriverByDefault);
+            state.DefaultTimeoutMs = EditorPrefs.GetInt(Prefix + nameof(TestRunnerViewState.DefaultTimeoutMs), 3000);
+        }
+
+        public static void Save(TestRunnerViewState state)
+        {
+            EditorPrefs.SetString(Prefix + nameof(TestRunnerViewState.TargetDirectory), state.TargetDirectory ?? "Assets/Examples/Yaml");
+            EditorPrefs.SetString(Prefix + nameof(TestRunnerViewState.ReportPath), state.ReportPath ?? "Reports/TestRunner");
+            EditorPrefs.SetString(Prefix + nameof(TestRunnerViewState.SearchFilter), state.SearchFilter ?? string.Empty);
+            EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.Headed), state.Headed);
+            EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.StopOnFirstFailure), state.StopOnFirstFailure);
+            EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.ContinueOnStepFailure), state.ContinueOnStepFailure);
+            EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.ScreenshotOnFailure), state.ScreenshotOnFailure);
+            EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.EnableVerboseLog), state.EnableVerboseLog);
+            EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.RequireOfficialHost), state.RequireOfficialHost);
+            EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.RequireOfficialPointerDriver), state.RequireOfficialPointerDriver);
+            EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.RequireInputSystemKeyboardDriver), state.RequireInputSystemKeyboardDriver);
+            EditorPrefs.SetInt(Prefix + nameof(TestRunnerViewState.DefaultTimeoutMs), state.DefaultTimeoutMs);
+        }
+    }
+}

@@ -444,7 +444,7 @@ namespace UnityUIFlow
                 paths.Add(UnityUIFlowUtility.EnsureRelativeTo(fullRoot, file));
             }
 
-            _jsonWriter.WriteArtifactManifest(paths, Path.Combine(fullRoot, "artifacts.json"));
+            _jsonWriter.WriteArtifactManifest(paths, new ReportPathBuilder().BuildArtifactsPath(reportRootPath));
         }
     }
 

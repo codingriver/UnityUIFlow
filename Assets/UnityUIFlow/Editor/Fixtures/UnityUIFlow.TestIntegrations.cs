@@ -554,6 +554,8 @@ namespace UnityUIFlow
 
         public bool HasExecutableOfficialHost => _officialHostBridge != null;
 
+        public EditorWindow HostEditorWindow => _officialHostBridge?.Window;
+
         public bool HasExecutableOfficialPointerDriver => PointerDriver != null && PointerDriver.IsOfficial;
 
         public bool HasExecutableOfficialKeyboardDriver => PanelSimulator != null;

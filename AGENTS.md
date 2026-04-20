@@ -221,6 +221,62 @@ Agent 应根据当前会话实际暴露的工具名选择等价调用方式。
 - ✅ “当前仅完成实现，未完成 MCP 验证。”
 - ❌ “测试已通过”（未真实执行时禁止）。
 
+### 6.6 批量测试分片强制规则
+
+> **核心原则：单次调用不得超过 15 个 YAML 文件；超过时必须由调用方分片，逐批发送。**
+
+Unity Editor 同一时间只能执行一个 `ExecutionContext`（`EDITOR_BUSY` 锁）。单次传入过多 YAML 文件会导致：
+- MCP 调用响应超时（默认 30s，Unity 侧实际执行可能 300s+）
+- Unity 主线程被长时间占用，无法干预
+- 中途若发生 Domain Reload，执行状态丢失且无法恢复
+
+#### 硬性规则
+
+1. **单次 `unity_uiflow_run_batch` 的 `yamlPaths` 不得超过 15 个文件。**
+2. **用例总数超过 15 时，调用方必须在 Agent 侧分片，逐批发送。** 默认 `batch_size = 10`，可根据单文件平均耗时调整，但上限为 15。
+3. **必须等待上一批 `status` 为 `completed` / `failed` / `aborted` 后，才能发送下一批。** Unity 侧存在 `EDITOR_BUSY` 锁，并发调用会返回 `EDITOR_BUSY` 错误。
+4. **优先使用 `tools/batch_yaml_runner.py`** 执行批量测试。该脚本自动完成：目录扫描 → 按 `batch_size` 分片 → 逐批调用 MCP → 等待完成 → 汇总结果 → 保存失败清单支持重试。
+5. **若直接调用 MCP 工具**，必须复现相同的分片逻辑：
+   - 切片后每批调用 `unity_uiflow_run_batch`（或 `unity_uiflow_run_file` 逐条）
+   - 轮询等待当前 batch 完成（通过返回的 `executionId` 查询 `unity_uiflow_run_file` / `unity_uiflow_run_suite` 等结果）
+   - 再发送下一批
+
+#### 标准批量执行示例
+
+```powershell
+# 使用 Agent 侧批量脚本（推荐）
+python tools/batch_yaml_runner.py `
+  --yaml-dir Assets/Examples/Yaml `
+  --batch-size 10 `
+  --report-dir Reports/AgentBatch `
+  --headed true
+
+# 重试某一批
+python tools/batch_yaml_runner.py `
+  --retry-from Reports/AgentBatch/batch_003_failed.json
+```
+
+```text
+# 单条 MCP 工具调用示例（仅适用于 ≤15 个文件）
+工具: unity_uiflow_run_batch
+参数:
+  - yamlPaths: [file1.yaml, file2.yaml, ..., file10.yaml]
+  - batchSize: 10
+  - batchOffset: 0
+  - headed: true
+  - reportOutputPath: Reports/AgentBatch/batch_000
+  - stopOnFirstFailure: false
+  - defaultTimeoutMs: 10000
+```
+
+#### 执行模型
+
+Agent 分片 → MCP 转发 → Unity 串行执行（同 batch 内文件逐个执行）→ MCP 轮询等待 → Agent 收到结果 → 发送下一批
+
+- 同一 batch 内的用例在 Unity 主线程上**串行执行**（打开窗口 → 执行 → 关闭窗口，循环）
+- MCP 轮询间隔 500ms，不阻塞 Unity
+- 每批有独立超时（默认 `120s + defaultTimeoutMs/1000 × batch_size + 120s`）
+
 ---
 
 ## 7. 构建与执行命令
@@ -283,7 +339,28 @@ Agent 应根据当前会话实际暴露的工具名选择等价调用方式。
 
 ### 8.2 报告目录
 
-所有执行输出默认落入 `./Reports/`：
+所有执行输出默认落入 `./Reports/`（或传入的 `reportPath`）。**报告根目录下仅保留两个 Markdown 汇总文件**，其余文件全部归入子目录：
+
+```
+Reports/
+├── full_reports.md              ← Suite 执行后生成（全量汇总：结果、耗时、起止时间）
+├── single_reports.md            ← 单文件执行后生成（单个用例详情）
+├── Cases/
+│   ├── {caseName}.md            ← 单用例 Markdown 报告
+│   ├── {caseName}.json          ← 单用例 JSON 报告
+│   └── suite-report.json        ← Suite JSON 汇总
+├── Screenshots/
+│   └── {caseName}-{step}-{tag}-{timestamp}.png
+└── Artifacts/
+    └── artifacts.json           ← CLI 产物清单
+```
+
+**规则**：
+- `RunFileAsync`（单文件）→ 生成 `single_reports.md` + `Cases/{caseName}.md+json`
+- `RunSuiteAsync`（Suite）→ 生成 `full_reports.md` + `Cases/` 下各用例报告
+- MCP `unityuiflow.run` 单文件 → `single_reports.md`
+- MCP `unityuiflow.run` 多文件 → `full_reports.md`
+- 旧的 `suite-report.md` 已更名为 `full_reports.md`，旧的 `{caseName}.md` 已移至 `Cases/` 子目录
 
 | 子目录 | 来源 |
 |--------|------|
@@ -291,7 +368,6 @@ Agent 应根据当前会话实际暴露的工具名选择等价调用方式。
 | `Examples/` | 示例用例执行 |
 | `HeadedAll/` | Headed 模式全量套件 |
 | `McpQuickTest/`、`McpRegression/`、`McpUiFlowFile/` 等 | MCP 驱动执行 |
-| `Screenshots/` | 失败截图汇总 |
 
 ---
 

@@ -229,6 +229,23 @@ namespace UnityUIFlow
             Register("assert_disabled", typeof(AssertDisabledAction));
             Register("assert_property", typeof(AssertPropertyAction));
             Register("screenshot", typeof(ScreenshotAction));
+
+            // IMGUI actions (Tier 1 + Tier 2 + Extended)
+            Register("imgui_click", typeof(ImguiClickAction));
+            Register("imgui_double_click", typeof(ImguiDoubleClickAction));
+            Register("imgui_right_click", typeof(ImguiRightClickAction));
+            Register("imgui_hover", typeof(ImguiHoverAction));
+            Register("imgui_type", typeof(ImguiTypeAction));
+            Register("imgui_focus", typeof(ImguiFocusAction));
+            Register("imgui_scroll", typeof(ImguiScrollAction));
+            Register("imgui_select_option", typeof(ImguiSelectOptionAction));
+            Register("imgui_press_key", typeof(ImguiPressKeyAction));
+            Register("imgui_press_key_combination", typeof(ImguiPressKeyCombinationAction));
+            Register("imgui_read_value", typeof(ImguiReadValueAction));
+            Register("imgui_assert_text", typeof(ImguiAssertTextAction));
+            Register("imgui_assert_visible", typeof(ImguiAssertVisibleAction));
+            Register("imgui_assert_value", typeof(ImguiAssertValueAction));
+            Register("imgui_wait", typeof(ImguiWaitAction));
         }
 
         private void RegisterCustomActions()
