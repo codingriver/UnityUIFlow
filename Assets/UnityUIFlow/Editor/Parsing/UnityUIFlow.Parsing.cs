@@ -807,9 +807,9 @@ namespace UnityUIFlow
             for (int rowIndex = 0; rowIndex < rows.Count; rowIndex++)
             {
                 IReadOnlyDictionary<string, string> data = rows[rowIndex];
-                AppendSteps(plan.Steps, definition.Fixture.Setup, data, StepPhase.Setup, options);
-                AppendSteps(plan.Steps, definition.Steps, data, StepPhase.Main, options);
-                AppendSteps(plan.Steps, definition.Fixture.Teardown, data, StepPhase.Teardown, options);
+                AppendSteps(plan.Steps, definition.Fixture.Setup, data, StepPhase.Setup, options, rowIndex);
+                AppendSteps(plan.Steps, definition.Steps, data, StepPhase.Main, options, rowIndex);
+                AppendSteps(plan.Steps, definition.Fixture.Teardown, data, StepPhase.Teardown, options, rowIndex);
             }
 
             if (plan.Steps.Count == 0)
@@ -825,7 +825,7 @@ namespace UnityUIFlow
             return plan;
         }
 
-        private void AppendSteps(List<ExecutableStep> target, List<StepDefinition> steps, IReadOnlyDictionary<string, string> data, StepPhase phase, TestOptions options)
+        private void AppendSteps(List<ExecutableStep> target, List<StepDefinition> steps, IReadOnlyDictionary<string, string> data, StepPhase phase, TestOptions options, int iterationIndex)
         {
             if (steps == null)
             {
@@ -834,11 +834,11 @@ namespace UnityUIFlow
 
             foreach (StepDefinition step in steps)
             {
-                target.Add(CompileStep(step, data, phase, options));
+                target.Add(CompileStep(step, data, phase, options, iterationIndex));
             }
         }
 
-        private ExecutableStep CompileStep(StepDefinition step, IReadOnlyDictionary<string, string> data, StepPhase phase, TestOptions options)
+        private ExecutableStep CompileStep(StepDefinition step, IReadOnlyDictionary<string, string> data, StepPhase phase, TestOptions options, int iterationIndex)
         {
             string displayName = TemplateRenderer.Render(step.Name ?? step.Action ?? "repeat_while", data, step.Name ?? step.Action ?? "repeat_while");
             if (step.RepeatWhile != null)
@@ -847,6 +847,7 @@ namespace UnityUIFlow
                 {
                     DisplayName = displayName,
                     Phase = phase,
+                    IterationIndex = iterationIndex,
                     TimeoutMs = !string.IsNullOrWhiteSpace(step.Timeout)
                         ? DurationParser.ParseToMilliseconds(TemplateRenderer.Render(step.Timeout, data, displayName), displayName)
                         : options.DefaultTimeoutMs,
@@ -866,7 +867,7 @@ namespace UnityUIFlow
 
                 foreach (StepDefinition loopStep in step.RepeatWhile.Steps)
                 {
-                    compiledLoop.Loop.Steps.Add(CompileStep(loopStep, data, phase, options));
+                    compiledLoop.Loop.Steps.Add(CompileStep(loopStep, data, phase, options, iterationIndex));
                 }
 
                 return compiledLoop;
@@ -881,6 +882,7 @@ namespace UnityUIFlow
             {
                 DisplayName = displayName,
                 ActionName = step.Action,
+                IterationIndex = iterationIndex,
                 TimeoutMs = !string.IsNullOrWhiteSpace(step.Timeout)
                     ? DurationParser.ParseToMilliseconds(TemplateRenderer.Render(step.Timeout, data, displayName), displayName)
                     : options.DefaultTimeoutMs,

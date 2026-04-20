@@ -83,6 +83,7 @@ namespace UnityUIFlow
         private Button _selectFailedButton;
         private Label _statsLabel;
         private ListView _caseListView;
+        private int _lastCheckedIndex = -1;
 
         // Right panel (details)
         private VisualElement _detailNameRow;
@@ -286,43 +287,48 @@ namespace UnityUIFlow
             rightPanel.style.paddingBottom = 12;
             rightPanel.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f);
 
+            var scrollView = new ScrollView();
+            scrollView.name = "test-runner-detail-scroll";
+            scrollView.style.flexGrow = 1;
+            scrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+            rightPanel.Add(scrollView);
+
             var detailTitle = new Label("Test Details") { name = "test-runner-detail-title" };
             detailTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
             detailTitle.style.fontSize = 14;
             detailTitle.style.marginBottom = 10;
-            rightPanel.Add(detailTitle);
+            scrollView.Add(detailTitle);
 
             _detailNameRow = CreateDetailRow("Name:", "-");
             _detailPathRow = CreateDetailRow("YAML Path:", "-");
             _detailStatusRow = CreateDetailRow("Status:", "-");
             _detailDurationRow = CreateDetailRow("Duration:", "-");
             _detailStepsRow = CreateDetailRow("Steps:", "-");
-            rightPanel.Add(_detailNameRow);
-            rightPanel.Add(_detailPathRow);
-            rightPanel.Add(_detailStatusRow);
-            rightPanel.Add(_detailDurationRow);
-            rightPanel.Add(_detailStepsRow);
+            scrollView.Add(_detailNameRow);
+            scrollView.Add(_detailPathRow);
+            scrollView.Add(_detailStatusRow);
+            scrollView.Add(_detailDurationRow);
+            scrollView.Add(_detailStepsRow);
 
             var errorTitle = new Label("Error") { name = "test-runner-error-title" };
             errorTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
             errorTitle.style.marginTop = 12;
             errorTitle.style.marginBottom = 4;
-            rightPanel.Add(errorTitle);
+            scrollView.Add(errorTitle);
 
             _detailErrorLabel = new Label("No error") { name = "test-runner-error" };
             _detailErrorLabel.style.whiteSpace = WhiteSpace.Normal;
             _detailErrorLabel.style.color = new Color(0.9f, 0.3f, 0.3f);
-            rightPanel.Add(_detailErrorLabel);
+            scrollView.Add(_detailErrorLabel);
 
             var stepsTitle = new Label("Steps") { name = "test-runner-steps-title" };
             stepsTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
             stepsTitle.style.marginTop = 12;
             stepsTitle.style.marginBottom = 4;
-            rightPanel.Add(stepsTitle);
+            scrollView.Add(stepsTitle);
 
             _detailStepsContainer = new VisualElement { name = "test-runner-steps" };
-            _detailStepsContainer.style.flexGrow = 1;
-            rightPanel.Add(_detailStepsContainer);
+            scrollView.Add(_detailStepsContainer);
 
             var actionRow = new VisualElement();
             actionRow.style.flexDirection = FlexDirection.Row;
@@ -489,13 +495,45 @@ namespace UnityUIFlow
                 item.IsChecked = evt.newValue;
                 _caseListView?.Rebuild();
             });
+            checkToggle.RegisterCallback<PointerDownEvent>(evt => evt.StopPropagation());
 
             return row;
         }
 
         private void OnCaseItemPointerDown(PointerDownEvent evt)
         {
-            // Single flat list; no expansion needed
+            int idx = (int)((evt.currentTarget as VisualElement)?.userData ?? -1);
+            if (idx < 0) return;
+
+            var filtered = GetFilteredCases();
+            if (idx >= filtered.Count) return;
+
+            bool isCtrl = (evt.modifiers & EventModifiers.Control) != 0;
+            bool isShift = (evt.modifiers & EventModifiers.Shift) != 0;
+
+            if (isShift && _lastCheckedIndex >= 0 && _lastCheckedIndex < filtered.Count)
+            {
+                int start = Mathf.Min(_lastCheckedIndex, idx);
+                int end = Mathf.Max(_lastCheckedIndex, idx);
+                for (int i = start; i <= end; i++)
+                {
+                    filtered[i].IsChecked = true;
+                }
+            }
+            else if (isCtrl)
+            {
+                filtered[idx].IsChecked = !filtered[idx].IsChecked;
+                _lastCheckedIndex = idx;
+            }
+            else
+            {
+                foreach (var item in filtered)
+                    item.IsChecked = false;
+                filtered[idx].IsChecked = true;
+                _lastCheckedIndex = idx;
+            }
+
+            _caseListView?.Rebuild();
         }
 
         private void OnListKeyDown(KeyDownEvent evt)
@@ -841,81 +879,159 @@ namespace UnityUIFlow
 
         private int RenderStepDetails(TestRunnerCaseItem selected)
         {
-            var stepInfos = new List<(string Name, string Phase)>();
+            TestCaseDefinition definition = null;
             try
             {
                 var parser = new YamlTestCaseParser();
-                TestCaseDefinition definition = parser.ParseFile(selected.YamlPath);
-                if (definition.Fixture?.Setup != null)
-                {
-                    foreach (var step in definition.Fixture.Setup)
-                    {
-                        stepInfos.Add((step.Name ?? step.Action ?? "setup", "Setup"));
-                    }
-                }
-                if (definition.Steps != null)
-                {
-                    foreach (var step in definition.Steps)
-                    {
-                        stepInfos.Add((step.Name ?? step.Action ?? "step", "Main"));
-                    }
-                }
+                definition = parser.ParseFile(selected.YamlPath);
             }
             catch
             {
                 _detailStepsContainer.Add(new Label("Unable to parse step definitions from YAML."));
-                return;
+                return 0;
             }
 
-            if (stepInfos.Count == 0)
+            var setupInfos = new List<(string Name, string PhaseLabel)>();
+            var mainInfos = new List<(string Name, string PhaseLabel)>();
+            var teardownInfos = new List<(string Name, string PhaseLabel)>();
+
+            if (definition.Fixture?.Setup != null)
+            {
+                foreach (var step in definition.Fixture.Setup)
+                    setupInfos.Add((step.Name ?? step.Action ?? "setup", "Setup"));
+            }
+            if (definition.Steps != null)
+            {
+                foreach (var step in definition.Steps)
+                    mainInfos.Add((step.Name ?? step.Action ?? "step", "Main"));
+            }
+            if (definition.Fixture?.Teardown != null)
+            {
+                foreach (var step in definition.Fixture.Teardown)
+                    teardownInfos.Add((step.Name ?? step.Action ?? "teardown", "Teardown"));
+            }
+
+            int templateStepCount = setupInfos.Count + mainInfos.Count + teardownInfos.Count;
+            if (templateStepCount == 0)
             {
                 _detailStepsContainer.Add(new Label("No steps defined in this test case."));
                 return 0;
             }
 
-            // Build a lookup from step index to result
-            var resultByIndex = new List<StepResult>();
+            int rowCount = definition.Data?.Rows?.Count ?? 0;
+            if (rowCount == 0) rowCount = 1;
+
+            // Group results by iteration index
+            var resultsByIteration = new Dictionary<int, List<StepResult>>();
             if (selected.StepResults != null)
             {
                 foreach (var sr in selected.StepResults)
                 {
-                    resultByIndex.Add(sr);
+                    int idx = sr.IterationIndex;
+                    if (!resultsByIteration.ContainsKey(idx))
+                        resultsByIteration[idx] = new List<StepResult>();
+                    resultsByIteration[idx].Add(sr);
                 }
             }
 
-            for (int i = 0; i < stepInfos.Count; i++)
+            bool hasMultipleIterations = rowCount > 1 || resultsByIteration.Count > 1;
+            int displayedStepCount = 0;
+
+            for (int iteration = 0; iteration < rowCount; iteration++)
             {
-                var (name, phase) = stepInfos[i];
-                string displayName = string.IsNullOrWhiteSpace(name) ? $"{phase} step {i + 1}" : name;
+                if (hasMultipleIterations)
+                {
+                    string iterationTitle = $"Iteration {iteration + 1}";
+                    if (iteration < (definition.Data?.Rows?.Count ?? 0) && definition.Data.Rows[iteration].Count > 0)
+                    {
+                        var rowData = definition.Data.Rows[iteration];
+                        string dataSummary = string.Join(", ", rowData.Select(kv => $"{kv.Key}={kv.Value}"));
+                        iterationTitle += $" ({dataSummary})";
+                    }
 
-                // Match result by index only; name-based lookup is unreliable when multiple steps share the same name
-                StepResult result = i < resultByIndex.Count ? resultByIndex[i] : null;
+                    var headerRow = new VisualElement();
+                    headerRow.style.flexDirection = FlexDirection.Row;
+                    headerRow.style.marginTop = iteration == 0 ? 0 : 10;
+                    headerRow.style.marginBottom = 4;
+                    headerRow.style.alignItems = Align.Center;
 
-                var stepRow = new VisualElement();
-                stepRow.style.flexDirection = FlexDirection.Row;
-                stepRow.style.marginBottom = 2;
-                stepRow.style.alignItems = Align.Center;
+                    var headerIcon = new Label("▸");
+                    headerIcon.style.width = 16;
+                    headerIcon.style.color = new Color(0.6f, 0.8f, 1f);
+                    headerIcon.style.unityFontStyleAndWeight = FontStyle.Bold;
 
-                var icon = new Label(result != null ? GetStatusIcon(result.Status, false) : "○");
-                icon.style.width = 16;
-                icon.style.color = result != null ? GetStatusColor(result.Status, false) : new Color(0.45f, 0.45f, 0.45f);
+                    var headerLabel = new Label(iterationTitle);
+                    headerLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+                    headerLabel.style.color = new Color(0.6f, 0.8f, 1f);
+                    headerLabel.style.fontSize = 12;
 
-                var nameLabel = new Label(displayName);
-                nameLabel.style.flexGrow = 1;
-                nameLabel.style.color = result != null ? new Color(0.8f, 0.8f, 0.8f) : new Color(0.5f, 0.5f, 0.5f);
+                    headerRow.Add(headerIcon);
+                    headerRow.Add(headerLabel);
+                    _detailStepsContainer.Add(headerRow);
+                }
 
-                var durLabel = new Label(result != null && result.DurationMs > 0 ? $"{result.DurationMs}ms" : "");
-                durLabel.style.width = 50;
-                durLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
-                durLabel.style.fontSize = 10;
-                durLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+                resultsByIteration.TryGetValue(iteration, out var iterationResults);
+                var setupResults = iterationResults?.Where(r => r.Phase == StepPhase.Setup).ToList();
+                var mainResults = iterationResults?.Where(r => r.Phase == StepPhase.Main).ToList();
+                var teardownResults = iterationResults?.Where(r => r.Phase == StepPhase.Teardown).ToList();
 
-                stepRow.Add(icon);
-                stepRow.Add(nameLabel);
-                stepRow.Add(durLabel);
-                _detailStepsContainer.Add(stepRow);
+                for (int i = 0; i < setupInfos.Count; i++)
+                {
+                    var (name, phaseLabel) = setupInfos[i];
+                    StepResult result = setupResults != null && i < setupResults.Count ? setupResults[i] : null;
+                    RenderStepRow(name, phaseLabel, result, i + 1);
+                    displayedStepCount++;
+                }
+
+                for (int i = 0; i < mainInfos.Count; i++)
+                {
+                    var (name, phaseLabel) = mainInfos[i];
+                    StepResult result = mainResults != null && i < mainResults.Count ? mainResults[i] : null;
+                    RenderStepRow(name, phaseLabel, result, setupInfos.Count + i + 1);
+                    displayedStepCount++;
+                }
+
+                for (int i = 0; i < teardownInfos.Count; i++)
+                {
+                    var (name, phaseLabel) = teardownInfos[i];
+                    StepResult result = teardownResults != null && i < teardownResults.Count ? teardownResults[i] : null;
+                    RenderStepRow(name, phaseLabel, result, setupInfos.Count + mainInfos.Count + i + 1);
+                    displayedStepCount++;
+                }
             }
-            return stepInfos.Count;
+
+            return displayedStepCount;
+        }
+
+        private void RenderStepRow(string name, string phaseLabel, StepResult result, int stepNumber)
+        {
+            string displayName = string.IsNullOrWhiteSpace(name) ? $"{phaseLabel} step {stepNumber}" : name;
+            if (result == null && phaseLabel != "Main")
+                displayName = $"[{phaseLabel}] {displayName}";
+
+            var stepRow = new VisualElement();
+            stepRow.style.flexDirection = FlexDirection.Row;
+            stepRow.style.marginBottom = 2;
+            stepRow.style.alignItems = Align.Center;
+
+            var icon = new Label(result != null ? GetStatusIcon(result.Status, false) : "○");
+            icon.style.width = 16;
+            icon.style.color = result != null ? GetStatusColor(result.Status, false) : new Color(0.45f, 0.45f, 0.45f);
+
+            var nameLabel = new Label(displayName);
+            nameLabel.style.flexGrow = 1;
+            nameLabel.style.color = result != null ? new Color(0.8f, 0.8f, 0.8f) : new Color(0.5f, 0.5f, 0.5f);
+
+            var durLabel = new Label(result != null && result.DurationMs > 0 ? $"{result.DurationMs}ms" : "");
+            durLabel.style.width = 50;
+            durLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
+            durLabel.style.fontSize = 10;
+            durLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+
+            stepRow.Add(icon);
+            stepRow.Add(nameLabel);
+            stepRow.Add(durLabel);
+            _detailStepsContainer.Add(stepRow);
         }
 
         private static void SetDetailValue(VisualElement row, string value)
@@ -987,10 +1103,7 @@ namespace UnityUIFlow
                         try
                         {
                             TestCaseDefinition definition = parser.ParseFile(yamlPath);
-                            if (definition.Fixture?.Setup != null)
-                                oldGroup.TotalSteps += definition.Fixture.Setup.Count;
-                            if (definition.Steps != null)
-                                oldGroup.TotalSteps += definition.Steps.Count;
+                            oldGroup.TotalSteps = ComputeTotalSteps(definition);
                         }
                         catch
                         {
@@ -1021,10 +1134,7 @@ namespace UnityUIFlow
                 try
                 {
                     TestCaseDefinition definition = parser.ParseFile(yamlPath);
-                    if (definition.Fixture?.Setup != null)
-                        totalSteps += definition.Fixture.Setup.Count;
-                    if (definition.Steps != null)
-                        totalSteps += definition.Steps.Count;
+                    totalSteps = ComputeTotalSteps(definition);
                 }
                 catch
                 {
@@ -1346,6 +1456,17 @@ namespace UnityUIFlow
                 case TestStatus.Error: _state.Errors++; break;
                 case TestStatus.Skipped: _state.Skipped++; break;
             }
+        }
+
+        private static int ComputeTotalSteps(TestCaseDefinition definition)
+        {
+            if (definition == null) return 0;
+            int setupCount = definition.Fixture?.Setup?.Count ?? 0;
+            int stepsCount = definition.Steps?.Count ?? 0;
+            int teardownCount = definition.Fixture?.Teardown?.Count ?? 0;
+            int rowCount = definition.Data?.Rows?.Count ?? 0;
+            if (rowCount == 0) rowCount = 1;
+            return rowCount * (setupCount + stepsCount + teardownCount);
         }
 
         private void RefreshUi()

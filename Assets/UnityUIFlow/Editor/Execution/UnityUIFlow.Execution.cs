@@ -229,6 +229,8 @@ namespace UnityUIFlow
             {
                 StepId = step.StepId,
                 DisplayName = step.DisplayName,
+                Phase = step.Phase,
+                IterationIndex = step.IterationIndex,
                 StartedAtUtc = startedAt.ToString("O"),
             };
 

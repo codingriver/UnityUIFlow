@@ -437,6 +437,7 @@ namespace UnityUIFlow
         public bool ContinueOnFailure;
         public ConditionExpression Condition;
         public StepPhase Phase;
+        public int IterationIndex;
         public ExecutableStepKind Kind = ExecutableStepKind.Action;
         public LoopExpression Loop;
     }
@@ -538,6 +539,8 @@ namespace UnityUIFlow
         public string PointerDriver;
         public string KeyboardDriver;
         public string DriverDetails;
+        public StepPhase Phase;
+        public int IterationIndex;
         public List<string> Attachments = new List<string>();
     }
 
