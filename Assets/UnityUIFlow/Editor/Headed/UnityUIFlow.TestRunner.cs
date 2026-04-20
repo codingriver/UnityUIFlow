@@ -24,6 +24,7 @@ namespace UnityUIFlow
         public string ReportJsonPath;
         public bool IsChecked = true;
         public bool IsRunning;
+        public int TotalSteps;
         public List<StepResult> StepResults = new List<StepResult>();
 
         // Grouping
@@ -68,6 +69,7 @@ namespace UnityUIFlow
         private CancellationTokenSource _runCts;
         private ExecutionContext _activeContext;
         private HighlightOverlayRenderer _overlayRenderer;
+        private readonly Dictionary<uint, Texture2D> _progressTextures = new Dictionary<uint, Texture2D>();
 
         // Left panel
         private TextField _searchField;
@@ -87,6 +89,7 @@ namespace UnityUIFlow
         private VisualElement _detailPathRow;
         private VisualElement _detailStatusRow;
         private VisualElement _detailDurationRow;
+        private VisualElement _detailStepsRow;
         private Label _detailErrorLabel;
         private VisualElement _detailStepsContainer;
         private Button _detailOpenReportButton;
@@ -130,6 +133,11 @@ namespace UnityUIFlow
             UnsubscribeEvents();
             _overlayRenderer?.Detach();
             _overlayRenderer = null;
+            foreach (var tex in _progressTextures.Values)
+            {
+                if (tex != null) UnityEngine.Object.DestroyImmediate(tex);
+            }
+            _progressTextures.Clear();
             TestRunnerPreferences.Save(_state);
         }
 
@@ -288,10 +296,12 @@ namespace UnityUIFlow
             _detailPathRow = CreateDetailRow("YAML Path:", "-");
             _detailStatusRow = CreateDetailRow("Status:", "-");
             _detailDurationRow = CreateDetailRow("Duration:", "-");
+            _detailStepsRow = CreateDetailRow("Steps:", "-");
             rightPanel.Add(_detailNameRow);
             rightPanel.Add(_detailPathRow);
             rightPanel.Add(_detailStatusRow);
             rightPanel.Add(_detailDurationRow);
+            rightPanel.Add(_detailStepsRow);
 
             var errorTitle = new Label("Error") { name = "test-runner-error-title" };
             errorTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -437,10 +447,11 @@ namespace UnityUIFlow
             checkToggle.style.marginLeft = 2;
             checkToggle.style.width = 18;
 
-            var statusLabel = new Label { name = "case-status" };
-            statusLabel.style.width = 18;
-            statusLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            statusLabel.style.marginRight = 2;
+            var statusLabel = new VisualElement { name = "case-status" };
+            statusLabel.style.width = 16;
+            statusLabel.style.height = 16;
+            statusLabel.style.marginRight = 4;
+            statusLabel.style.flexShrink = 0;
 
             var nameLabel = new Label { name = "case-name" };
             nameLabel.style.flexGrow = 1;
@@ -512,7 +523,7 @@ namespace UnityUIFlow
 
             var expandLabel = element.Q<Label>("case-expand");
             var checkToggle = element.Q<Toggle>("case-check");
-            var statusLabel = element.Q<Label>("case-status");
+            var statusLabel = element.Q<VisualElement>("case-status");
             var nameLabel = element.Q<Label>("case-name");
             var countLabel = element.Q<Label>("case-count");
             var durationLabel = element.Q<Label>("case-duration");
@@ -526,14 +537,33 @@ namespace UnityUIFlow
                 checkToggle.showMixedValue = item.GroupMixedChecked;
                 checkToggle.SetEnabled(!_state.IsRunning);
 
-                statusLabel.style.visibility = Visibility.Hidden;
+                statusLabel.style.visibility = Visibility.Visible;
+                if (item.IsRunning && item.TotalSteps > 0)
+                {
+                    double progress = (double)item.StepResults.Count / item.TotalSteps;
+                    var tex = GetProgressTexture((float)progress, new Color(0.3f, 0.6f, 1f));
+                    statusLabel.style.backgroundImage = Background.FromTexture2D(tex);
+                }
+                else
+                {
+                    var tex = GetStatusTexture(item.Status, item.IsRunning);
+                    statusLabel.style.backgroundImage = tex != null ? Background.FromTexture2D(tex) : null;
+                }
 
                 nameLabel.text = item.CaseName;
                 nameLabel.style.color = new Color(0.9f, 0.9f, 0.9f);
                 nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
                 nameLabel.style.marginLeft = 0;
 
-                countLabel.style.visibility = Visibility.Hidden;
+                if (item.IsRunning && item.TotalSteps > 0)
+                {
+                    countLabel.style.visibility = Visibility.Visible;
+                    countLabel.text = $"{item.StepResults.Count}/{item.TotalSteps}";
+                }
+                else
+                {
+                    countLabel.style.visibility = Visibility.Hidden;
+                }
 
                 durationLabel.style.visibility = Visibility.Hidden;
             }
@@ -547,8 +577,8 @@ namespace UnityUIFlow
                 checkToggle.SetEnabled(!_state.IsRunning);
 
                 statusLabel.style.visibility = Visibility.Visible;
-                statusLabel.text = GetStatusIcon(item.Status, item.IsRunning);
-                statusLabel.style.color = GetStatusColor(item.Status, item.IsRunning);
+                var tex = GetStatusTexture(item.Status, item.IsRunning);
+                statusLabel.style.backgroundImage = tex != null ? Background.FromTexture2D(tex) : null;
 
                 nameLabel.text = item.CaseName ?? Path.GetFileNameWithoutExtension(item.YamlPath);
                 nameLabel.style.marginLeft = 8;
@@ -591,6 +621,94 @@ namespace UnityUIFlow
                 case TestStatus.Skipped: return "○";
                 case TestStatus.None: return "○";
                 default: return "○";
+            }
+        }
+
+        private Texture2D GetProgressTexture(float progress, Color tint)
+        {
+            progress = Mathf.Clamp01(progress);
+            float discrete = progress <= 0f ? 0f : progress <= 0.25f ? 0.25f : progress <= 0.5f ? 0.5f : progress <= 0.75f ? 0.75f : 1f;
+            uint key = ((uint)(discrete * 100f) << 24)
+                     | ((uint)(tint.r * 255f) << 16)
+                     | ((uint)(tint.g * 255f) << 8)
+                     | ((uint)(tint.b * 255f));
+            if (_progressTextures.TryGetValue(key, out var existing) && existing != null)
+                return existing;
+
+            int size = 16;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Point;
+            tex.hideFlags = HideFlags.HideAndDontSave;
+            var pixels = new Color[size * size];
+
+            float cx = (size - 1) * 0.5f;
+            float cy = (size - 1) * 0.5f;
+            float outerR = size * 0.5f - 1f;
+            float innerR = outerR - 1.5f;
+
+            Color borderColor = new Color(tint.r, tint.g, tint.b, 0.45f);
+            Color fillColor = new Color(tint.r, tint.g, tint.b, 0.9f);
+            Color emptyColor = new Color(0.12f, 0.12f, 0.12f, 0.35f);
+            Color bgColor = Color.clear;
+
+            float maxAngle = discrete * 360f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x - cx;
+                    float dy = y - cy;
+                    float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                    int idx = y * size + x;
+
+                    if (dist > outerR)
+                    {
+                        pixels[idx] = bgColor;
+                        continue;
+                    }
+
+                    if (dist >= innerR)
+                    {
+                        pixels[idx] = borderColor;
+                        continue;
+                    }
+
+                    // Inside the circle: determine if this pixel is within the filled sector
+                    float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+                    angle = (angle + 450f) % 360f; // Rotate so 0 is at top, clockwise
+
+                    if (angle <= maxAngle)
+                        pixels[idx] = fillColor;
+                    else
+                        pixels[idx] = emptyColor;
+                }
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply();
+            _progressTextures[key] = tex;
+            return tex;
+        }
+
+        private Texture2D GetStatusTexture(TestStatus status, bool isRunning)
+        {
+            if (isRunning)
+                return GetProgressTexture(0.5f, new Color(0.3f, 0.6f, 1f));
+
+            switch (status)
+            {
+                case TestStatus.Passed:
+                    return GetProgressTexture(1.0f, new Color(0.3f, 0.9f, 0.3f));
+                case TestStatus.Failed:
+                    return GetProgressTexture(1.0f, new Color(0.95f, 0.3f, 0.3f));
+                case TestStatus.Error:
+                    return GetProgressTexture(1.0f, new Color(0.9f, 0.15f, 0.15f));
+                case TestStatus.Skipped:
+                    return GetProgressTexture(0.0f, new Color(0.5f, 0.5f, 0.5f));
+                case TestStatus.None:
+                default:
+                    return GetProgressTexture(0.0f, new Color(0.45f, 0.45f, 0.45f));
             }
         }
 
@@ -670,6 +788,7 @@ namespace UnityUIFlow
                 SetDetailValue(_detailPathRow, "-");
                 SetDetailValue(_detailStatusRow, "-");
                 SetDetailValue(_detailDurationRow, "-");
+                SetDetailValue(_detailStepsRow, "-");
                 _detailErrorLabel.text = "No error";
                 _detailStepsContainer.Clear();
                 _detailOpenYamlButton.SetEnabled(false);
@@ -713,13 +832,14 @@ namespace UnityUIFlow
             }
 
             _detailStepsContainer.Clear();
-            RenderStepDetails(selected);
+            int stepCount = RenderStepDetails(selected);
+            SetDetailValue(_detailStepsRow, stepCount > 0 ? $"{stepCount}" : "-");
 
             _detailOpenYamlButton.SetEnabled(File.Exists(selected.YamlPath));
             _detailOpenReportButton.SetEnabled(!string.IsNullOrWhiteSpace(selected.ReportMarkdownPath) && File.Exists(selected.ReportMarkdownPath));
         }
 
-        private void RenderStepDetails(TestRunnerCaseItem selected)
+        private int RenderStepDetails(TestRunnerCaseItem selected)
         {
             var stepInfos = new List<(string Name, string Phase)>();
             try
@@ -750,20 +870,15 @@ namespace UnityUIFlow
             if (stepInfos.Count == 0)
             {
                 _detailStepsContainer.Add(new Label("No steps defined in this test case."));
-                return;
+                return 0;
             }
 
-            // Build a lookup from step display name to result
-            var resultByName = new Dictionary<string, StepResult>(StringComparer.OrdinalIgnoreCase);
+            // Build a lookup from step index to result
             var resultByIndex = new List<StepResult>();
             if (selected.StepResults != null)
             {
                 foreach (var sr in selected.StepResults)
                 {
-                    if (!string.IsNullOrWhiteSpace(sr.DisplayName))
-                    {
-                        resultByName[sr.DisplayName] = sr;
-                    }
                     resultByIndex.Add(sr);
                 }
             }
@@ -773,16 +888,8 @@ namespace UnityUIFlow
                 var (name, phase) = stepInfos[i];
                 string displayName = string.IsNullOrWhiteSpace(name) ? $"{phase} step {i + 1}" : name;
 
-                // Try to find matching result by name, then by index
-                StepResult result = null;
-                if (!string.IsNullOrWhiteSpace(name) && resultByName.ContainsKey(name))
-                {
-                    result = resultByName[name];
-                }
-                else if (i < resultByIndex.Count)
-                {
-                    result = resultByIndex[i];
-                }
+                // Match result by index only; name-based lookup is unreliable when multiple steps share the same name
+                StepResult result = i < resultByIndex.Count ? resultByIndex[i] : null;
 
                 var stepRow = new VisualElement();
                 stepRow.style.flexDirection = FlexDirection.Row;
@@ -808,6 +915,7 @@ namespace UnityUIFlow
                 stepRow.Add(durLabel);
                 _detailStepsContainer.Add(stepRow);
             }
+            return stepInfos.Count;
         }
 
         private static void SetDetailValue(VisualElement row, string value)
@@ -874,6 +982,21 @@ namespace UnityUIFlow
 
                 if (existingGroups.TryGetValue(rel, out var oldGroup))
                 {
+                    if (oldGroup.TotalSteps == 0)
+                    {
+                        try
+                        {
+                            TestCaseDefinition definition = parser.ParseFile(yamlPath);
+                            if (definition.Fixture?.Setup != null)
+                                oldGroup.TotalSteps += definition.Fixture.Setup.Count;
+                            if (definition.Steps != null)
+                                oldGroup.TotalSteps += definition.Steps.Count;
+                        }
+                        catch
+                        {
+                            // Ignore parse errors
+                        }
+                    }
                     _state.Cases.Add(oldGroup);
                     continue;
                 }
@@ -894,12 +1017,27 @@ namespace UnityUIFlow
                 }
 
                 // One item per file, displaying file name; case name shown in detail panel
+                int totalSteps = 0;
+                try
+                {
+                    TestCaseDefinition definition = parser.ParseFile(yamlPath);
+                    if (definition.Fixture?.Setup != null)
+                        totalSteps += definition.Fixture.Setup.Count;
+                    if (definition.Steps != null)
+                        totalSteps += definition.Steps.Count;
+                }
+                catch
+                {
+                    // Ignore parse errors for step counting
+                }
+
                 _state.Cases.Add(new TestRunnerCaseItem
                 {
                     YamlPath = rel,
                     CaseName = fileName,
                     IsGroupHeader = true,
                     IsChecked = true,
+                    TotalSteps = totalSteps,
                 });
             }
 
@@ -1040,7 +1178,6 @@ namespace UnityUIFlow
             // Reset states for files in this run
             foreach (var item in _state.Cases)
             {
-                if (item.IsGroupHeader) continue;
                 if (yamlPaths.Any(p => StringComparer.OrdinalIgnoreCase.Equals(p, Path.GetFullPath(item.YamlPath))))
                 {
                     item.Status = TestStatus.None;
