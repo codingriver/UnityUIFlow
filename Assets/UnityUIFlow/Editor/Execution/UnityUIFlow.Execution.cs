@@ -471,7 +471,7 @@ namespace UnityUIFlow
         /// <summary>
         /// Runs a single YAML test file.
         /// </summary>
-        public Task<TestResult> RunFileAsync(string yamlPath, TestOptions options = null, VisualElement rootOverride = null, Action<ExecutionContext> onContextReady = null)
+        public async Task<TestResult> RunFileAsync(string yamlPath, TestOptions options = null, VisualElement rootOverride = null, Action<ExecutionContext> onContextReady = null)
         {
             if (string.IsNullOrWhiteSpace(yamlPath))
             {
@@ -479,7 +479,25 @@ namespace UnityUIFlow
             }
 
             TestCaseDefinition definition = _parser.ParseFile(yamlPath);
-            return RunDefinitionAsync(definition, options ?? new TestOptions(), rootOverride, onContextReady);
+            TestResult result = await RunDefinitionAsync(definition, options ?? new TestOptions(), rootOverride, onContextReady);
+
+            // Append single-file result to unified report
+            try
+            {
+                var suite = new TestSuiteResult
+                {
+                    StartedAtUtc = result.StartedAtUtc,
+                    EndedAtUtc = result.EndedAtUtc,
+                    CaseResults = new List<TestResult> { result },
+                };
+                MarkdownReporter.WriteUnifiedSuiteReport(suite, overwrite: false);
+            }
+            catch (Exception unifiedEx)
+            {
+                Debug.LogWarning($"[UnityUIFlow] 追加统一报告失败: {unifiedEx.Message}");
+            }
+
+            return result;
         }
         public Task<TestResult> RunAsync(string yamlContent, TestOptions options = null, VisualElement rootOverride = null)
         {
@@ -548,14 +566,16 @@ namespace UnityUIFlow
                 }
                 catch (Exception ex)
                 {
+                    string fallbackCaseName = Path.GetFileNameWithoutExtension(yamlFile);
                     testResult = new TestResult
                     {
-                        CaseName = Path.GetFileNameWithoutExtension(yamlFile),
+                        CaseName = fallbackCaseName,
                         Status = TestStatus.Error,
                         StartedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
                         EndedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
                         ErrorCode = ex is UnityUIFlowException flowException ? flowException.ErrorCode : ErrorCodes.CliExecutionError,
                         ErrorMessage = ex.Message,
+                        ReportMarkdownPath = new ReportPathBuilder().BuildCaseMarkdownPath(options.ReportOutputPath, fallbackCaseName),
                     };
                 }
 
@@ -602,6 +622,16 @@ namespace UnityUIFlow
             catch (Exception reportException)
             {
                 Debug.LogError($"[UnityUIFlow] {ErrorCodes.ReportWriteFailed}: {reportException.Message} 路径={options.ReportOutputPath}");
+            }
+
+            // Overwrite unified suite report with batch results
+            try
+            {
+                MarkdownReporter.WriteUnifiedSuiteReport(suiteResult, overwrite: true);
+            }
+            catch (Exception unifiedEx)
+            {
+                Debug.LogWarning($"[UnityUIFlow] 写入统一套件报告失败: {unifiedEx.Message}");
             }
 
             return suiteResult;
@@ -781,6 +811,8 @@ namespace UnityUIFlow
                     {
                         context.Reporter.WriteSingleReport(result);
                     }
+                    var reportPaths = new ReportPathBuilder();
+                    result.ReportMarkdownPath = reportPaths.BuildCaseMarkdownPath(options.ReportOutputPath, result.CaseName);
                     if (options.EnableVerboseLog)
                         Debug.Log($"[UnityUIFlow] 用例报告已生成 {options.ReportOutputPath}");
                 }

@@ -559,6 +559,10 @@ namespace UnityUIFlow
         public string ErrorCode;
         public string ErrorMessage;
         public List<string> Attachments = new List<string>();
+        /// <summary>
+        /// Path to the per-case markdown report, used by unified suite report linking.
+        /// </summary>
+        public string ReportMarkdownPath;
     }
 
     /// <summary>

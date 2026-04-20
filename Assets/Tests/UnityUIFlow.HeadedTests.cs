@@ -422,8 +422,8 @@ steps:
             Task task = (Task)executeMethod.Invoke(window, new object[] { yamlPaths, cts.Token });
             yield return UnityUIFlowTestTaskUtility.Await(task);
 
-            Assert.That(File.Exists(Path.Combine(tempDir, "Reports", "suite-report.md")), Is.True);
-            Assert.That(File.Exists(Path.Combine(tempDir, "Reports", "suite-report.json")), Is.True);
+            Assert.That(File.Exists(Path.Combine(tempDir, "Reports", "full_reports.md")), Is.True);
+            Assert.That(File.Exists(Path.Combine(tempDir, "Reports", "Cases", "suite-report.json")), Is.True);
 
             window.Close();
             yield return null;

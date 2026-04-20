@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -493,8 +494,8 @@ namespace UnityUIFlow
             markdown.AppendLine($"# Test Report: {result.CaseName}");
             markdown.AppendLine();
             markdown.AppendLine($"**Status**: {result.Status}");
-            markdown.AppendLine($"**Started At**: {result.StartedAtUtc}");
-            markdown.AppendLine($"**Ended At**: {result.EndedAtUtc}");
+            markdown.AppendLine($"**Started At**: {FormatLocalTime(result.StartedAtUtc)}");
+            markdown.AppendLine($"**Ended At**: {FormatLocalTime(result.EndedAtUtc)}");
             markdown.AppendLine($"**Duration**: {result.DurationMs}ms");
             markdown.AppendLine();
             markdown.AppendLine("## Step Details");
@@ -528,24 +529,112 @@ namespace UnityUIFlow
             var markdown = new StringBuilder();
             markdown.AppendLine("# Full Suite Report");
             markdown.AppendLine();
-            markdown.AppendLine($"**Started At**: {result.StartedAtUtc}");
-            markdown.AppendLine($"**Ended At**: {result.EndedAtUtc}");
+            markdown.AppendLine($"**Started At**: {FormatLocalTime(result.StartedAtUtc)}");
+            markdown.AppendLine($"**Ended At**: {FormatLocalTime(result.EndedAtUtc)}");
             markdown.AppendLine();
             markdown.AppendLine($"**Total**: {result.Total} | **Passed**: {result.Passed} | **Failed**: {result.Failed} | **Errors**: {result.Errors} | **Skipped**: {result.Skipped}");
             markdown.AppendLine();
             markdown.AppendLine("## Cases");
             markdown.AppendLine();
-            markdown.AppendLine("| Case | Status | Duration(ms) | Report |");
-            markdown.AppendLine("| --- | --- | --- | --- |");
+            markdown.AppendLine("| Case | Status | Started At | Duration(ms) | Report |");
+            markdown.AppendLine("| --- | --- | --- | --- | --- |");
 
             foreach (TestResult caseResult in result.CaseResults)
             {
-                string caseFileName = Path.GetFileName(_pathBuilder.BuildCaseMarkdownPath(_options.ReportRootPath, caseResult.CaseName));
-                markdown.AppendLine($"| {caseResult.CaseName} | {caseResult.Status} | {caseResult.DurationMs} | [Cases/{caseFileName}](Cases/{caseFileName}) |");
+                markdown.AppendLine($"| {caseResult.CaseName} | {caseResult.Status} | {FormatLocalTime(caseResult.StartedAtUtc)} | {caseResult.DurationMs} | {BuildCaseReportLink(caseResult)} |");
             }
 
             File.WriteAllText(markdownPath, markdown.ToString(), Encoding.UTF8);
             _jsonWriter.WriteSuiteJson(result, jsonPath);
+        }
+
+        /// <summary>
+        /// Writes or appends to the unified suite report at Reports/full_reports.md.
+        /// When overwrite is true, clears history and writes only the provided cases.
+        /// When overwrite is false, appends cases to existing history (deduplicated by CaseName).
+        /// </summary>
+        public static void WriteUnifiedSuiteReport(TestSuiteResult result, bool overwrite)
+        {
+            string unifiedJsonPath = Path.Combine("Reports", "Cases", "unified-history.json");
+            var pathBuilder = new ReportPathBuilder();
+            pathBuilder.EnsureDirectory(Path.GetDirectoryName(unifiedJsonPath) ?? Path.Combine("Reports", "Cases"));
+
+            TestSuiteResult targetSuite;
+            var jsonWriter = new JsonResultWriter();
+            var deserializer = new DeserializerBuilder().Build();
+
+            if (!overwrite && File.Exists(unifiedJsonPath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(unifiedJsonPath, Encoding.UTF8);
+                    targetSuite = deserializer.Deserialize<TestSuiteResult>(json) ?? new TestSuiteResult();
+                    targetSuite.CaseResults = targetSuite.CaseResults ?? new List<TestResult>();
+                }
+                catch
+                {
+                    targetSuite = new TestSuiteResult();
+                }
+            }
+            else
+            {
+                targetSuite = new TestSuiteResult();
+                targetSuite.StartedAtUtc = result.StartedAtUtc;
+            }
+
+            // Merge cases: remove duplicates by CaseName, then add new ones
+            foreach (TestResult caseResult in result.CaseResults)
+            {
+                targetSuite.CaseResults.RemoveAll(c => c.CaseName == caseResult.CaseName);
+                targetSuite.CaseResults.Add(caseResult);
+            }
+
+            targetSuite.EndedAtUtc = result.EndedAtUtc;
+            targetSuite.Total = targetSuite.CaseResults.Count;
+            targetSuite.Passed = targetSuite.CaseResults.Count(c => c.Status == TestStatus.Passed);
+            targetSuite.Failed = targetSuite.CaseResults.Count(c => c.Status == TestStatus.Failed);
+            targetSuite.Errors = targetSuite.CaseResults.Count(c => c.Status == TestStatus.Error);
+            targetSuite.Skipped = targetSuite.CaseResults.Count(c => c.Status == TestStatus.Skipped);
+
+            jsonWriter.WriteSuiteJson(targetSuite, unifiedJsonPath);
+
+            var reporter = new MarkdownReporter(new ReporterOptions
+            {
+                ReportRootPath = "Reports",
+                ScreenshotRootPath = Path.Combine("Reports", "Screenshots"),
+                SuiteName = "unified",
+            });
+            reporter.WriteSuiteReport(targetSuite);
+        }
+
+        private static string FormatLocalTime(string utcIsoString)
+        {
+            if (string.IsNullOrWhiteSpace(utcIsoString))
+            {
+                return string.Empty;
+            }
+            if (DateTimeOffset.TryParse(utcIsoString, out DateTimeOffset dto))
+            {
+                return dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz");
+            }
+            return utcIsoString;
+        }
+
+        private string BuildCaseReportLink(TestResult caseResult)
+        {
+            if (!string.IsNullOrWhiteSpace(caseResult.ReportMarkdownPath))
+            {
+                string linkPath = caseResult.ReportMarkdownPath.Replace('\\', '/');
+                string reportRoot = _options.ReportRootPath?.Replace('\\', '/').TrimEnd('/') ?? string.Empty;
+                if (!string.IsNullOrEmpty(reportRoot) && linkPath.StartsWith(reportRoot + "/", StringComparison.OrdinalIgnoreCase))
+                {
+                    linkPath = linkPath.Substring(reportRoot.Length + 1);
+                }
+                string linkText = Path.GetFileName(caseResult.ReportMarkdownPath);
+                return $"[{linkText}]({linkPath})";
+            }
+            string caseFileName = Path.GetFileName(_pathBuilder.BuildCaseMarkdownPath(_options.ReportRootPath, caseResult.CaseName));
+            return $"[Cases/{caseFileName}](Cases/{caseFileName})";
         }
 
         /// <summary>
@@ -559,8 +648,8 @@ namespace UnityUIFlow
             markdown.AppendLine($"# Single Test Report: {result.CaseName}");
             markdown.AppendLine();
             markdown.AppendLine($"**Status**: {result.Status}");
-            markdown.AppendLine($"**Started At**: {result.StartedAtUtc}");
-            markdown.AppendLine($"**Ended At**: {result.EndedAtUtc}");
+            markdown.AppendLine($"**Started At**: {FormatLocalTime(result.StartedAtUtc)}");
+            markdown.AppendLine($"**Ended At**: {FormatLocalTime(result.EndedAtUtc)}");
             markdown.AppendLine($"**Duration**: {result.DurationMs}ms");
             markdown.AppendLine();
             markdown.AppendLine("## Step Details");

@@ -124,7 +124,7 @@ steps:
             yield return UnityUIFlowTestTaskUtility.Await(batchTask);
 
             // The batch should complete without crashing, and the suite report should reflect the error
-            Assert.That(File.Exists(Path.Combine(tempDir, "Reports", "suite-report.md")), Is.True);
+            Assert.That(File.Exists(Path.Combine(tempDir, "Reports", "full_reports.md")), Is.True);
 
             window.Close();
             yield return null;

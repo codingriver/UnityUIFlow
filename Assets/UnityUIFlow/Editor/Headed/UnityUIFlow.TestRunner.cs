@@ -918,7 +918,18 @@ namespace UnityUIFlow
                 return 0;
             }
 
-            int rowCount = definition.Data?.Rows?.Count ?? 0;
+            // Resolve actual rows (including CSV/JSON data sources)
+            List<Dictionary<string, string>> resolvedRows;
+            try
+            {
+                resolvedRows = TestDataResolver.ResolveRows(definition);
+            }
+            catch
+            {
+                resolvedRows = definition.Data?.Rows ?? new List<Dictionary<string, string>>();
+            }
+
+            int rowCount = resolvedRows.Count;
             if (rowCount == 0) rowCount = 1;
 
             // Group results by iteration index
@@ -934,17 +945,19 @@ namespace UnityUIFlow
                 }
             }
 
-            bool hasMultipleIterations = rowCount > 1 || resultsByIteration.Count > 1;
+            // Ensure we iterate over all iterations that have results or template rows
+            int maxIteration = Math.Max(rowCount, resultsByIteration.Count > 0 ? resultsByIteration.Keys.Max() + 1 : 0);
+            bool hasMultipleIterations = maxIteration > 1;
             int displayedStepCount = 0;
 
-            for (int iteration = 0; iteration < rowCount; iteration++)
+            for (int iteration = 0; iteration < maxIteration; iteration++)
             {
                 if (hasMultipleIterations)
                 {
                     string iterationTitle = $"Iteration {iteration + 1}";
-                    if (iteration < (definition.Data?.Rows?.Count ?? 0) && definition.Data.Rows[iteration].Count > 0)
+                    if (iteration < resolvedRows.Count && resolvedRows[iteration].Count > 0)
                     {
-                        var rowData = definition.Data.Rows[iteration];
+                        var rowData = resolvedRows[iteration];
                         string dataSummary = string.Join(", ", rowData.Select(kv => $"{kv.Key}={kv.Value}"));
                         iterationTitle += $" ({dataSummary})";
                     }
@@ -1352,14 +1365,16 @@ namespace UnityUIFlow
                     }
                     catch (Exception ex)
                     {
+                        string fallbackCaseName = Path.GetFileNameWithoutExtension(yamlPath);
                         result = new TestResult
                         {
-                            CaseName = Path.GetFileNameWithoutExtension(yamlPath),
+                            CaseName = fallbackCaseName,
                             Status = TestStatus.Error,
                             StartedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
                             EndedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
                             ErrorCode = ex is UnityUIFlowException flowEx ? flowEx.ErrorCode : ErrorCodes.CliExecutionError,
                             ErrorMessage = ex.Message,
+                            ReportMarkdownPath = TestRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseMarkdownPath(reportRoot, fallbackCaseName)),
                         };
                     }
                     finally
@@ -1384,6 +1399,7 @@ namespace UnityUIFlow
                         caseItem.FailedStepError = failedStep?.ErrorMessage;
                         caseItem.ReportMarkdownPath = TestRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseMarkdownPath(reportRoot, result.CaseName));
                         caseItem.ReportJsonPath = TestRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseJsonPath(reportRoot, result.CaseName));
+                        result.ReportMarkdownPath = caseItem.ReportMarkdownPath;
                     }
 
                     _state.CurrentCaseName = null;
@@ -1412,6 +1428,16 @@ namespace UnityUIFlow
                 });
                 reporter.WriteSuiteReport(suite);
                 new CiArtifactManifestWriter().Write(reportRoot);
+
+                // Overwrite unified suite report with batch results
+                try
+                {
+                    MarkdownReporter.WriteUnifiedSuiteReport(suite, overwrite: true);
+                }
+                catch (Exception unifiedEx)
+                {
+                    Debug.LogWarning($"[UnityUIFlow] 统一套件报告写入失败: {unifiedEx.Message}");
+                }
 
                 _state.StatusText = _runCts.Token.IsCancellationRequested ? "Aborted"
                     : suite.Failed > 0 || suite.Errors > 0 ? "Failed"
@@ -1464,7 +1490,16 @@ namespace UnityUIFlow
             int setupCount = definition.Fixture?.Setup?.Count ?? 0;
             int stepsCount = definition.Steps?.Count ?? 0;
             int teardownCount = definition.Fixture?.Teardown?.Count ?? 0;
-            int rowCount = definition.Data?.Rows?.Count ?? 0;
+
+            int rowCount = 1;
+            try
+            {
+                rowCount = TestDataResolver.ResolveRows(definition).Count;
+            }
+            catch
+            {
+                rowCount = definition.Data?.Rows?.Count ?? 0;
+            }
             if (rowCount == 0) rowCount = 1;
             return rowCount * (setupCount + stepsCount + teardownCount);
         }

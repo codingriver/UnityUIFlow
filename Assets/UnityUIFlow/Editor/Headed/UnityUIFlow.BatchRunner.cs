@@ -646,14 +646,16 @@ namespace UnityUIFlow
                     }
                     catch (Exception ex)
                     {
+                        string fallbackCaseName = Path.GetFileNameWithoutExtension(yamlPath);
                         result = new TestResult
                         {
-                            CaseName = Path.GetFileNameWithoutExtension(yamlPath),
+                            CaseName = fallbackCaseName,
                             Status = TestStatus.Error,
                             StartedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
                             EndedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
                             ErrorCode = ex is UnityUIFlowException flowException ? flowException.ErrorCode : ErrorCodes.CliExecutionError,
                             ErrorMessage = ex.Message,
+                            ReportMarkdownPath = BatchRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseMarkdownPath(reportRoot, fallbackCaseName)),
                         };
                     }
                     finally
@@ -676,10 +678,13 @@ namespace UnityUIFlow
                         caseItem.FailedStepError = result.StepResults?.FirstOrDefault(s => s.Status == TestStatus.Failed || s.Status == TestStatus.Error)?.ErrorMessage;
                         caseItem.ReportMarkdownPath = BatchRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseMarkdownPath(reportRoot, result.CaseName));
                         caseItem.ReportJsonPath = BatchRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseJsonPath(reportRoot, result.CaseName));
+                        result.ReportMarkdownPath = caseItem.ReportMarkdownPath;
                     }
                     else
                     {
-                        _state.Cases.Add(BuildSnapshot(result, yamlPath, reportRoot, reportPaths));
+                        var snapshot = BuildSnapshot(result, yamlPath, reportRoot, reportPaths);
+                        _state.Cases.Add(snapshot);
+                        result.ReportMarkdownPath = snapshot.ReportMarkdownPath;
                     }
 
                     _state.CurrentCaseName = null;
@@ -722,6 +727,16 @@ namespace UnityUIFlow
                 });
                 reporter.WriteSuiteReport(suite);
                 new CiArtifactManifestWriter().Write(reportRoot);
+
+                // Overwrite unified suite report with batch results
+                try
+                {
+                    MarkdownReporter.WriteUnifiedSuiteReport(suite, overwrite: true);
+                }
+                catch (Exception unifiedEx)
+                {
+                    Debug.LogWarning($"[UnityUIFlow] 统一套件报告写入失败: {unifiedEx.Message}");
+                }
 
                 if (_runCts.Token.IsCancellationRequested)
                 {
