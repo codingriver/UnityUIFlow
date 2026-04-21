@@ -931,7 +931,7 @@ CI 环境使用 `-batchmode` 启动 Unity 时，框架会自动检测并将 `hea
 
 ## 示例文件
 
-项目内置示例位于 `Assets/UnityUIFlow/Samples/Yaml/`：
+项目内置示例位于 `Assets/Examples/Yaml/`：
 
 | 文件 | 说明 |
 | --- | --- |

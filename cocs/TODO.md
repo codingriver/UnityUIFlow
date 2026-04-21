@@ -14,8 +14,8 @@
   - `Assets/UnityUIFlow/Editor/Actions/UnityUIFlow.AdvancedActions.cs`
   - `Assets/UnityUIFlow/Editor/Fixtures/UnityUIFlow.TestIntegrations.cs`
   - `.unityuiflow.json`
-  - `Assets/Tests/UnityUIFlow.LocatorsAndActionsTests.cs`
-  - `Assets/Tests/UnityUIFlow.ExecutionReportingCliTests.cs`
+  - `Assets/Examples/Tests/UnityUIFlow.LocatorsAndActionsTests.cs`
+  - `Assets/Examples/Tests/UnityUIFlow.ExecutionReportingCliTests.cs`
 
 ## 待决策项
 
@@ -303,7 +303,7 @@
     - `HasExecutableOfficialHost` 改为“当前是否已真实绑定 official host bridge”，而不是仅看符号存在
 - **References**:
   - `Assets/UnityUIFlow/Editor/UnityUIFlow.asmdef`
-  - `Assets/Tests/UnityUIFlow.Tests.asmdef`
+  - `Assets/Examples/Tests/UnityUIFlow.Tests.asmdef`
   - `Assets/UnityUIFlow/Editor/Fixtures/UnityUIFlow.TestIntegrations.cs`
 
 ### RESOLVED-008: CSV UTF-8 BOM、CLI 环境变量优先级与 command actions 已落地
@@ -320,9 +320,9 @@
   - `Assets/UnityUIFlow/Editor/Cli/UnityUIFlow.Cli.cs`
   - `Assets/UnityUIFlow/Editor/Actions/UnityUIFlow.Actions.cs`
   - `Assets/UnityUIFlow/Editor/Fixtures/UnityUIFlow.TestIntegrations.cs`
-  - `Assets/Tests/UnityUIFlow.ParsingAndPlanningTests.cs`
-  - `Assets/Tests/UnityUIFlow.ExecutionReportingCliTests.cs`
-  - `Assets/Tests/UnityUIFlow.LocatorsAndActionsTests.cs`
+  - `Assets/Examples/Tests/UnityUIFlow.ParsingAndPlanningTests.cs`
+  - `Assets/Examples/Tests/UnityUIFlow.ExecutionReportingCliTests.cs`
+  - `Assets/Examples/Tests/UnityUIFlow.LocatorsAndActionsTests.cs`
   - `cocs/M08-命令行与CI集成-需求文档.md`
   - `cocs/M12-官方UI测试框架与输入系统测试接入-需求文档.md`
 

@@ -1,7 +1,7 @@
 name: Host Window Switch A
 fixture:
   host_window:
-    type: SampleLoginWindow
+    type: UnityUIFlow.SampleLoginWindow
     reopen_if_open: true
 steps:
   - action: type_text_fast

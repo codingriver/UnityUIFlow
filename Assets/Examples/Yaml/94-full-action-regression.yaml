@@ -1,83 +1,77 @@
 name: Full Action Regression Smoke Test
 description: |
- Quick smoke test covering the most commonly used UIToolkit actions
- in a single flow. Designed for fast CI validation of core automation
- capabilities.
+  Quick smoke test covering the most commonly used UIToolkit actions
+  in a single flow. Designed for fast CI validation of core automation
+  capabilities.
 
 fixture:
- host_window:
-   type: UnityUIFlow.Examples.ExampleBasicLoginWindow
-   reopen_if_open: true
+  host_window:
+    type: UnityUIFlow.Examples.ExampleBasicLoginWindow
+    reopen_if_open: true
 
 steps:
- # 鈹€鈹€ Input 鈹€鈹€
- - name: Enter username
-   action: type_text
-   selector: "#username-input"
-   text: "regression_user"
+  - name: Enter username
+    action: type_text
+    selector: "#username-input"
+    value: "regression_user"
 
- - name: Enter password
-   action: type_text_fast
-   selector: "#password-input"
-   text: "regression_pass"
+  - name: Enter password
+    action: type_text_fast
+    selector: "#password-input"
+    value: "regression_pass"
 
- # 鈹€鈹€ Interaction 鈹€鈹€
- - name: Click login
-   action: click
-   selector: "#login-button"
+  - name: Click login
+    action: click
+    selector: "#login-button"
 
- # 鈹€鈹€ Assertion 鈹€鈹€
- - name: Assert error message
-   action: assert_text
-   selector: "#status-label"
-   text: "Missing credentials"
+  - name: Assert welcome message for regression user
+    action: assert_text
+    selector: "#status-label"
+    expected: "Welcome regression_user"
 
- - name: Assert login button is visible
-   action: assert_visible
-   selector: "#login-button"
+  - name: Assert login button is visible
+    action: assert_visible
+    selector: "#login-button"
 
- # 鈹€鈹€ Focus and clear 鈹€鈹€
- - name: Focus username
-   action: focus
-   selector: "#username-input"
+  - name: Focus username
+    action: focus
+    selector: "#username-input"
 
- - name: Select all and delete
-   action: press_key_combination
-   keys: "Ctrl+A"
+  - name: Select all and delete
+    action: press_key_combination
+    keys: "Ctrl+A"
 
- - name: Type replacement
-   action: type_text
-   selector: "#username-input"
-   text: "admin"
+  - name: Type replacement
+    action: type_text
+    selector: "#username-input"
+    value: "admin"
 
- - name: Focus password
-   action: focus
-   selector: "#password-input"
+  - name: Focus password
+    action: focus
+    selector: "#password-input"
 
- - name: Clear password
-   action: press_key_combination
-   keys: "Ctrl+A"
+  - name: Clear password
+    action: press_key_combination
+    keys: "Ctrl+A"
 
- - name: Type new password
-   action: type_text_fast
-   selector: "#password-input"
-   text: "admin123"
+  - name: Type new password
+    action: type_text_fast
+    selector: "#password-input"
+    value: "admin123"
 
- # 鈹€鈹€ Re-login 鈹€鈹€
- - name: Click login again
-   action: click
-   selector: "#login-button"
+  - name: Click login again
+    action: click
+    selector: "#login-button"
 
- - name: Assert welcome message
-   action: assert_text_contains
-   selector: "#status-label"
-   text: "Welcome"
+  - name: Assert welcome message
+    action: assert_text_contains
+    selector: "#status-label"
+    expected: "Welcome"
 
- # 鈹€鈹€ Wait and screenshot 鈹€鈹€
- - name: Wait briefly
-   action: wait
-   duration: "500ms"
+  - name: Wait briefly
+    action: wait
+    duration: "500ms"
 
- - name: Capture final state
-   action: screenshot
-   tag: "regression_final"
+  - name: Capture final state
+    action: screenshot
+    tag: "regression_final"

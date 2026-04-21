@@ -10,10 +10,10 @@ data:
     - username: "bob"
       password: "builder"
 steps:
-  - action: type_text
+  - action: type_text_fast
     selector: "#username-input"
     value: "{{ username }}"
-  - action: type_text
+  - action: type_text_fast
     selector: "#password-input"
     value: "{{ password }}"
   - action: click

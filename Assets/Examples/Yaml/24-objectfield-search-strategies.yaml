@@ -9,10 +9,10 @@ steps:
     value: "name:SampleInteractionWindow"
   - action: assert_value
     selector: "#template-asset"
-    expected: "Assets/UnityUIFlow/Samples/Uxml/SampleInteractionWindow.uxml"
+    expected: "Assets/Examples/Uxml/SampleInteractionWindow.uxml"
   - action: set_value
     selector: "#template-asset"
     value: "search:VisualTreeAsset:SampleInteractionWindow"
   - action: assert_value
     selector: "#template-asset"
-    expected: "Assets/UnityUIFlow/Samples/Uxml/SampleInteractionWindow.uxml"
+    expected: "Assets/Examples/Uxml/SampleInteractionWindow.uxml"

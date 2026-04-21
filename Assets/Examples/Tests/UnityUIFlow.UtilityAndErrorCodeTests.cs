@@ -35,7 +35,7 @@ namespace UnityUIFlow
         public void Utility_EnsureRelativeTo_BuildsRelativePath()
         {
             string root = Path.GetFullPath("Assets");
-            string file = Path.GetFullPath("Assets/Tests/foo.cs");
+            string file = Path.GetFullPath("Assets/Examples/Tests/foo.cs");
             string relative = UnityUIFlowUtility.EnsureRelativeTo(root, file);
             Assert.That(relative, Does.Contain("foo.cs"));
             Assert.That(Path.IsPathRooted(relative), Is.False);

@@ -1,7 +1,7 @@
 name: Nested Loops Case
 fixture:
   host_window:
-    type: SampleLoginWindow
+    type: UnityUIFlow.SampleLoginWindow
     reopen_if_open: true
 steps:
   - action: click

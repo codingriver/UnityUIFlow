@@ -1,4 +1,8 @@
 name: Conditional And Loop
+fixture:
+  host_window:
+    type: UnityUIFlow.SampleLoginWindow
+    reopen_if_open: true
 steps:
   - name: Maybe click reset when present
     action: click
@@ -16,6 +20,7 @@ steps:
     repeat_while:
       condition:
         exists: "#toast-message"
+      max_iterations: 40
       steps:
         - action: wait
           duration: "50ms"

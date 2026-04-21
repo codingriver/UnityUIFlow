@@ -1,7 +1,7 @@
 name: Advanced Controls Tab And Tree
 fixture:
   host_window:
-    type: AdvancedControlsWindow
+    type: UnityUIFlow.AdvancedControlsWindow
     reopen_if_open: true
 steps:
   - action: select_tab

@@ -61,6 +61,15 @@ namespace UnityUIFlow.Examples
 
     public sealed class ExampleBasicLoginWindow : ExampleAcceptanceWindowBase
     {
+        [MenuItem("UnityUIFlow/Examples/Basic Login Window")]
+        public static void Open()
+        {
+            ExampleBasicLoginWindow window = GetWindow<ExampleBasicLoginWindow>();
+            window.titleContent = new GUIContent("Example Basic Login");
+            window.minSize = new Vector2(420f, 260f);
+            window.Show();
+        }
+
         private TextField _username;
         private TextField _password;
         private Label _status;
@@ -87,6 +96,15 @@ namespace UnityUIFlow.Examples
 
     public sealed class ExampleSelectorsWindow : ExampleAcceptanceWindowBase
     {
+        [MenuItem("UnityUIFlow/Examples/Selectors Window")]
+        public static void Open()
+        {
+            ExampleSelectorsWindow window = GetWindow<ExampleSelectorsWindow>();
+            window.titleContent = new GUIContent("Example Selectors");
+            window.minSize = new Vector2(420f, 260f);
+            window.Show();
+        }
+
         protected override string UxmlPath => "Assets/Examples/Uxml/ExampleSelectorsWindow.uxml";
 
         protected override string WindowTitle => "Example Selectors";
@@ -110,6 +128,15 @@ namespace UnityUIFlow.Examples
 
     public sealed class ExampleWaitForElementWindow : ExampleAcceptanceWindowBase
     {
+        [MenuItem("UnityUIFlow/Examples/Wait For Element Window")]
+        public static void Open()
+        {
+            ExampleWaitForElementWindow window = GetWindow<ExampleWaitForElementWindow>();
+            window.titleContent = new GUIContent("Example Wait For Element");
+            window.minSize = new Vector2(420f, 260f);
+            window.Show();
+        }
+
         private Label _message;
         private int _revealFrames;
 

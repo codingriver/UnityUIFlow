@@ -10,7 +10,7 @@
 本目录用于承接 `UnityUIFlow` 的需求、实现边界、测试覆盖与维护约定。
 
 当前文档集已经从“纯设计稿”收口为“代码优先的实现文档集”：
-- 已落地能力按 `Assets/UnityUIFlow/Editor/` 与 `Assets/Tests/` 的真实实现描述。
+- 已落地能力按 `Assets/UnityUIFlow/Editor/` 与 `Assets/Examples/Tests/` 的真实实现描述。
 - 尚未落地或仍受 Unity / 包边界限制的内容，必须在文档中显式标注为边界，不再写成“默认可用”。
 
 ## 模块清单
@@ -53,7 +53,7 @@
 | 当前官方宿主基线 | `UnityUIFlowFixture<TWindow>` + `OfficialEditorWindowPanelSimulator` 桥接 | `Assets/UnityUIFlow/Editor/Fixtures/UnityUIFlow.Fixtures.cs` / `Assets/UnityUIFlow/Editor/Fixtures/UnityUIFlow.TestIntegrations.cs` |
 | 当前动作总数 | 38 个内置动作 | `Assets/UnityUIFlow/Editor/Actions/UnityUIFlow.Actions.cs` |
 | 当前复杂字段支持 | `ObjectField` 资源路径 / `guid:`，`CurveField` 键帧 DSL，`GradientField` 渐变 DSL | `Assets/UnityUIFlow/Editor/Actions/UnityUIFlow.AdvancedActions.cs` |
-| 当前扩展控件回归 | `PopupField<string>`、`TagField`、`LayerField`、Toolbar 系列、`PropertyField`、`InspectorElement`、`MultiColumn*View` 排序/列宽 | `Assets/Tests/UnityUIFlow.LocatorsAndActionsTests.cs` / `Assets/Tests/UnityUIFlow.AdvancedControlsWindow.cs` |
+| 当前扩展控件回归 | `PopupField<string>`、`TagField`、`LayerField`、Toolbar 系列、`PropertyField`、`InspectorElement`、`MultiColumn*View` 排序/列宽 | `Assets/Examples/Tests/UnityUIFlow.LocatorsAndActionsTests.cs` / `Assets/Examples/Tests/UnityUIFlow.AdvancedControlsWindow.cs` |
 
 ## 当前实现边界
 

@@ -35,7 +35,7 @@ namespace UnityUIFlow
             Execute = 4,
         }
 
-        private static readonly string SampleUxmlAssetPath = "Assets/UnityUIFlow/Samples/Uxml/SampleInteractionWindow.uxml";
+        private static readonly string SampleUxmlAssetPath = "Assets/Examples/Uxml/SampleInteractionWindow.uxml";
         private readonly List<string> _multiColumnItems = new List<string> { "Mercury", "Venus", "Earth", "Mars", "Jupiter" };
         private readonly List<string> _items = new List<string> { "Alpha", "Beta", "Gamma", "Delta", "Epsilon" };
         private readonly List<TreeViewItemData<string>> _treeItems = new List<TreeViewItemData<string>>

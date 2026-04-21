@@ -438,9 +438,9 @@ defaultTimeoutMs: 1500
         [Test]
         public void YamlTestCaseFilter_MatchesFileNameAndCaseName()
         {
-            Assert.That(YamlTestCaseFilter.Match("01-*", "Assets/UnityUIFlow/Samples/Yaml/01-basic-login.yaml", "Basic Login"), Is.True);
-            Assert.That(YamlTestCaseFilter.Match("*Selectors", "Assets/UnityUIFlow/Samples/Yaml/03-assertions-and-selectors.yaml", "Assertions And Selectors"), Is.True);
-            Assert.That(YamlTestCaseFilter.Match("NoMatch*", "Assets/UnityUIFlow/Samples/Yaml/01-basic-login.yaml", "Basic Login"), Is.False);
+            Assert.That(YamlTestCaseFilter.Match("01-*", "Assets/Examples/Yaml/sample-01-basic-login.yaml", "Basic Login"), Is.True);
+            Assert.That(YamlTestCaseFilter.Match("*Selectors", "Assets/Examples/Yaml/03-assertions-and-selectors.yaml", "Assertions And Selectors"), Is.True);
+            Assert.That(YamlTestCaseFilter.Match("NoMatch*", "Assets/Examples/Yaml/sample-01-basic-login.yaml", "Basic Login"), Is.False);
         }
 
         [Test]

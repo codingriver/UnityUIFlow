@@ -32,7 +32,7 @@
 
 **关键约束**：
 - 所有生产代码均在 `Assets/UnityUIFlow/Editor/` 下，编译目标为 **Editor only**。
-- 测试代码在 `Assets/Tests/` 下，同样为 **Editor only**。
+- 测试代码在 `Assets/Examples/Tests/` 下，同样为 **Editor only**。
 - 不存在 PlayMode 测试，也不存在 Runtime 逻辑。
 
 ---
@@ -52,12 +52,12 @@ Assets/
 │   ├── Headed/                  ← Editor 可视化窗口（TestRunnerWindow，含批量执行与单条步进调试）
 │   ├── Parsing/                 ← YAML 解析、选择器编译、执行计划构建
 │   └── Reporting/               ← 截图、Markdown/JSON 报告
-├── Tests/                       ← 测试汇编（UnityUIFlow.Tests）
-├── Examples/                    ← 示例窗口与示例 YAML
+├── Examples/                    ← 示例窗口、测试界面 UI 与测试用例
 │   ├── Editor/                  ← 示例 EditorWindow（Acceptance + Coverage）
-│   ├── Uxml/                    ← 14 个 UXML 布局文件
+│   ├── Uxml/                    ← UXML 布局文件（示例 + 测试界面）
 │   ├── Uss/                     ← 共享样式表
-│   └── Yaml/                    ← 44+ 条示例自动化用例
+│   ├── Yaml/                    ← 自动化用例（示例 + 回归测试）
+│   └── Tests/                   ← 测试汇编（UnityUIFlow.Tests）
 └── Plugins/                     ← YamlDotNet.dll
 ```
 
@@ -144,11 +144,11 @@ Reporting（ScreenshotManager + MarkdownReporter + JsonResultWriter）
 
 | 层级 | 位置 | 说明 |
 |------|------|------|
-| 单元测试 | `Assets/Tests/UnityUIFlow.ParsingAndPlanningTests.cs` | 解析器、选择器编译、计划构建、模板渲染 |
-| 集成测试 | `Assets/Tests/UnityUIFlow.LocatorsAndActionsTests.cs` | 真实 EditorWindow 上的动作与定位器 |
-| 验收测试 | `Assets/Tests/UnityUIFlow.ExamplesAcceptanceTests.cs` | 端到端执行 `Assets/Examples/Yaml/*.yaml` |
-| Headed/Batch 测试 | `Assets/Tests/UnityUIFlow.HeadedTests.cs` | 可视化面板、RuntimeController、偏好设置 |
-| CLI/报告测试 | `Assets/Tests/UnityUIFlow.ExecutionReportingCliTests.cs` | CLI 参数、报告生成、ProjectSettings 覆盖 |
+| 单元测试 | `Assets/Examples/Tests/UnityUIFlow.ParsingAndPlanningTests.cs` | 解析器、选择器编译、计划构建、模板渲染 |
+| 集成测试 | `Assets/Examples/Tests/UnityUIFlow.LocatorsAndActionsTests.cs` | 真实 EditorWindow 上的动作与定位器 |
+| 验收测试 | `Assets/Examples/Tests/UnityUIFlow.ExamplesAcceptanceTests.cs` | 端到端执行 `Assets/Examples/Yaml/*.yaml` |
+| Headed/Batch 测试 | `Assets/Examples/Tests/UnityUIFlow.HeadedTests.cs` | 可视化面板、RuntimeController、偏好设置 |
+| CLI/报告测试 | `Assets/Examples/Tests/UnityUIFlow.ExecutionReportingCliTests.cs` | CLI 参数、报告生成、ProjectSettings 覆盖 |
 
 ### 5.2 测试命名与模式
 

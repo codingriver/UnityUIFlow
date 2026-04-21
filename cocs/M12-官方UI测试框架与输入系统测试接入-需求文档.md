@@ -149,7 +149,7 @@
 | M06 Headed可视化执行 | 被动接收 | Headed 面板必须显示实际宿主与实际驱动，而不是仅显示“理论目标驱动” | `HeadedTestWindow`、`HeadedPanelState` |
 | M07 报告与截图 | 被动接收 | `StepResult` 与 Markdown 报告必须记录 host/pointer/keyboard/driver-details | `StepResult`、`MarkdownReporter` |
 | M09 测试基座与Fixture基类 | 被动接收 | fixture 必须在 strict 模式下阻断 fallback 宿主冒充官方宿主 | `UnityUIFlowFixture<TWindow>` |
-| M10 测试用例说明与编写规范 | 主动通知 | 新增 probe、strict fail-fast、fallback-driver 报告测试要求 | `Assets/Tests/*.cs` |
+| M10 测试用例说明与编写规范 | 主动通知 | 新增 probe、strict fail-fast、fallback-driver 报告测试要求 | `Assets/Examples/Tests/*.cs` |
 
 ## 8. 技术实现要点
 

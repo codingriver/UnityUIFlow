@@ -1,7 +1,7 @@
 name: Advanced Controls Scroller And Split
 fixture:
   host_window:
-    type: AdvancedControlsWindow
+    type: UnityUIFlow.AdvancedControlsWindow
     reopen_if_open: true
 steps:
   - action: page_scroller

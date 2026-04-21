@@ -13,7 +13,7 @@ namespace UnityUIFlow
         [Test]
         public void Parser_BuildsExecutionPlan_FromCsvCase()
         {
-            string yamlPath = Path.GetFullPath("Assets/UnityUIFlow/Samples/Yaml/02-data-driven-csv.yaml");
+            string yamlPath = Path.GetFullPath("Assets/Examples/Yaml/02-data-driven-csv.yaml");
             var parser = new YamlTestCaseParser();
             TestCaseDefinition definition = parser.ParseFile(yamlPath);
             var builder = new ExecutionPlanBuilder(new SelectorCompiler(), new ActionRegistry());
@@ -95,7 +95,7 @@ data:
 steps:
   - action: wait
     duration: '10ms'
-", Path.GetFullPath("Assets/UnityUIFlow/Samples/Yaml/05-custom-action-and-json.yaml"));
+", Path.GetFullPath("Assets/Examples/Yaml/05-custom-action-and-json.yaml"));
 
             List<Dictionary<string, string>> rows = TestDataResolver.ResolveRows(definition);
 

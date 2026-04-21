@@ -58,7 +58,7 @@ steps:
 ### 2️⃣ **C# 单元测试** (Fixture 方式)
 
 #### 文件位置
-- **测试文件目录**: `Assets/Tests/`
+- **测试文件目录**: `Assets/Examples/Tests/`
 - **测试程序集**: `UnityUIFlow.Tests.asmdef`
 - **关键测试文件**:
   - `UnityUIFlow.ParsingAndPlanningTests.cs` - YAML 解析测试
@@ -714,7 +714,7 @@ Assets/Examples/Yaml/
 | [Assets/UnityUIFlow/Editor/](Assets/UnityUIFlow/Editor/) | 核心框架代码 |
 | [Assets/Examples/Yaml/](Assets/Examples/Yaml/) | 19 个示例 YAML 测试 |
 | [Assets/Examples/Editor/](Assets/Examples/Editor/) | 示例 EditorWindow 实现 |
-| [Assets/Tests/](Assets/Tests/) | C# 单元测试 |
+| [Assets/Examples/Tests/](Assets/Examples/Tests/) | C# 单元测试 |
 | [Packages/manifest.json](Packages/manifest.json) | 项目依赖配置 |
 
 ---

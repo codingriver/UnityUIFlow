@@ -1,4 +1,8 @@
 name: CSV Driven Login
+fixture:
+  host_window:
+    type: UnityUIFlow.SampleLoginWindow
+    reopen_if_open: true
 data:
   from_csv: users.csv
 steps:

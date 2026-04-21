@@ -110,7 +110,7 @@ namespace UnityUIFlow.Examples
             CoverageHost.Add(new BoundsField("Volume") { name = "volume-bounds", value = new Bounds(Vector3.zero, Vector3.one) });
             CoverageHost.Add(new BoundsIntField("Voxel Volume") { name = "voxel-boundsint", value = new BoundsInt(Vector3Int.zero, Vector3Int.one) });
             CoverageHost.Add(new Hash128Field("Content Hash") { name = "content-hash", value = new Hash128(0u, 0u, 0u, 0u) });
-            CoverageHost.Add(new ObjectField("Template Asset") { name = "template-asset", objectType = typeof(VisualTreeAsset), allowSceneObjects = false, value = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/UnityUIFlow/Samples/Uxml/SampleInteractionWindow.uxml") });
+            CoverageHost.Add(new ObjectField("Template Asset") { name = "template-asset", objectType = typeof(VisualTreeAsset), allowSceneObjects = false, value = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Examples/Uxml/SampleInteractionWindow.uxml") });
             CoverageHost.Add(new CurveField("Speed Curve") { name = "speed-curve", value = new AnimationCurve(new Keyframe(0f, 0f), new Keyframe(1f, 2f)) });
             CoverageHost.Add(new GradientField("Ramp") { name = "ramp-gradient", value = CreateGradient() });
             CoverageHost.Add(new ProgressBar { name = "progress-bar", title = "Progress", lowValue = 0f, highValue = 100f, value = 65f });
@@ -410,6 +410,15 @@ namespace UnityUIFlow.Examples
 
     public sealed class ExampleCoverageInputWindow : ExampleCoverageWindowBase
     {
+        [MenuItem("UnityUIFlow/Examples/Coverage Input Window")]
+        public static void Open()
+        {
+            ExampleCoverageInputWindow window = GetWindow<ExampleCoverageInputWindow>();
+            window.titleContent = new GUIContent("Example Coverage Input");
+            window.minSize = new Vector2(420f, 800f);
+            window.Show();
+        }
+
         protected override string WindowTitle => "Example Coverage Input";
 
         protected override void AfterBuild()

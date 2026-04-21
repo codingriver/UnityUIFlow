@@ -318,7 +318,7 @@ namespace UnityUIFlow
     {
         public static string Require(Dictionary<string, string> parameters, string actionName, string key)
         {
-            if (!parameters.TryGetValue(key, out string value) || string.IsNullOrWhiteSpace(value))
+            if (!parameters.TryGetValue(key, out string value))
             {
                 throw new UnityUIFlowException(ErrorCodes.ActionParameterMissing, $"Action {actionName} is missing parameter {key}.");
             }

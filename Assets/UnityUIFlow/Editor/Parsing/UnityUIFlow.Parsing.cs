@@ -891,29 +891,29 @@ namespace UnityUIFlow
                 Condition = CompileCondition(step.If, data, displayName),
             };
 
-            if (!string.IsNullOrWhiteSpace(step.Selector))
+            if (step.Selector != null)
             {
                 string selector = TemplateRenderer.Render(step.Selector, data, displayName);
                 compiled.Selector = _selectorCompiler.Compile(selector);
                 compiled.Parameters["selector"] = selector;
             }
 
-            if (!string.IsNullOrWhiteSpace(step.Value))
+            if (step.Value != null)
             {
                 compiled.Parameters["value"] = TemplateRenderer.Render(step.Value, data, displayName);
             }
 
-            if (!string.IsNullOrWhiteSpace(step.Expected))
+            if (step.Expected != null)
             {
                 compiled.Parameters["expected"] = TemplateRenderer.Render(step.Expected, data, displayName);
             }
 
-            if (!string.IsNullOrWhiteSpace(step.Duration))
+            if (step.Duration != null)
             {
                 compiled.Parameters["duration"] = TemplateRenderer.Render(step.Duration, data, displayName);
             }
 
-            if (!string.IsNullOrWhiteSpace(step.Timeout))
+            if (step.Timeout != null)
             {
                 compiled.Parameters["timeout"] = TemplateRenderer.Render(step.Timeout, data, displayName);
             }

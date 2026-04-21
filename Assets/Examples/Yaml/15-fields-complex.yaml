@@ -42,7 +42,7 @@ steps:
     value: "11111111222222223333333344444444"
   - action: set_value
     selector: "#template-asset"
-    value: "path:Assets/UnityUIFlow/Samples/Uxml/SampleInteractionWindow.uxml"
+    value: "path:Assets/Examples/Uxml/SampleInteractionWindow.uxml"
   - action: set_value
     selector: "#speed-curve"
     value: "0:0:1:1;1:2:0:0"
@@ -60,4 +60,4 @@ steps:
     expected: "1.5,2.5,3.5"
   - action: assert_value
     selector: "#template-asset"
-    expected: "Assets/UnityUIFlow/Samples/Uxml/SampleInteractionWindow.uxml"
+    expected: "Assets/Examples/Uxml/SampleInteractionWindow.uxml"

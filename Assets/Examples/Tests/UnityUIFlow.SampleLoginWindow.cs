@@ -43,8 +43,8 @@ namespace UnityUIFlow
     /// </summary>
     public sealed class SampleLoginWindow : EditorWindow
     {
-        internal const string UxmlPath = "Assets/UnityUIFlow/Samples/Uxml/SampleLoginWindow.uxml";
-        internal const string UssPath = "Assets/UnityUIFlow/Samples/Uss/SampleLoginWindow.uss";
+        internal const string UxmlPath = "Assets/Examples/Uxml/SampleLoginWindow.uxml";
+        internal const string UssPath = "Assets/Examples/Uss/SampleLoginWindow.uss";
 
         private TextField _usernameField;
         private TextField _passwordField;
@@ -156,8 +156,8 @@ namespace UnityUIFlow
     /// </summary>
     public sealed class SampleInteractionWindow : EditorWindow
     {
-        internal const string UxmlPath = "Assets/UnityUIFlow/Samples/Uxml/SampleInteractionWindow.uxml";
-        internal const string UssPath = "Assets/UnityUIFlow/Samples/Uss/SampleInteractionWindow.uss";
+        internal const string UxmlPath = "Assets/Examples/Uxml/SampleInteractionWindow.uxml";
+        internal const string UssPath = "Assets/Examples/Uss/SampleInteractionWindow.uss";
 
         private TextField _inputField;
         private Label _clickStatus;

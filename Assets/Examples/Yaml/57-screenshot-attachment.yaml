@@ -8,7 +8,7 @@ steps:
     selector: "#username-input"
     value: "screenshot"
   - action: screenshot
-    name: "login-filled"
+    tag: "login-filled"
   - action: assert_text_contains
     selector: "#username-input"
     expected: "screenshot"

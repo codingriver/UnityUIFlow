@@ -369,7 +369,7 @@ namespace UnityUIFlow
             }
             catch (UnityUIFlowException ex)
             {
-                result.Status = ex.ErrorCode == ErrorCodes.ActionExecutionFailed || ex.ErrorCode == ErrorCodes.StepTimeout
+                result.Status = ex.ErrorCode == ErrorCodes.ActionExecutionFailed || ex.ErrorCode == ErrorCodes.StepTimeout || ex.ErrorCode == ErrorCodes.AssertionFailed
                     ? TestStatus.Failed
                     : TestStatus.Error;
                 result.ErrorCode = ex.ErrorCode;

@@ -133,7 +133,7 @@ public interface IUnityUIFlowTestHostWindow
 - 关键类与职责：
   - `HostWindowResolver` `(设计提案，实现时确认)`：负责解析 `host_window.type` 为 `System.Type`，管理窗口创建、关闭与 `PrepareForAutomatedTest()` 调用。
   - `IUnityUIFlowTestHostWindow` `(设计提案，实现时确认)`：宿主窗口可选接口，提供自动化测试前的清理入口。
-  - `ExamplesAcceptanceTests` `(已实现)`：`Assets/Tests/UnityUIFlow.ExamplesAcceptanceTests.cs`，覆盖 `Assets/Examples` 下示例 YAML 的端到端验收路径。
+  - `ExamplesAcceptanceTests` `(已实现)`：`Assets/Examples/Tests/UnityUIFlow.ExamplesAcceptanceTests.cs`，覆盖 `Assets/Examples` 下示例 YAML 的端到端验收路径。
 
 - 核心流程：
 

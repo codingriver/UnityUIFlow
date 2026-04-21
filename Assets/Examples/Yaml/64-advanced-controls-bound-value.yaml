@@ -1,7 +1,7 @@
 name: Advanced Controls Bound Value
 fixture:
   host_window:
-    type: AdvancedControlsWindow
+    type: UnityUIFlow.AdvancedControlsWindow
     reopen_if_open: true
 steps:
   - action: set_bound_value
