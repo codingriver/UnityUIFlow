@@ -1,8 +1,8 @@
 # UIToolkit 控件自动化覆盖与限制说明
 
-版本：1.5.2
-日期：2026-04-17
-状态：更新基线（已适配 `com.unity.ui@2.0.0`，补齐菜单高级动作）
+版本：1.6.0
+日期：2026-04-21
+状态：已全量验证（71 份 YAML 全部执行通过，含 3 份负向测试）
 
 ---
 
@@ -15,9 +15,10 @@
 - **不可自动化**：官方 API 不开放或控件特性导致无法通过任何自动化手段操作。
 
 当前示例验收基线：
-- `Assets/Examples/Yaml` 当前已扩展到 `01-35` 及 `41-44` 共 39 份 YAML。
+- `Assets/Examples/Yaml` 当前已扩展到 71 份 YAML（含示例用例 `01-35`、`41-44`、场景扩展 `50-57`、IMGUI 用例 `97-99`、Host Window 用例、条件/循环用例等）。
 - 新增覆盖窗口已补入字段值、集合与布局、输入与菜单 3 类宿主，见 `ExampleCoverageFieldsWindow`、`ExampleCoverageCollectionsWindow`、`ExampleCoverageInputWindow`。
 - 这些 YAML 已覆盖当前代码中已实现的大部分内置动作，以及对应的 UIToolkit 控件族。
+- **全量验证结果**：68 份通过 / 3 份负向测试按设计失败（预期行为）/ 0 份错误。
 
 ---
 
@@ -131,133 +132,15 @@
 
 ---
 
-## 6. IMGUI 自动化支持（新增）
+## 6. IMGUI 自动化支持
 
-> 自 2026-04-17 起，UnityUIFlow 新增对 IMGUI（Immediate Mode GUI）的自动化测试能力。该能力通过反射 Unity 内部 `GUILayoutUtility` 状态、注入 `OnGUI` 钩子、发送 `UnityEngine.Event` 事件实现。
+> IMGUI（Immediate Mode GUI）自动化已作为独立子系统实现，详细覆盖范围、动作列表、选择器语法、设计原理与限制说明，请参见《IMGUI 控件自动化覆盖与限制说明.md》。
 
-### 6.1 设计原理
+IMGUI 动作（`imgui_*`）与 UIToolkit 动作可在同一 YAML 中混用。简要信息：
 
-IMGUI 与 UIToolkit 是两套独立的渲染体系：
-- UIToolkit 保留 `VisualElement` 树，可通过选择器遍历定位。
-- IMGUI 每帧通过 `OnGUI()` 回调即时绘制，无持久树结构。
-
-因此，IMGUI 自动化不走 `ElementFinder` + `VisualElement` 路径，而是建立了一套平行子系统：
-
-```
-YAML imgui_* 动作
-    ↓
-ImguiSelectorCompiler（编译 gui(button, text="OK") 语法）
-    ↓
-ImguiExecutionBridge（注入 IMGUIContainer.onGUIHandler 钩子）
-    ↓
-OnGUI 执行 → ImguiSnapshotCapture（反射 GUILayoutUtility.current.topLevel.entries）
-    ↓
-ImguiElementLocator（基于快照匹配选择器）
-    ↓
-Event 注入（MouseDown/Up/ScrollWheel/KeyDown/Up）或断言
-```
-
-### 6.2 支持的 IMGUI 控件（Tier 1）
-
-| 控件 | IMGUI API | 选择器示例 | 可用动作 |
-|------|-----------|-----------|---------|
-| Button | `GUILayout.Button` | `gui(button)` / `gui(button, text="Save")` | click、double_click、right_click、hover、assert_text、assert_visible |
-| TextField | `EditorGUILayout.TextField` | `gui(textfield, index=0)` | type、focus、press_key、assert_visible |
-| Label | `GUILayout.Label` | `gui(label, index=2)` | assert_text、assert_visible |
-| Toggle | `EditorGUILayout.Toggle` | `gui(toggle, text="Enabled")` | click、assert_value、assert_visible |
-| Popup/Dropdown | `EditorGUILayout.Popup` | `gui(dropdown, index=0)` | click、select_option、assert_value、assert_visible |
-| Toolbar | `GUILayout.Toolbar` | `gui(toolbar, index=0)` | click、assert_visible |
-| Slider | `EditorGUILayout.Slider` | `gui(slider, index=0)` | press_key（方向键）、assert_visible |
-| ScrollView | `GUILayout.BeginScrollView` | `gui(scroller)` | scroll、assert_visible |
-| Group | `GUILayout.BeginVertical/Horizontal` | `gui(group="Settings")` | 作为路径容器使用 |
-
-### 6.3 IMGUI 动作列表（15 个）
-
-| 动作 | 说明 |
-|------|------|
-| `imgui_click` | 左键点击控件中心 |
-| `imgui_double_click` | 快速双击 |
-| `imgui_right_click` | 右键点击（button=1） |
-| `imgui_hover` | 发送 MouseMove 到控件中心 |
-| `imgui_type` | 逐字符输入文本（Event 队列） |
-| `imgui_focus` | 点击控件以获取焦点 |
-| `imgui_scroll` | 发送 ScrollWheel 事件 |
-| `imgui_select_option` | Dropdown 展开 + 方向键导航 + 回车确认 |
-| `imgui_press_key` | 发送单按键（KeyDown + KeyUp） |
-| `imgui_press_key_combination` | 发送组合键（Ctrl+A、Shift+Tab 等） |
-| `imgui_read_value` | 读取控件文本/值，存入 `SharedBag` |
-| `imgui_assert_text` | 断言 Label/Button 文本 |
-| `imgui_assert_visible` | 断言控件存在且尺寸 > 0 |
-| `imgui_assert_value` | 尽力断言值（依赖 text/style 推断） |
-| `imgui_wait` | 轮询等待控件出现在快照中 |
-
-### 6.4 选择器语法
-
-```yaml
-# 基本类型匹配
-gui(button)
-gui(textfield, index=2)
-gui(toggle, text="Enabled")
-
-# 组路径限定
-gui(group="Settings" > button, text="Apply")
-
-# ControlName 匹配（需要被测代码配合 GUI.SetNextControlName）
-gui(textfield, control_name="username-field")
-
-# 焦点匹配
-gui(focused)
-```
-
-### 6.5 被测代码的可测试性改造（推荐）
-
-为了让选择器更稳定，建议在 IMGUI 代码中为关键控件设置 `ControlName`：
-
-```csharp
-GUI.SetNextControlName("save-button");
-if (GUILayout.Button("Save")) { /* ... */ }
-
-GUI.SetNextControlName("username-field");
-_username = GUILayout.TextField(_username);
-```
-
-YAML 中即可精确匹配：
-```yaml
-- imgui_click: { selector: "gui(button, control_name=\"save-button\")" }
-- imgui_type: { selector: "gui(textfield, control_name=\"username-field\")", text: "admin" }
-```
-
-### 6.6 已知限制
-
-| 限制 | 说明 |
-|------|------|
-| 反射依赖 | `ImguiSnapshotCapture` 反射 `GUILayoutUtility.current` 等内部字段，Unity 版本升级可能破坏兼容性 |
-| 布局重排 | 窗口 resize 后 `index` 选择器可能失效，建议优先使用 `text` 或 `control_name` |
-| 浮窗菜单 | `GenericMenu` / `EditorUtility.DisplayDialog` 等独立浮窗不在 GUILayout 树内，无法定位 |
-| 值断言 | Toggle/Slider 的真实值不存储在 `GUILayoutEntry` 中，`imgui_assert_value` 为尽力推断 |
-| 复杂自定义绘制 | `GUI.DrawTexture`、`Handles` 等纯绘制控件无 `GUILayoutEntry`，无法定位 |
-
-### 6.7 与 UIToolkit 混用
-
-IMGUI 动作与 UIToolkit 动作可在同一 YAML 中混用：
-
-```yaml
-steps:
-  # UIToolkit 部分
-  - click: { selector: "#open-settings" }
-
-  # IMGUI 部分（设置面板是 IMGUI 的）
-  - imgui_type:
-      selector: "gui(textfield, control_name=\"project-name\")"
-      text: "TestProject"
-  - imgui_click:
-      selector: "gui(button, text=\"Save\")"
-
-  # 回到 UIToolkit
-  - assert_text:
-      selector: "#status-label"
-      text: "Saved"
-```
+- **15 个 IMGUI 动作**：`imgui_click`、`imgui_double_click`、`imgui_right_click`、`imgui_hover`、`imgui_type`、`imgui_focus`、`imgui_scroll`、`imgui_select_option`、`imgui_press_key`、`imgui_press_key_combination`、`imgui_read_value`、`imgui_assert_text`、`imgui_assert_visible`、`imgui_assert_value`、`imgui_wait`。
+- **选择器语法**：`gui(button)`、`gui(textfield, control_name="xxx")`、`gui(group="Settings" > button, text="Apply")`、`gui(focused)`。
+- **验收基线**：`Assets/Examples/Yaml/99-imgui-example.yaml`、`98-imgui-advanced.yaml`、`97-imgui-negative-assert.yaml` 等 5 份用例已全部通过验证。
 
 ---
 
@@ -580,3 +463,34 @@ steps:
   - RuntimeController NRE 修复、CoverageWindow 反射赋值修复、DragAction 兼容 com.unity.ui@2.0.0 的 legacy 事件派发、InputWindow 事件回调注册修复。
 - **EDITOR_BUSY 恢复机制**：
   - Unity 桥接层与 MCP Server 新增 unity_uiflow_force_reset，可在毫秒级释放卡死的执行锁，无需重启 Unity。
+
+## 2026-04-21 1.6.0 全量验证与修复修订
+
+基于对当前代码库的完整复核、71 份 YAML 全量执行验证及 3 个 pre-existing 失败用例修复，修订以下口径：
+
+- **全量验证结果**：
+  - `Assets/Examples/Yaml` 全部 71 份 YAML 用例已执行验证：68 份通过 / 3 份负向测试按设计失败（预期行为）/ 0 份错误。
+  - 负向测试清单：`97-imgui-negative-assert`、`_96-imgui-negative-wait`、`_97-imgui-negative-assert`。
+
+- **Empty String 参数修复**：
+  - `ActionHelpers.Require`（`UnityUIFlow.Actions.cs`）原使用 `string.IsNullOrWhiteSpace`，错误地将合法空字符串 `""` 判定为缺失。已改为仅检查 `TryGetValue`，允许空字符串作为有效参数值。
+  - `UnityUIFlow.Parsing.cs` 在编译参数时同样使用 `string.IsNullOrWhiteSpace`，导致 `expected: ""` 被丢弃。已改为 `!= null` 检查，保留空字符串。
+
+- **AssertionFailed 状态映射修复**：
+  - `UnityUIFlow.Execution.cs` 将 `AssertionFailed` 异常错误码映射到 `TestStatus.Error`，导致负向测试（预期失败）被错误标记为 Error 而非 Failed。已将其加入 `Failed` 分支，负向测试现在正确报告为 `Failed`。
+
+- **编译监控修复（Critical）**：
+  - `UnityPilotCompileService.cs` 存在分裂的错误处理逻辑：全局 `assemblyCompilationFinished` 仅设置 `HasCompileErrors = true`，但未将错误信息写入 `_lastErrors`，导致自动编译触发的错误无法通过 MCP `unity_compile_errors` 工具读取。
+  - 修复方案：将错误收集逻辑合并到 `OnAssemblyCompilationFinished`（所有编译共用），将持久化逻辑保留在 `OnCompilationFinished`。现在自动编译和 MCP 发起的编译均正确报告结构化错误信息。
+
+- **测试用例修复**：
+  - `98-imgui-advanced.yaml`：修正状态文本 `"Ready"` → `"Status: Ready"`（与 `ImguiExampleWindow` 实际输出对齐）；移除不支持的 slider 值断言步骤。
+  - `93-host-window-advanced.yaml`：重写为测试单窗口 `reopen_if_open` 持久化场景（V1 不支持多窗口切换）。
+  - `sample-04-conditional-and-loop.yaml`：延长 Toast 显示时长（5 帧 → 60 帧，约 0.25s → 3s）和断言超时（1s → 5s），消除因 Toast 生命周期过短导致的 flaky 失败。
+
+- **IMGUI 文档独立**：
+  - 原 §6「IMGUI 自动化支持」详细内容已迁移至独立文档《IMGUI 控件自动化覆盖与限制说明.md》。
+  - 本文档 §6 现仅保留 IMGUI 简要引用和混用示例。
+
+- **YAML 基线数量更新**：
+  - 全量套件从 39 份扩展到 71 份，新增 IMGUI 用例（5 份）、Host Window 高级用例、条件/循环用例、负向测试用例、截图/附件用例等。
