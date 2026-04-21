@@ -364,7 +364,6 @@ Reports/
 
 | 子目录 | 来源 |
 |--------|------|
-| `BatchRunner/` | Editor GUI 批量运行 |
 | `Examples/` | 示例用例执行 |
 | `HeadedAll/` | Headed 模式全量套件 |
 | `McpQuickTest/`、`McpRegression/`、`McpUiFlowFile/` 等 | MCP 驱动执行 |

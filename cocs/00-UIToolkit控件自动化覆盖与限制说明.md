@@ -2,7 +2,7 @@
 
 版本：1.5.2
 日期：2026-04-17
-状态：更新基线（已适配 `com.unity.ui@2.0.0`，补齐菜单高级动作与 BatchRunner 覆盖）
+状态：更新基线（已适配 `com.unity.ui@2.0.0`，补齐菜单高级动作）
 
 ---
 
@@ -16,7 +16,7 @@
 
 当前示例验收基线：
 - `Assets/Examples/Yaml` 当前已扩展到 `01-35` 及 `41-44` 共 39 份 YAML。
-- 新增覆盖窗口已补入字段值、集合与布局、输入与菜单、BatchRunner 4 类宿主，见 `ExampleCoverageFieldsWindow`、`ExampleCoverageCollectionsWindow`、`ExampleCoverageInputWindow`、`BatchRunnerWindow`。
+- 新增覆盖窗口已补入字段值、集合与布局、输入与菜单 3 类宿主，见 `ExampleCoverageFieldsWindow`、`ExampleCoverageCollectionsWindow`、`ExampleCoverageInputWindow`。
 - 这些 YAML 已覆盖当前代码中已实现的大部分内置动作，以及对应的 UIToolkit 控件族。
 
 ---
@@ -307,7 +307,7 @@ steps:
 | P1 | 上下文菜单自动化 | 已完成，支持 `open_context_menu` / `select_context_menu_item` / `assert_menu_item*` |
 | P1 | 弹出菜单自动化 | 已完成，支持 `open_popup_menu` / `select_popup_menu_item` / `assert_menu_item*` |
 | P1 | Toolbar 控件覆盖 | 已完成：`Toolbar`（§2）、`ToolbarButton`/`ToolbarToggle`/`ToolbarSearchField`（§2，继承父类动作）、`ToolbarMenu`（§3，支持官方 `PopupMenuSimulator` + `DropdownMenu` fallback） |
-| P1 | `BatchRunnerWindow` 自动化 | 已完成：`41-batch-runner.yaml` 覆盖批量运行器窗口的核心交互 |
+| P1 | `TestRunnerWindow` 批量执行 | 已完成：`TestRunnerWindow` 已覆盖目录批量运行、勾选执行与报告生成 |
 | P2 | `ObjectField` 拖放赋值 | 模拟 `DragAndDrop` API |
 | P2 | 组合键（`Shift+Click` 等） | 已完成：`press_key_combination` 支持 `Ctrl+A` / `Ctrl+C` / `Ctrl+S` 等常见系统级键盘组合 |
 | P2 | 剪贴板操作 | `Ctrl+C` / `Ctrl+V` 模拟 |
@@ -522,7 +522,7 @@ steps:
   - `ToolbarMenu` 的菜单动作增加了 `DropdownMenu` reflection fallback：当官方 `PopupMenuSimulator` 无法打开或选择菜单项时，自动降级到直接操作 `ToolbarMenu.menu` 的 `DropdownMenuAction`。
 - **YAML 基线扩展到 39 份**：
   - 新增 `35-menu-advanced.yaml`：覆盖 `open_popup_menu`、`select_popup_menu_item`、`open_context_menu`、`select_context_menu_item`、`assert_menu_item`、`assert_menu_item_disabled` 六个此前缺失的菜单动作。
-  - 新增 `41-batch-runner.yaml`：覆盖 `BatchRunnerWindow` 的核心交互（路径设置、选项勾选、运行/取消按钮、结果断言）。
+
 - **动作层收口**：
   - `navigate_breadcrumb` 专用动作已实现（支持 `label` / `index`）。
   - `set_split_view_size` 专用动作已实现（支持 `size` / `pane`）。

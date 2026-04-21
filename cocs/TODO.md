@@ -282,7 +282,6 @@
   - `Assets/UnityUIFlow/Editor/Fixtures/UnityUIFlow.TestIntegrations.cs`
   - `Assets/UnityUIFlow/Editor/Cli/UnityUIFlow.Cli.cs`
   - `Assets/UnityUIFlow/Editor/Headed/UnityUIFlow.Headed.cs`
-  - `Assets/UnityUIFlow/Editor/Headed/UnityUIFlow.BatchRunner.cs`
 
 ### RESOLVED-007: `com.unity.ui.test-framework@6.3.0` 安装验证与代码集成完成
 

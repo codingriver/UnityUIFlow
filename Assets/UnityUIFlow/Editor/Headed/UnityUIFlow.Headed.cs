@@ -347,18 +347,6 @@ namespace UnityUIFlow
     }
 
     /// <summary>
-    /// Legacy menu item redirected to TestRunnerWindow.
-    /// </summary>
-    internal static class HeadedTestWindowMenuRedirect
-    {
-        [MenuItem("UnityUIFlow/UnityUIFlow")]
-        public static void Open()
-        {
-            TestRunnerWindow.Open();
-        }
-    }
-
-    /// <summary>
     /// UnityUIFlow menu bar items.
     /// </summary>
     internal static class UnityUIFlowMenuItems

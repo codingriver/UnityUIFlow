@@ -663,7 +663,7 @@ namespace UnityUIFlow
                     if (hasInteractiveCapability)
                     {
                         // In com.unity.ui 2.0.0, generated pointer events may miss the target inside some
-                        // EditorWindow layouts (e.g. BatchRunnerWindow). Fallback to direct callback invocation.
+                        // EditorWindow layouts. Fallback to direct callback invocation.
                         if (element is Button btn && TryInvokeButtonDirectly(btn, context))
                         {
                             continue;
