@@ -113,7 +113,7 @@ namespace UnityUIFlow
 
             _loginButton.RegisterCallback<MouseUpEvent>(_ => HandleLogin());
             _resetButton.RegisterCallback<MouseUpEvent>(_ => HandleReset());
-            _saveButton.RegisterCallback<MouseUpEvent>(_ => ShowToastForFrames(5));
+            _saveButton.RegisterCallback<MouseUpEvent>(_ => ShowToastForFrames(60));
 
             _statusLabel.text = "Idle";
             _toast.style.display = DisplayStyle.None;

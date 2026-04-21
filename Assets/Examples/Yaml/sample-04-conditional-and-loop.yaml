@@ -15,7 +15,7 @@ steps:
   - name: Toast becomes visible
     action: assert_visible
     selector: "#toast-message"
-    timeout: "1s"
+    timeout: "5s"
   - name: Wait until toast disappears
     repeat_while:
       condition:

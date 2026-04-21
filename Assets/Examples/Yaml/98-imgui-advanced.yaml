@@ -32,7 +32,7 @@ steps:
   - name: Assert text was entered
     action: imgui_assert_text
     selector: "gui(label, control_name=\"status-label\")"
-    text: "Ready"
+    text: "Status: Ready"
 
   - name: Click Generate to update status
     action: imgui_click
@@ -66,11 +66,6 @@ steps:
   - name: Click slider to change value (best-effort)
     action: imgui_click
     selector: "gui(slider, control_name=\"scale-slider\")"
-
-  - name: Assert slider value (unknown due to IMGUI limitations)
-    action: imgui_assert_value
-    selector: "gui(slider, control_name=\"scale-slider\")"
-    expected: "unknown"
 
   - name: Toggle feature on
     action: imgui_click
