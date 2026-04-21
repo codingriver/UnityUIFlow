@@ -4,7 +4,7 @@
     padding-top: 16px;
     padding-bottom: 16px;
     flex-grow: 1;
-    background-color: rgb(248, 246, 241);
+    background-color: rgb(218, 210, 198);
 }
 
 .panel {
@@ -17,11 +17,11 @@
     border-right-width: 1px;
     border-top-width: 1px;
     border-bottom-width: 1px;
-    border-left-color: rgb(181, 166, 142);
-    border-right-color: rgb(181, 166, 142);
-    border-top-color: rgb(181, 166, 142);
-    border-bottom-color: rgb(181, 166, 142);
-    background-color: rgb(255, 252, 245);
+    border-left-color: rgb(175, 162, 142);
+    border-right-color: rgb(175, 162, 142);
+    border-top-color: rgb(175, 162, 142);
+    border-bottom-color: rgb(175, 162, 142);
+    background-color: rgb(245, 242, 235);
 }
 
 .text-input {
@@ -46,7 +46,7 @@
     width: 160px;
     height: 42px;
     margin-bottom: 10px;
-    background-color: rgb(222, 232, 238);
+    background-color: rgb(210, 220, 228);
     border-left-width: 1px;
     border-right-width: 1px;
     border-top-width: 1px;
@@ -71,7 +71,7 @@
     border-right-color: rgb(166, 132, 95);
     border-top-color: rgb(166, 132, 95);
     border-bottom-color: rgb(166, 132, 95);
-    background-color: rgb(247, 237, 221);
+    background-color: rgb(240, 230, 215);
 }
 
 .status {
@@ -82,7 +82,7 @@
     height: 120px;
     margin-top: 8px;
     border-top-width: 1px;
-    border-top-color: rgb(207, 196, 179);
+    border-top-color: rgb(175, 162, 142);
 }
 
 .item {

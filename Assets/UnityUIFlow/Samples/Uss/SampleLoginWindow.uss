@@ -4,7 +4,7 @@
     padding-top: 16px;
     padding-bottom: 16px;
     flex-grow: 1;
-    background-color: rgb(245, 247, 249);
+    background-color: rgb(205, 215, 230);
 }
 
 .panel {
@@ -17,11 +17,11 @@
     border-right-width: 1px;
     border-top-width: 1px;
     border-bottom-width: 1px;
-    border-left-color: rgb(186, 194, 201);
-    border-right-color: rgb(186, 194, 201);
-    border-top-color: rgb(186, 194, 201);
-    border-bottom-color: rgb(186, 194, 201);
-    background-color: rgb(255, 255, 255);
+    border-left-color: rgb(160, 175, 200);
+    border-right-color: rgb(160, 175, 200);
+    border-top-color: rgb(160, 175, 200);
+    border-bottom-color: rgb(160, 175, 200);
+    background-color: rgb(235, 240, 248);
 }
 
 .text-input {
@@ -45,7 +45,7 @@
 .status {
     margin-top: 4px;
     margin-bottom: 8px;
-    unity-font-style: bold;
+    -unity-font-style: bold;
 }
 
 .toast {
@@ -62,7 +62,7 @@
     margin-top: 8px;
     padding-top: 8px;
     border-top-width: 1px;
-    border-top-color: rgb(216, 220, 224);
+    border-top-color: rgb(160, 175, 200);
 }
 
 .item {
