@@ -60,6 +60,7 @@ namespace UnityUIFlow
         public int Failed;
         public int Errors;
         public int Skipped;
+        public HeadedFailurePolicy FailurePolicy;
         public List<TestRunnerCaseItem> Cases = new List<TestRunnerCaseItem>();
     }
 
@@ -75,6 +76,7 @@ namespace UnityUIFlow
         private TextField _searchField;
         private Button _runAllButton;
         private Button _runSelectedButton;
+        private Button _runStepButton;
         private Button _rerunFailedButton;
         private Button _cancelButton;
         private Button _refreshButton;
@@ -86,6 +88,10 @@ namespace UnityUIFlow
         private int _lastCheckedIndex = -1;
 
         // Right panel (details)
+        private VisualElement _detailControlRow;
+        private Button _pauseButton;
+        private Button _resumeButton;
+        private EnumField _failurePolicyField;
         private VisualElement _detailNameRow;
         private VisualElement _detailPathRow;
         private VisualElement _detailStatusRow;
@@ -174,24 +180,34 @@ namespace UnityUIFlow
             toolbar.style.alignItems = Align.Center;
             toolbar.style.paddingLeft = 12;
             toolbar.style.paddingRight = 12;
-            toolbar.style.paddingTop = 16;
-            toolbar.style.paddingBottom = 16;
-            toolbar.style.height = 72;
+            toolbar.style.paddingTop = 8;
+            toolbar.style.paddingBottom = 8;
+            toolbar.style.height = 48;
             toolbar.style.borderBottomWidth = 1;
             toolbar.style.borderBottomColor = new Color(0.15f, 0.15f, 0.15f);
             toolbar.style.backgroundColor = new Color(0.22f, 0.22f, 0.22f);
+            toolbar.style.flexShrink = 0;
             rootVisualElement.Add(toolbar);
 
             _runAllButton = CreateToolbarButton("Run All", RunAll);
             _runSelectedButton = CreateToolbarButton("Run Selected", RunSelected);
+            _runStepButton = CreateToolbarButton("Run Step", RunStep);
             _rerunFailedButton = CreateToolbarButton("Rerun Failed", RunFailed);
             _cancelButton = CreateToolbarButton("Cancel", CancelRun);
+            _pauseButton = CreateToolbarButton("Pause", () => _activeContext?.RuntimeController?.Pause());
+            _pauseButton.style.marginLeft = 8;
+            _pauseButton.style.marginRight = 4;
+            _resumeButton = CreateToolbarButton("Resume", () => _activeContext?.RuntimeController?.Resume());
+            _resumeButton.style.marginRight = 4;
             _refreshButton = CreateToolbarButton("Refresh", RefreshCaseList);
             var clearButton = CreateToolbarButton("Clear Results", ClearResults);
             toolbar.Add(_runAllButton);
             toolbar.Add(_runSelectedButton);
+            toolbar.Add(_runStepButton);
             toolbar.Add(_rerunFailedButton);
             toolbar.Add(_cancelButton);
+            toolbar.Add(_pauseButton);
+            toolbar.Add(_resumeButton);
             toolbar.Add(_refreshButton);
             toolbar.Add(clearButton);
 
@@ -287,6 +303,32 @@ namespace UnityUIFlow
             rightPanel.style.paddingBottom = 12;
             rightPanel.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f);
 
+            // ── Debug control row (sticky header above scroll view) ──
+            _detailControlRow = new VisualElement();
+            _detailControlRow.name = "test-runner-debug-controls";
+            _detailControlRow.style.flexDirection = FlexDirection.Row;
+            _detailControlRow.style.alignItems = Align.Center;
+            _detailControlRow.style.paddingBottom = 8;
+            _detailControlRow.style.marginBottom = 8;
+            _detailControlRow.style.borderBottomWidth = 1;
+            _detailControlRow.style.borderBottomColor = new Color(0.18f, 0.18f, 0.18f);
+            rightPanel.Add(_detailControlRow);
+
+            var failurePolicyContainer = new VisualElement();
+            failurePolicyContainer.style.flexDirection = FlexDirection.Row;
+            failurePolicyContainer.style.alignItems = Align.Center;
+            failurePolicyContainer.style.marginRight = 8;
+            var failurePolicyLabel = new Label("On Fail") { style = { marginRight = 2, color = new Color(0.6f, 0.6f, 0.6f), fontSize = 10 } };
+            _failurePolicyField = new EnumField(_state.FailurePolicy) { style = { fontSize = 10 } };
+            _failurePolicyField.RegisterValueChangedCallback(evt =>
+            {
+                _state.FailurePolicy = (HeadedFailurePolicy)evt.newValue;
+                TestRunnerPreferences.Save(_state);
+            });
+            failurePolicyContainer.Add(failurePolicyLabel);
+            failurePolicyContainer.Add(_failurePolicyField);
+            _detailControlRow.Add(failurePolicyContainer);
+
             var scrollView = new ScrollView();
             scrollView.name = "test-runner-detail-scroll";
             scrollView.style.flexGrow = 1;
@@ -366,6 +408,7 @@ namespace UnityUIFlow
             progressBar.style.height = 18;
             progressBar.style.marginTop = 0;
             progressBar.style.marginBottom = 0;
+            progressBar.style.flexShrink = 0;
             progressBar.lowValue = 0;
             progressBar.highValue = 100;
             progressBar.value = 0;
@@ -377,6 +420,7 @@ namespace UnityUIFlow
             statusBar.style.flexDirection = FlexDirection.Row;
             statusBar.style.alignItems = Align.Center;
             statusBar.style.height = 36;
+            statusBar.style.flexShrink = 0;
             statusBar.style.paddingLeft = 12;
             statusBar.style.paddingRight = 12;
             statusBar.style.paddingTop = 0;
@@ -398,9 +442,9 @@ namespace UnityUIFlow
         private Button CreateToolbarButton(string text, Action onClick)
         {
             var btn = new Button(onClick) { text = text };
-            btn.style.marginRight = 8;
-            btn.style.height = 36;
-            btn.style.fontSize = 14;
+            btn.style.marginRight = 4;
+            btn.style.height = 24;
+            btn.style.fontSize = 10;
             return btn;
         }
 
@@ -1243,6 +1287,31 @@ namespace UnityUIFlow
             await ExecuteBatchAsync(selectedPaths, _ => true);
         }
 
+        private async void RunStep()
+        {
+            if (_state.IsRunning)
+            {
+                _activeContext?.RuntimeController?.StepOnce();
+                return;
+            }
+
+            var selected = GetSelectedItem();
+            if (selected == null)
+            {
+                ShowNotification(new GUIContent("No case selected."));
+                return;
+            }
+
+            string yamlPath = Path.GetFullPath(selected.YamlPath);
+            if (!File.Exists(yamlPath))
+            {
+                ShowNotification(new GUIContent("Selected YAML file does not exist."));
+                return;
+            }
+
+            await ExecuteBatchAsync(new List<string> { yamlPath }, _ => true, HeadedRunMode.Step);
+        }
+
         private async void RunFailed()
         {
             var failedPaths = _state.Cases
@@ -1279,7 +1348,7 @@ namespace UnityUIFlow
             await ExecuteBatchAsync(yamlPaths, _ => true);
         }
 
-        private async System.Threading.Tasks.Task ExecuteBatchAsync(List<string> yamlPaths, Func<string, bool> filter)
+        private async System.Threading.Tasks.Task ExecuteBatchAsync(List<string> yamlPaths, Func<string, bool> filter, HeadedRunMode? runModeOverride = null)
         {
             if (_state.IsRunning)
             {
@@ -1342,7 +1411,7 @@ namespace UnityUIFlow
                             new TestOptions
                             {
                                 Headed = _state.Headed,
-                                DebugOnFailure = false,
+                                DebugOnFailure = _state.FailurePolicy == HeadedFailurePolicy.Pause,
                                 ReportOutputPath = reportRoot,
                                 ScreenshotPath = screenshotRoot,
                                 ScreenshotOnFailure = _state.ScreenshotOnFailure,
@@ -1358,6 +1427,10 @@ namespace UnityUIFlow
                             context =>
                             {
                                 _activeContext = context;
+                                if (runModeOverride.HasValue)
+                                {
+                                    context.RuntimeController.RunMode = runModeOverride.Value;
+                                }
                                 _state.CurrentCaseName = context.CaseName;
                                 if (caseItem != null) caseItem.CaseName = context.CaseName;
                                 RefreshUi();
@@ -1377,11 +1450,6 @@ namespace UnityUIFlow
                             ReportMarkdownPath = TestRunnerPathUtility.MakeProjectRelative(reportPaths.BuildCaseMarkdownPath(reportRoot, fallbackCaseName)),
                         };
                     }
-                    finally
-                    {
-                        _activeContext = null;
-                    }
-
                     suite.CaseResults.Add(result);
                     ApplyCounters(result.Status);
 
@@ -1522,6 +1590,14 @@ namespace UnityUIFlow
             var timeoutField = rootVisualElement.Q<IntegerField>("test-runner-timeout");
             timeoutField?.SetEnabled(!_state.IsRunning);
 
+            // Runtime control buttons state
+            bool isRunning = _state.IsRunning;
+            bool isPaused = _activeContext?.RuntimeController?.IsPaused ?? false;
+            _runStepButton?.SetEnabled((!isRunning && GetSelectedItem() != null) || (isRunning && isPaused));
+            _pauseButton?.SetEnabled(isRunning && !isPaused);
+            _resumeButton?.SetEnabled(isRunning && isPaused);
+            _failurePolicyField?.SetEnabled(!isRunning);
+
             // Update progress bar
             var progressBar = rootVisualElement.Q<ProgressBar>("test-runner-progress");
             if (progressBar != null)
@@ -1586,9 +1662,17 @@ namespace UnityUIFlow
                 caseItem.StepResults.Add(result);
             }
 
-            _state.StatusText = result.Status == TestStatus.Passed
-                ? $"Step passed: {step.DisplayName}"
-                : $"Step {result.Status}: {step.DisplayName}";
+            if (_activeContext?.RuntimeController?.IsPaused == true)
+            {
+                _state.StatusText = $"Paused at: {step.DisplayName}";
+            }
+            else
+            {
+                _state.StatusText = result.Status == TestStatus.Passed
+                    ? $"Step passed: {step.DisplayName}"
+                    : $"Step {result.Status}: {step.DisplayName}";
+            }
+
             RefreshUi();
             RefreshDetailPanel();
         }
@@ -1649,6 +1733,7 @@ namespace UnityUIFlow
             state.RequireOfficialPointerDriver = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.RequireOfficialPointerDriver), UnityUIFlowProjectSettings.instance.RequireOfficialPointerDriverByDefault);
             state.RequireInputSystemKeyboardDriver = EditorPrefs.GetBool(Prefix + nameof(TestRunnerViewState.RequireInputSystemKeyboardDriver), UnityUIFlowProjectSettings.instance.RequireInputSystemKeyboardDriverByDefault);
             state.DefaultTimeoutMs = EditorPrefs.GetInt(Prefix + nameof(TestRunnerViewState.DefaultTimeoutMs), 3000);
+            state.FailurePolicy = (HeadedFailurePolicy)EditorPrefs.GetInt(Prefix + nameof(TestRunnerViewState.FailurePolicy), (int)HeadedFailurePolicy.Pause);
         }
 
         public static void Save(TestRunnerViewState state)
@@ -1665,6 +1750,7 @@ namespace UnityUIFlow
             EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.RequireOfficialPointerDriver), state.RequireOfficialPointerDriver);
             EditorPrefs.SetBool(Prefix + nameof(TestRunnerViewState.RequireInputSystemKeyboardDriver), state.RequireInputSystemKeyboardDriver);
             EditorPrefs.SetInt(Prefix + nameof(TestRunnerViewState.DefaultTimeoutMs), state.DefaultTimeoutMs);
+            EditorPrefs.SetInt(Prefix + nameof(TestRunnerViewState.FailurePolicy), (int)state.FailurePolicy);
         }
     }
 }

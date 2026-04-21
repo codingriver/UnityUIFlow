@@ -110,13 +110,13 @@ namespace UnityUIFlow
 
         public void OnStepCompleted()
         {
-            if (RunMode == HeadedRunMode.Step)
+            if (_stepRequested)
             {
-                if (_stepRequested)
-                {
-                    _stepRequested = false;
-                }
-
+                _stepRequested = false;
+                _isPaused = true;
+            }
+            else if (RunMode == HeadedRunMode.Step)
+            {
                 _isPaused = true;
             }
         }
@@ -430,6 +430,7 @@ namespace UnityUIFlow
             {
                 StepHighlighter.ClearAfterDelay(highlightedElement, 800);
             }
+            context.RuntimeController?.OnStepCompleted();
             HeadedRunEventBus.PublishStepCompleted(step, result, completedElement);
             return result;
         }
@@ -769,7 +770,6 @@ namespace UnityUIFlow
                         }
                     }
 
-                    context.RuntimeController.OnStepCompleted();
                 }
 
                 if (context.RuntimeController.IsPausedForFailure && !context.RuntimeController.IsStopped)
@@ -871,7 +871,7 @@ namespace UnityUIFlow
         private static VisualElement ResolveDefaultRoot()
         {
             EditorWindow focused = EditorWindow.focusedWindow;
-            if (focused != null && !(focused is HeadedTestWindow) && focused.rootVisualElement != null)
+            if (focused != null && !(focused is TestRunnerWindow) && focused.rootVisualElement != null)
             {
                 return focused.rootVisualElement;
             }
@@ -879,7 +879,7 @@ namespace UnityUIFlow
             EditorWindow[] windows = Resources.FindObjectsOfTypeAll<EditorWindow>();
             foreach (EditorWindow window in windows)
             {
-                if (window == null || window is HeadedTestWindow)
+                if (window == null || window is TestRunnerWindow)
                 {
                     continue;
                 }

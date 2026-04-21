@@ -183,7 +183,7 @@ namespace UnityUIFlow
             });
             targetModeRow.Add(_targetModeField);
 
-            targetModeRow.Add(CreateButton("Open Headed", HeadedTestWindow.Open));
+            targetModeRow.Add(CreateButton("Open Test Runner", TestRunnerWindow.Open));
             targetModeRow.Add(CreateButton("Settings", OpenSettings));
 
             var targetPathRow = new VisualElement();

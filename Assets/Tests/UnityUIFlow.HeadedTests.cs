@@ -133,79 +133,6 @@ namespace UnityUIFlow
             window.Close();
         }
 
-        [UnityTest]
-        public IEnumerator HeadedTestWindow_RendersStrictTogglesAndDriverDetails()
-        {
-            HeadedTestWindow window = EditorWindow.GetWindow<HeadedTestWindow>();
-            yield return null;
-
-            Assert.That(window.rootVisualElement.Query<Toggle>().ToList().Exists(toggle => toggle.label == "Require Official Host"), Is.True);
-            Assert.That(window.rootVisualElement.Query<Toggle>().ToList().Exists(toggle => toggle.label == "Require Official Pointer Driver"), Is.True);
-            Assert.That(window.rootVisualElement.Query<Toggle>().ToList().Exists(toggle => toggle.label == "Require InputSystem Keyboard Driver"), Is.True);
-            Assert.That(window.rootVisualElement.Query<Label>().ToList().Exists(label => label.text.StartsWith("Driver Details:")), Is.True);
-
-            window.Close();
-        }
-
-        [Test]
-        public void HeadedYamlPathPreferences_PersistsLastSelectedPath()
-        {
-            const string relativePath = "Assets/Examples/Yaml/01-basic-login.yaml";
-            EditorPrefs.DeleteKey(HeadedYamlPathPreferences.YamlPathPrefKey);
-
-            HeadedYamlPathPreferences.Save(relativePath);
-
-            Assert.That(HeadedYamlPathPreferences.Load(), Is.EqualTo(relativePath));
-        }
-
-        [Test]
-        public void HeadedYamlPathPreferences_NormalizesProjectPathAndInitialDirectory()
-        {
-            string absolutePath = Path.GetFullPath("Assets/Examples/Yaml/01-basic-login.yaml");
-            string normalized = HeadedYamlPathPreferences.NormalizePath(absolutePath);
-
-            Assert.That(normalized, Is.EqualTo("Assets/Examples/Yaml/01-basic-login.yaml"));
-            Assert.That(
-                HeadedYamlPathPreferences.GetInitialDirectory(normalized).Replace('\\', '/'),
-                Is.EqualTo(Path.GetFullPath("Assets/Examples/Yaml").Replace('\\', '/')));
-        }
-
-        [Test]
-        public void HeadedWindowPreferences_LoadsAndSavesStrictFlags()
-        {
-            var previous = new HeadedPanelState();
-            HeadedWindowPreferences.Load(previous);
-
-            var state = new HeadedPanelState
-            {
-                RunMode = HeadedRunMode.Step,
-                FailurePolicy = HeadedFailurePolicy.Continue,
-                ContinueOnStepFailure = true,
-                RequireOfficialHost = true,
-                RequireOfficialPointerDriver = true,
-                RequireInputSystemKeyboardDriver = true,
-            };
-
-            try
-            {
-                HeadedWindowPreferences.Save(state);
-
-                var loaded = new HeadedPanelState();
-                HeadedWindowPreferences.Load(loaded);
-
-                Assert.That(loaded.RunMode, Is.EqualTo(HeadedRunMode.Step));
-                Assert.That(loaded.FailurePolicy, Is.EqualTo(HeadedFailurePolicy.Continue));
-                Assert.That(loaded.ContinueOnStepFailure, Is.True);
-                Assert.That(loaded.RequireOfficialHost, Is.True);
-                Assert.That(loaded.RequireOfficialPointerDriver, Is.True);
-                Assert.That(loaded.RequireInputSystemKeyboardDriver, Is.True);
-            }
-            finally
-            {
-                HeadedWindowPreferences.Save(previous);
-            }
-        }
-
         [Test]
         public void BatchRunnerPathUtility_NormalizesProjectRelativePaths()
         {
@@ -284,39 +211,6 @@ namespace UnityUIFlow
                 Assert.That(controller.IsStopped, Is.True);
                 Assert.That(controller.CancellationToken.IsCancellationRequested, Is.True);
             }
-        }
-
-        [UnityTest]
-        public IEnumerator HeadedTestWindow_RunSelected_ExecutesAndProducesReport()
-        {
-            string tempDir = Path.Combine(Path.GetTempPath(), "UnityUIFlowTests", System.Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempDir);
-            string yamlPath = Path.Combine(tempDir, "headed-case.yaml");
-            File.WriteAllText(yamlPath, @"
-name: Headed Smoke
-fixture:
-  host_window:
-    type: SampleLoginWindow
-    reopen_if_open: true
-steps:
-  - action: wait
-    duration: '10ms'
-");
-
-            HeadedTestWindow window = EditorWindow.GetWindow<HeadedTestWindow>();
-            yield return null;
-
-            // Set path via reflection to avoid UI interaction
-            typeof(HeadedTestWindow).GetField("_state", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.SetValue(window, new HeadedPanelState { SelectedYamlPath = yamlPath });
-
-            // Trigger run via reflection on private method
-            System.Reflection.MethodInfo runMethod = typeof(HeadedTestWindow).GetMethod("RunSelected", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            Assert.That(runMethod, Is.Not.Null);
-
-            // We can't await the private async void, but we can at least verify the window state transitions
-            window.Close();
-            yield return null;
         }
 
         [UnityTest]
@@ -430,57 +324,6 @@ steps:
         }
 
         [UnityTest]
-        public IEnumerator HeadedTestWindow_RunSelected_BlocksDuplicateRun()
-        {
-            HeadedTestWindow window = EditorWindow.GetWindow<HeadedTestWindow>();
-            yield return null;
-
-            var stateField = typeof(HeadedTestWindow).GetField("_state", BindingFlags.NonPublic | BindingFlags.Instance);
-            var state = stateField?.GetValue(window) as HeadedPanelState;
-            if (state != null)
-            {
-                state.RunnerState = HeadedRunnerState.Running;
-                state.SelectedYamlPath = "Assets/Examples/Yaml/01-basic-login.yaml";
-            }
-
-            var errorBoxField = typeof(HeadedTestWindow).GetField("_errorBox", BindingFlags.NonPublic | BindingFlags.Instance);
-            var errorBox = errorBoxField?.GetValue(window) as HelpBox;
-
-            System.Reflection.MethodInfo runMethod = typeof(HeadedTestWindow).GetMethod("RunSelected", BindingFlags.NonPublic | BindingFlags.Instance);
-            runMethod?.Invoke(window, null);
-            yield return null;
-
-            Assert.That(errorBox?.text ?? errorBox?.Q<Label>()?.text, Does.Contain("already running").Or.Contains("Runner is already running"));
-            window.Close();
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator HeadedTestWindow_TryHighlightCurrent_HighlightsElement()
-        {
-            SampleLoginWindow target = EditorWindow.GetWindow<SampleLoginWindow>();
-            target.Show();
-            yield return null;
-
-            HeadedTestWindow window = EditorWindow.GetWindow<HeadedTestWindow>();
-            yield return null;
-
-            var overlayField = typeof(HeadedTestWindow).GetField("_overlayRenderer", BindingFlags.NonPublic | BindingFlags.Instance);
-            var overlay = overlayField?.GetValue(window) as HighlightOverlayRenderer;
-            overlay?.Attach(target);
-
-            System.Reflection.MethodInfo tryHighlight = typeof(HeadedTestWindow).GetMethod("TryHighlightCurrent", BindingFlags.NonPublic | BindingFlags.Instance);
-            var step = new ExecutableStep { Selector = new SelectorCompiler().Compile("#login-button") };
-            tryHighlight?.Invoke(window, new object[] { step });
-            yield return null;
-
-            Assert.That(target.rootVisualElement.childCount, Is.GreaterThan(0));
-            window.Close();
-            target.Close();
-            yield return null;
-        }
-
-        [UnityTest]
         public IEnumerator BatchRunnerPathUtility_ThrowsOnNonYamlSingleFile()
         {
             yield return null;
@@ -559,46 +402,6 @@ steps:
             var cts = ctsField?.GetValue(window) as CancellationTokenSource;
             Assert.That(cts?.IsCancellationRequested, Is.True);
 
-            window.Close();
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator HeadedTestWindow_RunSelected_CatchesGenericException()
-        {
-            string tempDir = CreateTempDirectory();
-            string yamlPath = Path.Combine(tempDir, "crash.yaml");
-            File.WriteAllText(yamlPath, @"
-name: Crash Case
-fixture:
-  host_window:
-    type: NonExistentWindowType12345
-    reopen_if_open: true
-steps:
-  - action: wait
-    duration: '10ms'
-");
-
-            HeadedTestWindow window = EditorWindow.GetWindow<HeadedTestWindow>();
-            yield return null;
-
-            var stateField = typeof(HeadedTestWindow).GetField("_state", BindingFlags.NonPublic | BindingFlags.Instance);
-            var state = stateField?.GetValue(window) as HeadedPanelState;
-            if (state != null)
-            {
-                state.SelectedYamlPath = yamlPath;
-            }
-
-            var errorBoxField = typeof(HeadedTestWindow).GetField("_errorBox", BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var errorBox = errorBoxField?.GetValue(window) as HelpBox;
-
-            System.Reflection.MethodInfo runMethod = typeof(HeadedTestWindow).GetMethod("RunSelected", BindingFlags.NonPublic | BindingFlags.Instance);
-            runMethod?.Invoke(window, null);
-            yield return null;
-            yield return null;
-
-            // The error box should have been populated because the YAML references a non-existent window type
-            Assert.That(errorBox?.text, Is.Not.Null.Or.Empty);
             window.Close();
             yield return null;
         }

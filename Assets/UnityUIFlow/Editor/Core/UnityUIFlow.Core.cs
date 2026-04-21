@@ -643,30 +643,6 @@ namespace UnityUIFlow
     }
 
     /// <summary>
-    /// Headed panel view state.
-    /// </summary>
-    [Serializable]
-    public sealed class HeadedPanelState
-    {
-        public string SelectedYamlPath;
-        public HeadedRunMode RunMode = HeadedRunMode.Continuous;
-        public HeadedRunnerState RunnerState = HeadedRunnerState.Idle;
-        public bool ContinueOnStepFailure;
-        public bool RequireOfficialHost;
-        public bool RequireOfficialPointerDriver;
-        public bool RequireInputSystemKeyboardDriver;
-        public string CurrentStepName;
-        public string CurrentSelector;
-        public string CurrentHostDriver;
-        public string CurrentPointerDriver;
-        public string CurrentKeyboardDriver;
-        public string CurrentDriverDetails;
-        public string LastErrorMessage;
-        public HeadedFailurePolicy FailurePolicy = HeadedFailurePolicy.Pause;
-        public bool RetainSceneOnFailure = true;
-    }
-
-    /// <summary>
     /// Highlight state used by the headed overlay.
     /// </summary>
     public sealed class HighlightState
