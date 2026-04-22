@@ -42,7 +42,7 @@ namespace UnityUIFlow
         /// <summary>
         /// 当前线程是否为主线程。
         /// </summary>
-        public static bool IsMainThread => Thread.CurrentThread.ManagedThreadId == MainThreadId;
+        private static bool IsMainThread => Thread.CurrentThread.ManagedThreadId == MainThreadId;
 
         static Logger()
         {
@@ -154,7 +154,7 @@ namespace UnityUIFlow
         /// </summary>
         /// <param name="line">日志正文（通常已包含 [LEVEL] message）。</param>
         /// <param name="tags">可选标签列表，会追加在行尾。</param>
-        public static void AppendLine(string line, params string[] tags)
+        private static void AppendLine(string line, params string[] tags)
         {
             if (string.IsNullOrEmpty(line)) return;
 
