@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -11,7 +11,7 @@ namespace UnityUIFlow
     // Auto-compile trigger to recover from stuck test runner
     public sealed class UnityUIFlowImguiTests
     {
-        // 鈹€鈹€ Selector Compiler Tests 鈹€鈹€
+        // ── Selector Compiler Tests ──
 
         [Test]
         public void SelectorCompiler_ParseButtonType()
@@ -85,7 +85,7 @@ namespace UnityUIFlow
             Assert.Throws<UnityUIFlowException>(() => ImguiSelectorCompiler.Compile("not_a_selector"));
         }
 
-        // 鈹€鈹€ Element Locator Tests 鈹€鈹€
+        // ── Element Locator Tests ──
 
         [Test]
         public void Locator_FindFirst_ByType()
@@ -177,7 +177,7 @@ namespace UnityUIFlow
             Assert.That(results.Count, Is.EqualTo(2));
         }
 
-        // 鈹€鈹€ Snapshot FindFirst/FindAll Tests 鈹€鈹€
+        // ── Snapshot FindFirst/FindAll Tests ──
 
         [Test]
         public void Snapshot_FindFirst_ReturnsMatchingEntry()
@@ -223,7 +223,7 @@ namespace UnityUIFlow
             Assert.That(result, Is.Null);
         }
 
-        // 鈹€鈹€ Integration Test: Snapshot Capture via MonoHook 鈹€鈹€
+        // ── Integration Test: Snapshot Capture via MonoHook ──
 
         [UnityTest]
         public System.Collections.IEnumerator SnapshotCapture_RealWindow_HasEntries()
@@ -255,12 +255,12 @@ namespace UnityUIFlow
             {
                 sb.AppendLine($"  type={entry.InferredType}, text={entry.Text}, rect={entry.Rect}, group={entry.GroupName}");
             }
-            Codingriver.Logger.Log(sb.ToString());
+            UnityEngine.Debug.Log(sb.ToString());
 
             window.Close();
         }
 
-        // 鈹€鈹€ Helper 鈹€鈹€
+        // ── Helper ──
 
         private static ImguiSnapshot CreateSnapshot(params ImguiSnapshotEntry[] entries)
         {

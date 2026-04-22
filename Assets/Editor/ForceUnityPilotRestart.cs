@@ -6,7 +6,7 @@ public class ForceUnityPilotRestart
     [MenuItem("UnityPilot/Force Restart Bridge")]
     public static void RestartBridge()
     {
-        Codingriver.Logger.Log("[ForceUnityPilotRestart] Attempting bridge restart...");
+        Debug.Log("[ForceUnityPilotRestart] Attempting bridge restart...");
         var bridgeType = System.Type.GetType("codingriver.unity.pilot.UnityPilotBridge, unitypilot-editor");
         if (bridgeType != null)
         {
@@ -16,16 +16,16 @@ public class ForceUnityPilotRestart
             {
                 var restartMethod = bridgeType.GetMethod("Restart", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 restartMethod?.Invoke(instance, null);
-                Codingriver.Logger.Log("[ForceUnityPilotRestart] Restart called.");
+                Debug.Log("[ForceUnityPilotRestart] Restart called.");
             }
             else
             {
-                Codingriver.Logger.LogWarning("[ForceUnityPilotRestart] Instance is null.");
+                Debug.LogWarning("[ForceUnityPilotRestart] Instance is null.");
             }
         }
         else
         {
-            Codingriver.Logger.LogWarning("[ForceUnityPilotRestart] Bridge type not found.");
+            Debug.LogWarning("[ForceUnityPilotRestart] Bridge type not found.");
         }
     }
 

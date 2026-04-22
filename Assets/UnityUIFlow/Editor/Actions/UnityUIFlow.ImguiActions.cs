@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -9,7 +9,7 @@ using UnityEngine.UIElements;
 
 namespace UnityUIFlow
 {
-    // 鈹€鈹€ Helper: shared IMGUI action infrastructure 鈹€鈹€
+    // ── Helper: shared IMGUI action infrastructure ──
 
     internal static class ImguiActionHelper
     {
@@ -105,7 +105,7 @@ namespace UnityUIFlow
             Vector2 offset = bridge?.WindowToContentOffset ?? Vector2.zero;
             Vector2 windowPos = localPos + offset;
 
-            Codingriver.Logger.Log($"[UnityUIFlow] SendMouseEvent {eventType} at {localPos} (window={windowPos}, offset={offset}) for {window?.GetType().Name}");
+            Debug.Log($"[UnityUIFlow] SendMouseEvent {eventType} at {localPos} (window={windowPos}, offset={offset}) for {window?.GetType().Name}");
             var evt = new Event
             {
                 type = eventType,
@@ -125,7 +125,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_click 鈹€鈹€
+    // ── imgui_click ──
 
     [ActionName("imgui_click")]
     public sealed class ImguiClickAction : IAction
@@ -186,7 +186,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_type 鈹€鈹€
+    // ── imgui_type ──
 
     [ActionName("imgui_type")]
     public sealed class ImguiTypeAction : IAction
@@ -264,7 +264,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_assert_text 鈹€鈹€
+    // ── imgui_assert_text ──
 
     [ActionName("imgui_assert_text")]
     public sealed class ImguiAssertTextAction : IAction
@@ -346,7 +346,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_assert_visible 鈹€鈹€
+    // ── imgui_assert_visible ──
 
     [ActionName("imgui_assert_visible")]
     public sealed class ImguiAssertVisibleAction : IAction
@@ -404,7 +404,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_wait 鈹€鈹€
+    // ── imgui_wait ──
 
     [ActionName("imgui_wait")]
     public sealed class ImguiWaitAction : IAction
@@ -460,7 +460,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_double_click 鈹€鈹€
+    // ── imgui_double_click ──
 
     [ActionName("imgui_double_click")]
     public sealed class ImguiDoubleClickAction : IAction
@@ -522,7 +522,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_focus 鈹€鈹€
+    // ── imgui_focus ──
 
     [ActionName("imgui_focus")]
     public sealed class ImguiFocusAction : IAction
@@ -583,7 +583,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_scroll 鈹€鈹€
+    // ── imgui_scroll ──
 
     [ActionName("imgui_scroll")]
     public sealed class ImguiScrollAction : IAction
@@ -670,7 +670,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_select_option 鈹€鈹€
+    // ── imgui_select_option ──
 
     [ActionName("imgui_select_option")]
     public sealed class ImguiSelectOptionAction : IAction
@@ -812,7 +812,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_assert_value 鈹€鈹€
+    // ── imgui_assert_value ──
 
     [ActionName("imgui_assert_value")]
     public sealed class ImguiAssertValueAction : IAction
@@ -907,7 +907,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_read_value 鈹€鈹€
+    // ── imgui_read_value ──
 
     [ActionName("imgui_read_value")]
     public sealed class ImguiReadValueAction : IAction
@@ -970,7 +970,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_right_click 鈹€鈹€
+    // ── imgui_right_click ──
 
     [ActionName("imgui_right_click")]
     public sealed class ImguiRightClickAction : IAction
@@ -1029,7 +1029,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_hover 鈹€鈹€
+    // ── imgui_hover ──
 
     [ActionName("imgui_hover")]
     public sealed class ImguiHoverAction : IAction
@@ -1094,7 +1094,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_press_key 鈹€鈹€
+    // ── imgui_press_key ──
 
     [ActionName("imgui_press_key")]
     public sealed class ImguiPressKeyAction : IAction
@@ -1168,7 +1168,7 @@ namespace UnityUIFlow
         }
     }
 
-    // 鈹€鈹€ imgui_press_key_combination 鈹€鈹€
+    // ── imgui_press_key_combination ──
 
     [ActionName("imgui_press_key_combination")]
     public sealed class ImguiPressKeyCombinationAction : IAction

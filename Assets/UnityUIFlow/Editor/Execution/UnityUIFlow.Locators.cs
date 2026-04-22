@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
@@ -166,16 +166,16 @@ namespace UnityUIFlow
         {
             if (selector == null)
             {
-                throw new UnityUIFlowException(ErrorCodes.SelectorEmpty, "閫夋嫨鍣ㄤ笉鑳戒负绌?);
+                throw new UnityUIFlowException(ErrorCodes.SelectorEmpty, "选择器不能为空");
             }
 
             if (root == null)
             {
-                throw new UnityUIFlowException(ErrorCodes.RootElementMissing, $"鏍硅妭鐐逛笉瀛樺湪锛屾棤娉曟煡鎵?{selector.Raw}");
+                throw new UnityUIFlowException(ErrorCodes.RootElementMissing, $"根节点不存在，无法查找 {selector.Raw}");
             }
 
             if (EnableVerboseLog)
-                Codingriver.Logger.Log($"[UnityUIFlow][Locators] 鏌ユ壘鍏冪礌 閫夋嫨鍣?{selector.Raw} 鑼冨洿={RootInfo(root)} 瑕佹眰鍙={requireVisible}");
+                Debug.Log($"[UnityUIFlow][Locators] 查找元素 选择器={selector.Raw} 范围={RootInfo(root)} 要求可见={requireVisible}");
 
             VisualElement element = TryFastPath(selector, root, requireVisible);
             if (element == null)
@@ -200,7 +200,7 @@ namespace UnityUIFlow
             if (element != null)
             {
                 if (EnableVerboseLog)
-                    Codingriver.Logger.Log($"[UnityUIFlow][Locators] 鎵惧埌鍏冪礌 {ActionContext.ElementInfo(element)} 閫夋嫨鍣?{selector.Raw}");
+                    Debug.Log($"[UnityUIFlow][Locators] 找到元素 {ActionContext.ElementInfo(element)} 选择器={selector.Raw}");
                 return new FindResult
                 {
                     Element = element,
@@ -234,7 +234,7 @@ namespace UnityUIFlow
                 if (element != null)
                 {
                     if (EnableVerboseLog)
-                        Codingriver.Logger.Log($"[UnityUIFlow][Locators] 鎵惧埌鍏冪礌(娴姩闈㈡澘) {ActionContext.ElementInfo(element)} 閫夋嫨鍣?{selector.Raw}");
+                        Debug.Log($"[UnityUIFlow][Locators] 找到元素(浮动面板) {ActionContext.ElementInfo(element)} 选择器={selector.Raw}");
                     return new FindResult
                     {
                         Element = element,
@@ -244,7 +244,7 @@ namespace UnityUIFlow
             }
 
             if (EnableVerboseLog)
-                Codingriver.Logger.Log($"[UnityUIFlow][Locators] 鏈壘鍒板厓绱?閫夋嫨鍣?{selector.Raw} 鑼冨洿={RootInfo(root)}");
+                Debug.Log($"[UnityUIFlow][Locators] 未找到元素 选择器={selector.Raw} 范围={RootInfo(root)}");
             return new FindResult();
         }
 
@@ -255,22 +255,22 @@ namespace UnityUIFlow
         {
             if (root == null)
             {
-                throw new UnityUIFlowException(ErrorCodes.RootElementMissing, $"鏍硅妭鐐逛笉瀛樺湪锛屾棤娉曟煡鎵?{selector?.Raw}");
+                throw new UnityUIFlowException(ErrorCodes.RootElementMissing, $"根节点不存在，无法查找 {selector?.Raw}");
             }
 
             if (selector == null)
             {
-                throw new UnityUIFlowException(ErrorCodes.SelectorEmpty, "閫夋嫨鍣ㄤ笉鑳戒负绌?);
+                throw new UnityUIFlowException(ErrorCodes.SelectorEmpty, "选择器不能为空");
             }
 
             if (options == null || options.TimeoutMs < 100 || options.TimeoutMs > 600000)
             {
-                throw new UnityUIFlowException(ErrorCodes.TestOptionsInvalid, $"绛夊緟瓒呮椂鍊奸潪娉曪細{options?.TimeoutMs}");
+                throw new UnityUIFlowException(ErrorCodes.TestOptionsInvalid, $"等待超时值非法：{options?.TimeoutMs}");
             }
 
             if (options.PollIntervalMs < 16 || options.PollIntervalMs > 1000)
             {
-                throw new UnityUIFlowException(ErrorCodes.TestOptionsInvalid, "杞闂撮殧涓嶈兘灏忎簬 16ms");
+                throw new UnityUIFlowException(ErrorCodes.TestOptionsInvalid, "轮询间隔不能小于 16ms");
             }
 
             DateTimeOffset startedAt = DateTimeOffset.UtcNow;
@@ -280,7 +280,7 @@ namespace UnityUIFlow
 
                 if (root.panel == null)
                 {
-                    throw new UnityUIFlowException(ErrorCodes.ElementDisposedDuringQuery, $"鍏冪礌鏍戝凡閲婃斁锛歿selector.Raw}");
+                    throw new UnityUIFlowException(ErrorCodes.ElementDisposedDuringQuery, $"元素树已释放：{selector.Raw}");
                 }
 
                 FindResult result = Find(selector, root, options.RequireVisible);
@@ -293,7 +293,7 @@ namespace UnityUIFlow
                 int elapsedMs = UnityUIFlowUtility.DurationMs(startedAt, DateTimeOffset.UtcNow);
                 if (elapsedMs >= options.TimeoutMs)
                 {
-                    throw new UnityUIFlowException(ErrorCodes.ElementWaitTimeout, $"绛夊緟鍏冪礌瓒呮椂锛歿selector.Raw}锛岃秴鏃?{options.TimeoutMs}ms");
+                    throw new UnityUIFlowException(ErrorCodes.ElementWaitTimeout, $"等待元素超时：{selector.Raw}，超时 {options.TimeoutMs}ms");
                 }
 
                 await EditorAsyncUtility.DelayAsync(options.PollIntervalMs, cancellationToken);
@@ -307,7 +307,7 @@ namespace UnityUIFlow
         {
             bool exists = Find(selector, root, requireVisible).Element != null;
             if (EnableVerboseLog)
-                Codingriver.Logger.Log($"[UnityUIFlow][Locators] 妫€鏌ュ瓨鍦?閫夋嫨鍣?{selector?.Raw} => {exists}");
+                Debug.Log($"[UnityUIFlow][Locators] 检查存在 选择器={selector?.Raw} => {exists}");
             return exists;
         }
 

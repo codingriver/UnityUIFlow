@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -65,7 +65,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
-                Codingriver.Logger.LogWarning($"[UnityUIFlow] IMGUI snapshot capture failed: {ex.Message}");
+                UnityEngine.Debug.LogWarning($"[UnityUIFlow] IMGUI snapshot capture failed: {ex.Message}");
             }
 
             // Assign global indices after full capture
@@ -192,7 +192,7 @@ namespace UnityUIFlow
 
                 if (_guiLayoutUtilityCurrentField == null)
                 {
-                    Codingriver.Logger.LogWarning("[UnityUIFlow] GUILayoutUtility.current field not found via reflection. IMGUI automation unavailable.");
+                    UnityEngine.Debug.LogWarning("[UnityUIFlow] GUILayoutUtility.current field not found via reflection. IMGUI automation unavailable.");
                     return false;
                 }
 
@@ -203,7 +203,7 @@ namespace UnityUIFlow
 
                 if (_guiLayoutGroupType == null || _guiLayoutEntryType == null)
                 {
-                    Codingriver.Logger.LogWarning("[UnityUIFlow] GUILayoutGroup or GUILayoutEntry type not found. IMGUI automation unavailable.");
+                    UnityEngine.Debug.LogWarning("[UnityUIFlow] GUILayoutGroup or GUILayoutEntry type not found. IMGUI automation unavailable.");
                     return false;
                 }
 
@@ -218,7 +218,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
-                Codingriver.Logger.LogWarning($"[UnityUIFlow] IMGUI reflection initialization failed: {ex.Message}");
+                UnityEngine.Debug.LogWarning($"[UnityUIFlow] IMGUI reflection initialization failed: {ex.Message}");
                 return false;
             }
         }
@@ -442,7 +442,7 @@ namespace UnityUIFlow
             // Diagnostic
             var evtType = Event.current?.type.ToString() ?? "null";
             var count = _lastSnapshot?.Entries?.Count ?? -1;
-            Codingriver.Logger.Log($"[UnityUIFlow] CaptureSnapshotEarly: event={evtType}, entries={count}");
+            UnityEngine.Debug.Log($"[UnityUIFlow] CaptureSnapshotEarly: event={evtType}, entries={count}");
         }
 
         /// <summary>
@@ -473,7 +473,7 @@ namespace UnityUIFlow
                 _isInDeferredExecution = true;
                 try
                 {
-                    Codingriver.Logger.Log($"[UnityUIFlow] ScheduleDeferredExecution: _window={_window?.GetType().Name}@{_window?.GetHashCode()}, _pendingCommands={_pendingCommands.Count}");
+                    UnityEngine.Debug.Log($"[UnityUIFlow] ScheduleDeferredExecution: _window={_window?.GetType().Name}@{_window?.GetHashCode()}, _pendingCommands={_pendingCommands.Count}");
 
                 // Ensure we have a snapshot to work with
                 if (_lastSnapshot == null)
@@ -486,12 +486,12 @@ namespace UnityUIFlow
                     var cmd = _pendingCommands.Dequeue();
                     try
                     {
-                        Codingriver.Logger.Log($"[UnityUIFlow] Executing {cmd.GetType().Name}: window={_window?.GetType().Name}@{_window?.GetHashCode()}, snapshot={_lastSnapshot?.Entries?.Count}");
+                        UnityEngine.Debug.Log($"[UnityUIFlow] Executing {cmd.GetType().Name}: window={_window?.GetType().Name}@{_window?.GetHashCode()}, snapshot={_lastSnapshot?.Entries?.Count}");
                         cmd.Execute(_window, _lastSnapshot);
                     }
                     catch (Exception ex)
                     {
-                        Codingriver.Logger.LogWarning($"[UnityUIFlow] IMGUI command failed: {ex}");
+                        UnityEngine.Debug.LogWarning($"[UnityUIFlow] IMGUI command failed: {ex}");
                     }
 
                     // After mutating commands, trigger repaint and break to let the window
@@ -548,7 +548,7 @@ namespace UnityUIFlow
                 }
                 catch (Exception ex)
                 {
-                    Codingriver.Logger.LogWarning($"[UnityUIFlow] IMGUI command failed: {ex.Message}");
+                    UnityEngine.Debug.LogWarning($"[UnityUIFlow] IMGUI command failed: {ex.Message}");
                 }
             }
         }
