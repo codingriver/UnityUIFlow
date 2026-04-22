@@ -221,6 +221,16 @@ namespace UnityUIFlow
         public bool GenerateSingleReport = true;
 
         /// <summary>
+        /// 当前用例在批次中的索引（从 1 开始）。仅用于日志/报告展示。
+        /// </summary>
+        public int CaseIndex = 0;
+
+        /// <summary>
+        /// 批次中用例总数。仅用于日志/报告展示。
+        /// </summary>
+        public int TotalCases = 0;
+
+        /// <summary>
         /// Creates a defensive copy.
         /// </summary>
         public TestOptions Clone()
@@ -242,6 +252,8 @@ namespace UnityUIFlow
                 EnableVerboseLog = EnableVerboseLog,
                 PreStepDelayMs = PreStepDelayMs,
                 GenerateSingleReport = GenerateSingleReport,
+                CaseIndex = CaseIndex,
+                TotalCases = TotalCases,
             };
         }
 

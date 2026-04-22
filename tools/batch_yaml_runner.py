@@ -94,6 +94,7 @@ def run_batch(
     stop_on_first_failure: bool = False,
     default_timeout_ms: int = 10000,
 ) -> dict[str, Any]:
+    """Legacy synchronous batch call (no per-case progress)."""
     print(f"[Batch] Running {len(yaml_paths)} file(s) -> {report_dir}")
     for yp in yaml_paths:
         marker = " [NEG]" if is_negative_test(yp) else ""
@@ -121,22 +122,173 @@ def run_batch(
     return result
 
 
+def _extract_execution_payload(result: dict) -> dict:
+    """Extract the UnityUIFlow payload from an MCP tool result."""
+    text = McpHttpClient._extract_text(result)
+    if not text:
+        return {}
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict) and parsed.get("ok"):
+            data = parsed.get("data", {})
+            if "result" in data:
+                return data["result"]
+            return data
+        return parsed
+    except Exception:
+        return {}
+
+
+def run_batch_with_polling(
+    client: McpHttpClient,
+    yaml_paths: list[str],
+    report_dir: str,
+    headed: bool = True,
+    stop_on_first_failure: bool = False,
+    default_timeout_ms: int = 10000,
+    poll_interval_s: float = 2.0,
+    max_total_timeout_s: float = 600.0,
+    event_timeout_s: float = 30.0,
+) -> dict[str, Any]:
+    """Async batch execution with per-case progress via polling.
+
+    1. Calls unityuiflow.run to start the batch and get an executionId.
+    2. Polls unityuiflow.results every poll_interval_s.
+    3. Prints progress whenever a new case finishes.
+    4. If no new case appears for event_timeout_s, prints a warning and
+       triggers an extra poll (fallback).
+    5. Returns the final aggregated result.
+
+    Falls back to legacy run_batch() if unityuiflow.run is unavailable.
+    """
+    print(f"[Batch] Running {len(yaml_paths)} file(s) with polling -> {report_dir}")
+    for yp in yaml_paths:
+        marker = " [NEG]" if is_negative_test(yp) else ""
+        print(f"  - {yp}{marker}")
+
+    has_negative = any(is_negative_test(yp) for yp in yaml_paths)
+    continue_on_step_failure = has_negative
+
+    # ── 1. Start batch via unity_uiflow_run_async ──
+    start_result = client.call_tool(
+        "unity_uiflow_run_async",
+        {
+            "yamlPaths": yaml_paths,
+            "batchSize": len(yaml_paths),
+            "batchOffset": 0,
+            "headed": headed,
+            "reportOutputPath": report_dir,
+            "screenshotOnFailure": True,
+            "stopOnFirstFailure": stop_on_first_failure,
+            "continueOnStepFailure": continue_on_step_failure,
+            "defaultTimeoutMs": default_timeout_ms,
+            "enableVerboseLog": True,
+            "debugOnFailure": False,
+        },
+    )
+
+    start_payload = _extract_execution_payload(start_result)
+    execution_id = start_payload.get("executionId", "")
+
+    if not execution_id:
+        error_msg = start_payload.get("error", {}).get("message", "")
+        if error_msg and ("Unknown command" in error_msg or "not found" in error_msg.lower()):
+            print("[Batch] unity_uiflow_run_async not available, falling back to legacy unity_uiflow_run_batch")
+            return run_batch(client, yaml_paths, report_dir, headed, stop_on_first_failure, default_timeout_ms)
+        print(f"[Batch] Failed to start batch: {start_payload}")
+        return {"ok": False, "error": "Failed to obtain executionId", "raw": start_payload}
+
+    print(f"[Batch] Started executionId={execution_id}")
+
+    # ── 2. Poll loop ──
+    known_cases: set[str] = set()
+    final_payload: dict = {}
+    deadline = time.monotonic() + max_total_timeout_s
+    last_new_case_time = time.monotonic()
+
+    while time.monotonic() < deadline:
+        time.sleep(poll_interval_s)
+
+        poll_result = client.call_tool(
+            "unity_uiflow_results",
+            {"executionId": execution_id},
+        )
+        poll_payload = _extract_execution_payload(poll_result)
+        final_payload = poll_payload
+
+        status = poll_payload.get("status", "")
+        total = poll_payload.get("total", len(yaml_paths))
+        cases = poll_payload.get("cases", [])
+        current_yaml = poll_payload.get("currentYamlPath", "")
+
+        # Detect newly finished cases
+        new_cases = []
+        for case in cases:
+            case_key = f"{case.get('yamlPath','')}#{case.get('caseName','')}"
+            if case_key not in known_cases:
+                known_cases.add(case_key)
+                new_cases.append(case)
+
+        if new_cases:
+            last_new_case_time = time.monotonic()
+            for case in new_cases:
+                case_name = case.get("caseName", "")
+                case_status = case.get("status", "")
+                progress_str = f"[{len(known_cases)}/{total}]"
+                print(f"[Progress] {progress_str} case_finished: {case_name} -> {case_status}")
+
+        # Event-timeout fallback: if no new case for a while, warn and poll immediately once more
+        elapsed_since_last = time.monotonic() - last_new_case_time
+        if elapsed_since_last > event_timeout_s and status in ("running", "queued"):
+            print(f"[Fallback] No new case for {elapsed_since_last:.0f}s, triggering extra progress poll...")
+            # Next loop iteration will poll again immediately (sleep already done above)
+            last_new_case_time = time.monotonic()  # reset to avoid spam
+
+        if status in ("completed", "failed", "aborted"):
+            print(f"[Batch] Execution finished status={status} cases={len(known_cases)}/{total}")
+            break
+
+        if current_yaml:
+            print(f"[Polling] status={status} completed={len(known_cases)}/{total} current={current_yaml}")
+
+    else:
+        print(f"[Batch] Polling timed out after {max_total_timeout_s}s")
+        return {"ok": False, "error": "Polling timeout", "raw": final_payload}
+
+    # ── 3. Build result compatible with parse_batch_result ──
+    return {
+        "ok": True,
+        "status": final_payload.get("status"),
+        "total": final_payload.get("total", 0),
+        "passed": final_payload.get("passed", 0),
+        "failed": final_payload.get("failed", 0),
+        "errors": final_payload.get("errors", 0),
+        "skipped": final_payload.get("skipped", 0),
+        "reportPath": final_payload.get("reportPath", report_dir),
+        "raw": final_payload,
+    }
+
+
 def parse_batch_result(result: dict, yaml_paths: list[str]) -> dict[str, Any]:
     text = McpHttpClient._extract_text(result)
-    try:
-        payload = json.loads(text)
-    except Exception as e:
-        return {"ok": False, "error": f"Failed to parse result: {e}", "raw": text}
+    if text:
+        try:
+            payload = json.loads(text)
+        except Exception as e:
+            return {"ok": False, "error": f"Failed to parse result: {e}", "raw": text}
 
-    if not payload.get("ok"):
-        return {"ok": False, "error": payload.get("error", {}).get("message", "Unknown error"), "raw": payload}
+        if not payload.get("ok"):
+            return {"ok": False, "error": payload.get("error", {}).get("message", "Unknown error"), "raw": payload}
 
-    data = payload.get("data", {})
-    result_data = data.get("result", {})
+        data = payload.get("data", {})
+        result_data = data.get("result", {})
+    else:
+        # Direct result from run_batch_with_polling
+        result_data = result.get("raw", {})
 
     # Reconcile negative tests: case-level Failed is expected
     negative_paths = {yp for yp in yaml_paths if is_negative_test(yp)}
-    raw_cases = result_data.get("raw", {}).get("cases", [])
+    raw_cases = result_data.get("cases", []) or result_data.get("raw", {}).get("cases", [])
     adjusted_passed = result_data.get("passed", 0)
     adjusted_failed = result_data.get("failed", 0)
     negative_expected_failures = 0
@@ -170,9 +322,9 @@ def parse_batch_result(result: dict, yaml_paths: list[str]) -> dict[str, Any]:
         "errors": result_data.get("errors", 0),
         "skipped": result_data.get("skipped", 0),
         "negativeExpectedFailures": negative_expected_failures,
-        "reportPath": data.get("reportOutputPath", ""),
-        "screenshotPath": data.get("screenshotPath", ""),
-        "raw": result_data.get("raw", {}),
+        "reportPath": result_data.get("reportPath", result_data.get("reportOutputPath", "")),
+        "screenshotPath": result_data.get("screenshotPath", ""),
+        "raw": result_data if "cases" in result_data else result_data.get("raw", {}),
     }
 
 
@@ -239,7 +391,7 @@ def main() -> int:
         batch_files = all_files[offset:offset + args.batch_size]
         batch_report_dir = f"{base_report_dir}/batch_{i:03d}"
 
-        mcp_result = run_batch(
+        mcp_result = run_batch_with_polling(
             client,
             batch_files,
             batch_report_dir,
@@ -247,7 +399,10 @@ def main() -> int:
             stop_on_first_failure=args.stop_on_first_failure,
             default_timeout_ms=args.timeout_ms,
         )
-        parsed = parse_batch_result(mcp_result, batch_files)
+        if "raw" in mcp_result and mcp_result.get("ok"):
+            parsed = parse_batch_result(mcp_result, batch_files)
+        else:
+            parsed = mcp_result
 
         if not parsed["ok"]:
             print(f"[Batch {i}] MCP call failed: {parsed.get('error')}")

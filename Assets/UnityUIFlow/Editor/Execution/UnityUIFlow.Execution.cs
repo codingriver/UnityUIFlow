@@ -563,6 +563,8 @@ namespace UnityUIFlow
 
                     var caseOptions = options.Clone();
                     caseOptions.GenerateSingleReport = false;
+                    caseOptions.CaseIndex = fileIndex;
+                    caseOptions.TotalCases = yamlFiles.Length;
                     testResult = await RunDefinitionAsync(definition, caseOptions, rootOverride);
                 }
                 catch (Exception ex)
@@ -642,6 +644,12 @@ namespace UnityUIFlow
         {
             options = UnityUIFlowProjectSettingsUtility.ApplyOverrides(options);
             options.Validate();
+            if (options.TotalCases <= 0)
+            {
+                options.CaseIndex = 1;
+                options.TotalCases = 1;
+            }
+
             if (options.RetryCount.HasValue)
             {
                 Codingriver.Logger.LogWarning($"[UnityUIFlow] RetryCount={options.RetryCount.Value} 在 V1 中不支持，已忽略。如需重试请在调用方实现。");
@@ -823,11 +831,11 @@ namespace UnityUIFlow
 
                 context.Dispose();
                 HeadedRunEventBus.PublishRunFinished(result);
-
-                if (options.EnableVerboseLog)
+                
                 {
                     string stepSummary = $"通过={result.StepResults.Count(s => s.Status == TestStatus.Passed)} 失败={result.StepResults.Count(s => s.Status == TestStatus.Failed)} 错误={result.StepResults.Count(s => s.Status == TestStatus.Error)} 跳过={result.StepResults.Count(s => s.Status == TestStatus.Skipped)}";
-                    Codingriver.Logger.LogWarning($"[UnityUIFlow] 用例 \"{definition.Name}\" 完成 状态={result.Status} 耗时={result.DurationMs}ms | {stepSummary}");
+                    string progressPrefix = options.TotalCases > 1 ? $"[{options.CaseIndex}/{options.TotalCases}]" : "";
+                    Codingriver.Logger.LogWarning($"[UnityUIFlow] {progressPrefix}用例 \"{definition.Name}\" 完成 状态={result.Status} 耗时={result.DurationMs}ms | {stepSummary}");
                 }
             }
 

@@ -8,6 +8,7 @@
 /[Uu]ser[Ss]ettings/
 /[Mm]emoryCaptures/
 /[Rr]ecordings/
+/[Ll]og/
 
 # Addressables and cache artifacts
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
@@ -69,3 +70,5 @@ log/unitypilot-operations.log
 log/unitypilot.log
 log/.session
 log/UnityUIFlow.log
+log/log.log
+/tools/__pycache__/

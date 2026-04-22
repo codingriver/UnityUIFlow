@@ -175,6 +175,19 @@ Reporting（ScreenshotManager + MarkdownReporter + JsonResultWriter）
 5. **Agent 可以在没有 MCP 的情况下修改代码、修复 Bug、实现需求，但不能声称已完成 YAML 测试验证。**
 6. 输出“已验证 YAML 测试通过”的前提，必须是 MCP 工具真实执行成功。
 
+### 6.1.1 MCP 服务器可用性探测规则（强制）
+
+> **在任何情况下，Agent 不得在未完成探测的情况下断言“MCP 服务器不可用”或“没有 MCP 服务器”。**
+
+判定 MCP 服务器不可用之前，必须按顺序完成以下探测步骤：
+
+1. **读取配置文件**：检查 `.vscode/mcp.json`、`.kimi/mcp.json`、`.cursor/mcp.json`、`.opencode/` 等目录中的 MCP 服务器配置，确认 server URL、端口、命令。
+2. **网络探测**：使用 `Get-NetTCPConnection` / `netstat` / `curl` 等工具检查配置的端口（如 `8011`、`8767`）是否处于 `Listen` 状态。
+3. **协议握手**：实际发送请求调用 `tools/list` 或 `unity_mcp_status`，验证 server 是否响应、Unity Editor 是否已连接（`connected: true`）。
+4. **结论**：只有当上述步骤**全部失败**后，才能判定 MCP 服务器不可用，并明确记录每一步的失败原因。
+
+**违规示例**：在未检查端口、未调用 `unity_mcp_status` 的情况下，仅凭“代码中看不到 MCP server 定义”就声称 MCP 不可用。
+
 ### 6.2 Headed 模式检查
 
 执行前必须确认项目根目录 `.unityuiflow.json` 满足：
