@@ -1,0 +1,11 @@
+name: Negative Drag Invalid Coordinates
+description: Expects failure when drag coordinates are invalid.
+fixture:
+  host_window:
+    type: ExampleCoverageInputWindow
+    reopen_if_open: true
+steps:
+  - action: drag
+    selector: "#gesture-click-target"
+    from: "invalid"
+    to: "100,100"

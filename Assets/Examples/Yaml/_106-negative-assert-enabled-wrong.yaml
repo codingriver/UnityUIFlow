@@ -1,0 +1,9 @@
+name: Negative Assert Enabled Wrong
+description: Expects failure when assert_enabled targets a disabled element.
+fixture:
+  host_window:
+    type: ExampleCoverageInputWindow
+    reopen_if_open: true
+steps:
+  - action: assert_enabled
+    selector: "#disabled-button"
