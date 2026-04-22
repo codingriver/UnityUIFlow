@@ -32,7 +32,7 @@ namespace UnityUIFlow.Examples
 
         private void OnGUI()
         {
-            UnityEngine.Debug.Log($"[ImguiExampleWindow] OnGUI event={Event.current?.type} mousePos={Event.current?.mousePosition}");
+            Codingriver.Logger.Log($"[ImguiExampleWindow] OnGUI event={Event.current?.type} mousePos={Event.current?.mousePosition}");
             GUILayout.BeginVertical("box");
             GUILayout.Label("IMGUI Automation Demo", EditorStyles.boldLabel);
             GUILayout.EndVertical();
@@ -80,7 +80,7 @@ namespace UnityUIFlow.Examples
             GUILayout.BeginHorizontal();
             GUI.SetNextControlName("generate-button");
             bool generateClicked = GUILayout.Button("Generate", GUILayout.Width(120), GUILayout.Height(30));
-            UnityEngine.Debug.Log($"[ImguiExampleWindow] GUILayout.Button Generate returned {generateClicked}, event={Event.current?.type}, hotControl={GUIUtility.hotControl}");
+            Codingriver.Logger.Log($"[ImguiExampleWindow] GUILayout.Button Generate returned {generateClicked}, event={Event.current?.type}, hotControl={GUIUtility.hotControl}");
             if (generateClicked)
             {
                 float now = Time.realtimeSinceStartup;
@@ -126,7 +126,7 @@ namespace UnityUIFlow.Examples
             {
                 _logText += $"  Feature enabled.\n";
             }
-            UnityEngine.Debug.Log($"[ImguiExampleWindow] OnGenerateClicked called! status={_statusLabel}");
+            Codingriver.Logger.Log($"[ImguiExampleWindow] OnGenerateClicked called! status={_statusLabel}");
         }
 
         private void OnResetClicked()

@@ -113,14 +113,14 @@ namespace UnityUIFlow
             if (preferred == null || preferred != EditorWindow.focusedWindow)
             {
                 LastCaptureSource = "skipped-unfocused";
-                Debug.LogWarning($"[UnityUIFlow] 截图跳过：窗口未聚焦 (preferred={preferred?.GetType().Name}, focused={EditorWindow.focusedWindow?.GetType().Name})");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] 截图跳过：窗口未聚焦 (preferred={preferred?.GetType().Name}, focused={EditorWindow.focusedWindow?.GetType().Name})");
                 return null;
             }
 
             string path = _pathBuilder.BuildScreenshotPath(_options.ScreenshotPath, caseName, stepIndex, tag);
             await EditorAsyncUtility.NextFrameAsync(cancellationToken);
             CaptureSync(path);
-            Debug.Log($"[UnityUIFlow] 截图已保存 {path}");
+            Codingriver.Logger.Log($"[UnityUIFlow] 截图已保存 {path}");
             return path;
         }
 
@@ -143,7 +143,7 @@ namespace UnityUIFlow
                 else
                 {
                     LastCaptureSource = SourceFallbackTexture;
-                    Debug.LogWarning($"[UnityUIFlow] 截图回退到纹理模式: {Path.GetFileName(filePath)}");
+                    Codingriver.Logger.LogWarning($"[UnityUIFlow] 截图回退到纹理模式: {Path.GetFileName(filePath)}");
                     Texture2D fallbackTexture = CreateFallbackTexture();
                     try
                     {
@@ -226,7 +226,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[UnityUIFlow] Failed to resolve screenshot host window: {ex.Message}");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] Failed to resolve screenshot host window: {ex.Message}");
             }
 
             return EditorWindow.focusedWindow;
@@ -417,7 +417,7 @@ namespace UnityUIFlow
 
         public void RecordAction(string stepId, string actionName, string message)
         {
-            Debug.Log($"[UnityUIFlow] [{stepId}] {actionName}: {message}");
+            Codingriver.Logger.Log($"[UnityUIFlow] [{stepId}] {actionName}: {message}");
         }
 
         /// <summary>

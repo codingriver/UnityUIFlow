@@ -175,7 +175,7 @@ namespace UnityUIFlow
             }
 
             if (EnableVerboseLog)
-                Debug.Log($"[UnityUIFlow][Locators] 查找元素 选择器={selector.Raw} 范围={RootInfo(root)} 要求可见={requireVisible}");
+                Codingriver.Logger.Log($"[UnityUIFlow][Locators] 查找元素 选择器={selector.Raw} 范围={RootInfo(root)} 要求可见={requireVisible}");
 
             VisualElement element = TryFastPath(selector, root, requireVisible);
             if (element == null)
@@ -200,7 +200,7 @@ namespace UnityUIFlow
             if (element != null)
             {
                 if (EnableVerboseLog)
-                    Debug.Log($"[UnityUIFlow][Locators] 找到元素 {ActionContext.ElementInfo(element)} 选择器={selector.Raw}");
+                    Codingriver.Logger.Log($"[UnityUIFlow][Locators] 找到元素 {ActionContext.ElementInfo(element)} 选择器={selector.Raw}");
                 return new FindResult
                 {
                     Element = element,
@@ -234,7 +234,7 @@ namespace UnityUIFlow
                 if (element != null)
                 {
                     if (EnableVerboseLog)
-                        Debug.Log($"[UnityUIFlow][Locators] 找到元素(浮动面板) {ActionContext.ElementInfo(element)} 选择器={selector.Raw}");
+                        Codingriver.Logger.Log($"[UnityUIFlow][Locators] 找到元素(浮动面板) {ActionContext.ElementInfo(element)} 选择器={selector.Raw}");
                     return new FindResult
                     {
                         Element = element,
@@ -244,7 +244,7 @@ namespace UnityUIFlow
             }
 
             if (EnableVerboseLog)
-                Debug.Log($"[UnityUIFlow][Locators] 未找到元素 选择器={selector.Raw} 范围={RootInfo(root)}");
+                Codingriver.Logger.Log($"[UnityUIFlow][Locators] 未找到元素 选择器={selector.Raw} 范围={RootInfo(root)}");
             return new FindResult();
         }
 
@@ -307,7 +307,7 @@ namespace UnityUIFlow
         {
             bool exists = Find(selector, root, requireVisible).Element != null;
             if (EnableVerboseLog)
-                Debug.Log($"[UnityUIFlow][Locators] 检查存在 选择器={selector?.Raw} => {exists}");
+                Codingriver.Logger.Log($"[UnityUIFlow][Locators] 检查存在 选择器={selector?.Raw} => {exists}");
             return exists;
         }
 

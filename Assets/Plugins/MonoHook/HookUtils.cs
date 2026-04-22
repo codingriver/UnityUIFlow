@@ -67,7 +67,7 @@ namespace MonoHook
             flush_icache?.Invoke(code, size);
 
 #if ENABLE_HOOK_DEBUG
-            Debug.Log($"flush icache at 0x{(IntPtr.Size == 4 ? (uint)code : (ulong)code):x}, size:{size}");
+            Codingriver.Logger.Log($"flush icache at 0x{(IntPtr.Size == 4 ? (uint)code : (ulong)code):x}, size:{size}");
 #endif
         }
 
@@ -135,7 +135,7 @@ namespace MonoHook
             }
 
 #if ENABLE_HOOK_DEBUG
-            Debug.Log($"flush_icache delegate is {((flush_icache != null) ? "not " : "")}null");
+            Codingriver.Logger.Log($"flush_icache delegate is {((flush_icache != null) ? "not " : "")}null");
 #endif
         }
 

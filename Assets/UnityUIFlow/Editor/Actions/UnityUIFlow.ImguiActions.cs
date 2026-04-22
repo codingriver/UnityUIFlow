@@ -105,7 +105,7 @@ namespace UnityUIFlow
             Vector2 offset = bridge?.WindowToContentOffset ?? Vector2.zero;
             Vector2 windowPos = localPos + offset;
 
-            Debug.Log($"[UnityUIFlow] SendMouseEvent {eventType} at {localPos} (window={windowPos}, offset={offset}) for {window?.GetType().Name}");
+            Codingriver.Logger.Log($"[UnityUIFlow] SendMouseEvent {eventType} at {localPos} (window={windowPos}, offset={offset}) for {window?.GetType().Name}");
             var evt = new Event
             {
                 type = eventType,

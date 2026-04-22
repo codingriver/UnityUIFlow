@@ -1504,7 +1504,7 @@ namespace UnityUIFlow
                 }
                 catch (Exception unifiedEx)
                 {
-                    Debug.LogWarning($"[UnityUIFlow] 统一套件报告写入失败: {unifiedEx.Message}");
+                    Codingriver.Logger.LogWarning($"[UnityUIFlow] 统一套件报告写入失败: {unifiedEx.Message}");
                 }
 
                 _state.StatusText = _runCts.Token.IsCancellationRequested ? "Aborted"
@@ -1514,7 +1514,7 @@ namespace UnityUIFlow
             catch (Exception ex)
             {
                 _state.StatusText = "Failed";
-                Debug.LogError($"[UnityUIFlow] Test Runner batch error: {ex.Message}");
+                Codingriver.Logger.LogError($"[UnityUIFlow] Test Runner batch error: {ex.Message}");
             }
             finally
             {

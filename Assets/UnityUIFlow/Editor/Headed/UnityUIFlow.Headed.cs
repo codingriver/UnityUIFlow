@@ -364,7 +364,7 @@ namespace UnityUIFlow
         {
             if (UnityUIFlowProjectSettings.instance.AlwaysEnableVerboseLog)
             {
-                Debug.Log("[UnityUIFlow] Verbose log is forced on by Project Settings/UnityUIFlow.");
+                Codingriver.Logger.Log("[UnityUIFlow] Verbose log is forced on by Project Settings/UnityUIFlow.");
                 SettingsService.OpenProjectSettings(UnityUIFlowProjectSettingsUtility.SettingsPath);
                 return;
             }
@@ -372,7 +372,7 @@ namespace UnityUIFlow
             bool next = !EditorPrefs.GetBool(PrefKey, false);
             EditorPrefs.SetBool(PrefKey, next);
             Menu.SetChecked(MenuPath, next);
-            Debug.Log($"[UnityUIFlow] Verbose log is now {(next ? "enabled" : "disabled")}.");
+            Codingriver.Logger.Log($"[UnityUIFlow] Verbose log is now {(next ? "enabled" : "disabled")}.");
         }
 
         [MenuItem(MenuPath, validate = true)]

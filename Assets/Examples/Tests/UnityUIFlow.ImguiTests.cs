@@ -255,7 +255,7 @@ namespace UnityUIFlow
             {
                 sb.AppendLine($"  type={entry.InferredType}, text={entry.Text}, rect={entry.Rect}, group={entry.GroupName}");
             }
-            UnityEngine.Debug.Log(sb.ToString());
+            Codingriver.Logger.Log(sb.ToString());
 
             window.Close();
         }

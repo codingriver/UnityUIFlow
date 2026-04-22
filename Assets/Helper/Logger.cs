@@ -19,7 +19,7 @@ namespace Codingriver
     /// 支持标签、主线程帧号检测、LogLevel 过滤、日志按大小滚动，并双写到 Unity Editor Console。
     /// </summary>
     [InitializeOnLoad]
-    internal static class Logger
+    public static class Logger
     {
         private static readonly object FileLock = new object();
         private static readonly int MainThreadId;

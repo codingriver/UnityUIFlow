@@ -92,11 +92,11 @@ namespace UnityUIFlow
             {
                 _simulator = new EditorWindowPanelSimulator(window);
                 _simulator.FrameUpdate();
-                Debug.Log($"[UnityUIFlow] 初始化官方测试宿主桥接 {window.GetType().Name} 成功");
+                Codingriver.Logger.Log($"[UnityUIFlow] 初始化官方测试宿主桥接 {window.GetType().Name} 成功");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[UnityUIFlow] 初始化官方测试宿主桥接失败: {ex.Message}");
+                Codingriver.Logger.LogError($"[UnityUIFlow] 初始化官方测试宿主桥接失败: {ex.Message}");
                 throw;
             }
         }
@@ -199,7 +199,7 @@ namespace UnityUIFlow
             VisualElement trigger = ResolvePopupTrigger(element);
             if (trigger == null)
             {
-                Debug.LogWarning($"[UnityUIFlow] 打开弹出菜单失败: trigger 为空");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] 打开弹出菜单失败: trigger 为空");
                 return false;
             }
 
@@ -209,11 +209,11 @@ namespace UnityUIFlow
             bool displayed = _popupMenuSimulator.menuIsDisplayed;
             if (displayed)
             {
-                Debug.Log($"[UnityUIFlow] 打开弹出菜单成功: trigger={trigger.name} ({trigger.GetType().Name})");
+                Codingriver.Logger.Log($"[UnityUIFlow] 打开弹出菜单成功: trigger={trigger.name} ({trigger.GetType().Name})");
             }
             else
             {
-                Debug.LogWarning($"[UnityUIFlow] 打开弹出菜单后菜单未显示: trigger={trigger.name}");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] 打开弹出菜单后菜单未显示: trigger={trigger.name}");
             }
             return displayed;
         }
@@ -584,7 +584,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[UnityUIFlow] Failed to bind official EditorWindow host bridge: {ex}");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] Failed to bind official EditorWindow host bridge: {ex}");
                 ReleaseOfficialHostBridge();
                 _pointerDriver = new FallbackUiPointerDriver();
                 MarkKeyboardFallback();
@@ -949,7 +949,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[UnityUIFlow] Failed to tear down InputSystem test session: {ex.Message}");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] Failed to tear down InputSystem test session: {ex.Message}");
             }
             finally
             {
@@ -966,7 +966,7 @@ namespace UnityUIFlow
         {
             if (TestContext.CurrentTestExecutionContext != null)
             {
-                Debug.Log($"[UnityUIFlow] EnsureFakeNUnitTestContext: already set, id={TestContext.CurrentTestExecutionContext.CurrentTest?.Id}");
+                Codingriver.Logger.Log($"[UnityUIFlow] EnsureFakeNUnitTestContext: already set, id={TestContext.CurrentTestExecutionContext.CurrentTest?.Id}");
                 return;
             }
             if (s_FakeTestContext == null)
@@ -975,7 +975,7 @@ namespace UnityUIFlow
                 s_FakeTestContext.CurrentTest = new TestSuite("UnityUIFlow.FakeTest");
             }
             TestContext.CurrentTestExecutionContext = s_FakeTestContext;
-            Debug.Log($"[UnityUIFlow] EnsureFakeNUnitTestContext: injected fake context, id={s_FakeTestContext.CurrentTest?.Id}");
+            Codingriver.Logger.Log($"[UnityUIFlow] EnsureFakeNUnitTestContext: injected fake context, id={s_FakeTestContext.CurrentTest?.Id}");
         }
 
         private void EnsureOfficialEventLifecycle()
@@ -996,7 +996,7 @@ namespace UnityUIFlow
                 catch (Exception ex)
                 {
                     var inner = ex.InnerException?.ToString() ?? "(no inner exception)";
-                    Debug.LogWarning($"[UnityUIFlow] EventHelpers.TestSetUp failed: {ex.Message}. Inner: {inner}");
+                    Codingriver.Logger.LogWarning($"[UnityUIFlow] EventHelpers.TestSetUp failed: {ex.Message}. Inner: {inner}");
                     try
                     {
                         var pointerStateType = Type.GetType("UnityEngine.UIElements.PointerDeviceState, UnityEngine.UIElementsModule");
@@ -1024,7 +1024,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[UnityUIFlow] Failed to tear down UI Test Framework event lifecycle: {ex.Message}");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] Failed to tear down UI Test Framework event lifecycle: {ex.Message}");
             }
             finally
             {
