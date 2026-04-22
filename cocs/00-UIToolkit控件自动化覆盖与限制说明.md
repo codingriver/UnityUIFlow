@@ -15,10 +15,10 @@
 - **不可自动化**：官方 API 不开放或控件特性导致无法通过任何自动化手段操作。
 
 当前示例验收基线：
-- `Assets/Examples/Yaml` 当前已扩展到 71 份 YAML（含示例用例 `01-35`、`41-44`、场景扩展 `50-57`、IMGUI 用例 `97-99`、Host Window 用例、条件/循环用例等）。
+- `Assets/Examples/Yaml` 当前已扩展到 115 份 YAML（含示例用例 `01-35`、`41-44`、场景扩展 `50-57`、`66-69`、`74-90`、IMGUI 用例 `97-99`、Host Window 用例、条件/循环用例、高级参数别名、负向测试等）。
 - 新增覆盖窗口已补入字段值、集合与布局、输入与菜单 3 类宿主，见 `ExampleCoverageFieldsWindow`、`ExampleCoverageCollectionsWindow`、`ExampleCoverageInputWindow`。
 - 这些 YAML 已覆盖当前代码中已实现的大部分内置动作，以及对应的 UIToolkit 控件族。
-- **全量验证结果**：68 份通过 / 3 份负向测试按设计失败（预期行为）/ 0 份错误。
+- **全量验证结果**：正向测试全部通过 / 负向测试按设计失败（预期行为）/ 0 份错误。
 
 ---
 
@@ -494,3 +494,74 @@ IMGUI 动作（`imgui_*`）与 UIToolkit 动作可在同一 YAML 中混用。简
 
 - **YAML 基线数量更新**：
   - 全量套件从 39 份扩展到 71 份，新增 IMGUI 用例（5 份）、Host Window 高级用例、条件/循环用例、负向测试用例、截图/附件用例等。
+
+## 2026-04-21 1.7.0 大规模扩展修订
+
+基于对项目代码的完整覆盖分析，新增 31 份 YAML 用例，将全量套件从 71 份扩展到 **102 份**。本轮扩展聚焦以下缺口：
+
+- **替代参数覆盖（6 份）**：
+  - `66-advanced-controls-alternative-params.yaml`：`select_tree_item`/`select_tab`/`close_tab` 的 `index` 参数；`sort_column` 的 `index` 参数；`resize_column` 的 `column` 参数；`drag_scroller` 的 `ratio` 参数。
+  - `67-menu-item-aliases.yaml`：`menu_item` 的 `menu`（`mode` 别名）和 `value`（`item` 别名）参数；`assert_menu_item`/`select_context_menu_item` 的 `value` 别名。
+  - `68-drag-and-scroll-modifiers.yaml`：`double_click` 的 `modifiers`；`drag` 的 `button` 和 `modifiers`；`open_context_menu` 的 `modifiers`。
+  - `69-imgui-alternative-params.yaml`：`imgui_select_option` 的 `option` 参数；`imgui_press_key`/`imgui_press_key_combination` 的 `selector` 可选参数。
+  - `81-open-popup-menu-modifiers.yaml`：`open_popup_menu` 的 `modifiers` 参数。
+  - `82-assert-enabled-disabled-dynamic.yaml`：`assert_enabled`/`assert_disabled` 动态状态断言。
+
+- **功能增强覆盖（5 份）**：
+  - `74-conditional-not-exists.yaml`：`if` + `not_exists` 条件。
+  - `75-loop-max-iterations-boundary.yaml`：`repeat_while` + `max_iterations` 边界退出。
+  - `76-validate-command-advanced.yaml`：`validate_command`/`execute_command` 多命令组合（`SelectAll`、`Copy`、`Delete`）。
+  - `77-assert-property-comprehensive.yaml`：`assert_property` 跨多种控件类型（`Toggle`、`IntegerField`、`DropdownField`、`Slider`、`ProgressBar`、`HelpBox`、`Image`、`FloatField`）。
+  - `78-screenshot-multiple-tags.yaml`：同一用例内多截图不同 `tag`。
+  - `79-set-value-complex-formats.yaml`：`set_value` 复杂类型 DSL（`Color` 十六进制、`Gradient` DSL、`Curve` 键帧 DSL、`Hash128` 十六进制、`Vector3`、`Rect`）。
+  - `80-wait-boundary-durations.yaml`：`wait` 边界值（`0ms`、`1s`）。
+
+- **负向测试扩展（18 份）**：
+  - `_70-negative-invalid-params.yaml`：`menu_item` + `invalid_mode`。
+  - `_71-negative-advanced-not-found.yaml`：`select_tree_item` + `invalid_id`。
+  - `_72-negative-fields-and-bound.yaml`：`set_bound_value` 应用于非绑定元素。
+  - `_73-negative-step-timeout.yaml`：`wait` + `timeout` 小于 `duration`。
+  - `_74-negative-assert-bound-value.yaml`：`assert_bound_value` 值不匹配。
+  - `_75-negative-select-option-missing.yaml`：`select_option` 缺失选项。
+  - `_76-negative-assert-menu-item-missing.yaml`：`assert_menu_item` 缺失菜单项。
+  - `_77-negative-assert-not-visible-timeout.yaml`：`assert_not_visible` 可见元素超时。
+  - `_78-negative-type-text-non-input.yaml`：`type_text` 非输入元素。
+  - `_79-negative-press-key-combination.yaml`：`press_key_combination` 仅修饰键无主键。
+  - `_80-negative-page-scroller.yaml`：`page_scroller` 无效方向。
+  - `_81-negative-close-tab-invalid.yaml`：`close_tab` 无效标签。
+  - `_82-negative-sort-column-invalid.yaml`：`sort_column` 无效列名。
+  - `_83-negative-drag-reorder-invalid.yaml`：`drag_reorder` 无效索引。
+  - `_84-negative-wait-over-boundary.yaml`：`wait` 越界 `601s`。
+  - `_85-negative-read-breadcrumbs-missing.yaml`：`read_breadcrumbs` 元素缺失。
+  - `_86-negative-set-split-view-invalid-pane.yaml`：`set_split_view_size` 无效 pane。
+  - `_87-negative-click-popup-item-invalid.yaml`：`click_popup_item` 无效值。
+  - `_88-negative-set-slider-invalid.yaml`：`set_slider` 无效非数值。
+  - `_89-negative-focus-non-focusable.yaml`：`focus` 非可聚焦元素。
+  - `_90-negative-execute-command-invalid.yaml`：`execute_command` 无效命令名。
+  - `_91-negative-set-value-invalid.yaml`：`set_value` 类型不匹配值。
+  - `_92-negative-assert-property-invalid.yaml`：`assert_property` 不存在的属性。
+
+## 2026-04-21 1.8.0 第三轮扩展修订
+
+新增 13 份 YAML，将全量套件从 102 份扩展到 **115** 份：
+
+- **控制流覆盖（2 份）**：
+  - `83-if-inside-loop.yaml`：`if exists`/`not_exists` 嵌套在 `repeat_while` 循环体内。
+  - `84-loop-multi-step.yaml`：`repeat_while` 每迭代包含多步骤（`assert_visible` + `assert_text_contains` + `wait`）。
+
+- **属性与选择器覆盖（3 份）**：
+  - `85-assert-property-style.yaml`：`assert_property` 在元数据属性上（`name`、`visible`、`tabIndex`、`lowValue`、`highValue`）。
+  - `86-data-attribute-selector.yaml`：`[data-role=primary]` 属性选择器，验证 `userData` Dictionary 桥接。
+  - `87-type-text-vs-fast.yaml`：`type_text` 与 `type_text_fast` 最终值一致性验证，包含空字符串边界。
+
+- **字段策略与边界覆盖（3 份）**：
+  - `88-objectfield-strategies-extended.yaml`：`set_value` 的 `path:` 和 `asset-name:` 策略扩展。
+  - `89-set-slider-boundary.yaml`：`set_slider` 在 `Slider` 和 `SliderInt` 上的 min/max 边界值（`0` 和 `10`/`5`）。
+  - `90-toggle-mask-multi-bit.yaml`：`toggle_mask_option` 多 bit 组合（`MaskField` 和 `EnumFlagsField` 均切换两位后断言值为 `3`）。
+
+- **负向测试扩展（5 份）**：
+  - `_88-negative-set-slider-invalid.yaml`：`set_slider` 传入 `"abc"` 非数字。
+  - `_89-negative-focus-non-focusable.yaml`：`focus` 作用于 `Box` 非可聚焦元素。
+  - `_90-negative-execute-command-invalid.yaml`：`execute_command` 传入不存在命令名。
+  - `_91-negative-set-value-invalid.yaml`：`set_value` 向 `IntegerField` 传入 `"not_a_number"`。
+  - `_92-negative-assert-property-invalid.yaml`：`assert_property` 请求不存在的属性名。

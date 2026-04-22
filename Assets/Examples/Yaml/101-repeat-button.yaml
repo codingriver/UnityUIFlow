@@ -1,0 +1,12 @@
+name: Repeat Button
+description: Covers click action on RepeatButton control.
+fixture:
+  host_window:
+    type: ExampleCoverageInputWindow
+    reopen_if_open: true
+steps:
+  - action: click
+    selector: "#repeat-button"
+  - action: assert_text
+    selector: "#gesture-status"
+    expected: "Repeat: clicked"

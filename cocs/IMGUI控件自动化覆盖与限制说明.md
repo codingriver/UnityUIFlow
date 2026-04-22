@@ -27,6 +27,9 @@ IMGUI 与 UIToolkit 是两套独立的渲染体系：
 - `Assets/Examples/Yaml/97-imgui-negative-assert.yaml`：负向断言验证。
 - `Assets/Examples/Yaml/_96-imgui-negative-wait.yaml`：负向等待超时验证。
 - `Assets/Examples/Yaml/_97-imgui-negative-assert.yaml`：负向断言副本验证。
+- `Assets/Examples/Yaml/69-imgui-alternative-params.yaml`：替代参数验证（`option`、`selector`）。
+- `Assets/Examples/Yaml/_78-negative-type-text-non-input.yaml`：type_text 应用于非输入元素负向验证。
+- `Assets/Examples/Yaml/_79-negative-press-key-combination.yaml`：无效组合键负向验证。
 
 ---
 
@@ -328,3 +331,15 @@ steps:
 - 确认 15 个 `imgui_*` 动作全部实现并通过回归验证。
 - 确认快照捕获双链路（反射 + MonoHook）在 Unity 6000.6.0a2 下工作正常。
 - 明确列出 IMGUI 架构导致的硬性边界（值断言、浮窗、纯绘制控件）。
+
+### 2026-04-21 1.1.0 扩展验证
+
+- 新增 `69-imgui-alternative-params.yaml`：验证 `imgui_select_option` 的 `option` 参数、`imgui_press_key` 和 `imgui_press_key_combination` 的 `selector` 可选参数。
+- 新增 IMGUI 负向测试：`_78-negative-type-text-non-input.yaml`（type_text 非输入元素）、`_79-negative-press-key-combination.yaml`（无效组合键）。
+- YAML 基线从 71 份扩展到 102 份，IMGUI 相关用例从 5 份扩展到 8 份。
+
+### 2026-04-21 1.2.0 第三轮扩展
+
+- 新增 `87-type-text-vs-fast.yaml`：包含 `type_text_fast` 对空字符串 `""` 的边界验证（回归空字符串参数修复）。
+- 新增 IMGUI 负向测试：`_91-negative-set-value-invalid.yaml`（`set_value` 类型不匹配）。
+- YAML 基线从 102 份扩展到 115 份，IMGUI 相关用例从 8 份扩展到 10 份。

@@ -1,0 +1,42 @@
+name: Menu Item Alias Parameters
+description: |
+  Tests alias parameters for menu actions:
+  menu_item with menu (alias for mode) and value (alias for item),
+  assert_menu_item with value alias, select_context_menu_item with value alias.
+
+fixture:
+  host_window:
+    type: UnityUIFlow.Examples.ExampleCoverageInputWindow
+    reopen_if_open: true
+
+steps:
+  - name: Open toolbar menu via menu_item with menu alias for mode
+    action: menu_item
+    selector: "#toolbar-menu"
+    value: "Refresh"
+    menu: "select"
+
+  - name: Assert menu action fired
+    action: assert_text
+    selector: "#toolbar-status"
+    expected: "Toolbar: refresh"
+
+  - name: Assert menu item enabled using value alias
+    action: assert_menu_item
+    selector: "#toolbar-menu"
+    value: "Reset"
+
+  - name: Open context menu and select item using value alias
+    action: select_context_menu_item
+    selector: "#context-target"
+    value: "Copy"
+
+  - name: Assert context menu action fired
+    action: assert_text
+    selector: "#command-status"
+    expected: "Context: Copy"
+
+  - name: Assert disabled menu item using value alias
+    action: assert_menu_item_disabled
+    selector: "#toolbar-menu"
+    value: "Disabled"
