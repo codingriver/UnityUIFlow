@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------
-// UnityPilot Editor — https://github.com/codingriver/unitypilot
+// UnityPilot Editor — https://github.com/codingriver
 // SPDX-License-Identifier: MIT
 // -----------------------------------------------------------------------
 
@@ -11,7 +11,7 @@ using System.Threading;
 using UnityEditor;
 using UnityEngine;
 
-namespace UnityUIFlow
+namespace Codingriver
 {
     /// <summary>
     /// 每次打开 Unity 编辑器（新会话）首次写入前会清空并写入会话头；同一会话内脚本域重载不清空，继续追加。
@@ -27,7 +27,7 @@ namespace UnityUIFlow
         private static readonly DateTime CurrentProcessStartTime;
         private static readonly string SessionMarkerPath = "./log/.session";
 
-        public static string LogFilePath = "./log/UnityUIFlow.log";
+        public static string LogFilePath = "./log/log.log";
 
         /// <summary>
         /// 最低输出日志级别。低于此级别的日志将被忽略。默认 Debug。

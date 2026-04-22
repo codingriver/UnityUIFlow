@@ -191,7 +191,7 @@ namespace MonoHook
                 throw new ArgumentException("address offset of target and replace must less than ((1 << 25) - 1)");
 
 #if ENABLE_HOOK_DEBUG
-            Debug.Log($"CodePatcher_arm32_near: {PrintAddrs()}");
+            Codingriver.Logger.Log($"CodePatcher_arm32_near: {PrintAddrs()}");
 #endif
         }
 
@@ -226,7 +226,7 @@ namespace MonoHook
                 throw new ArgumentException("address offset of target and replace must larger than ((1 << 25) - 1), please use InstructionModifier_arm32_near instead");
 
 #if ENABLE_HOOK_DEBUG
-            Debug.Log($"CodePatcher_arm32_far: {PrintAddrs()}");
+            Codingriver.Logger.Log($"CodePatcher_arm32_far: {PrintAddrs()}");
 #endif
         }
 
@@ -265,7 +265,7 @@ namespace MonoHook
                 throw new ArgumentException("address offset of target and replace must less than (1 << 26) - 1) * 4");
 
 #if ENABLE_HOOK_DEBUG
-            Debug.Log($"CodePatcher_arm64: {PrintAddrs()}");
+            Codingriver.Logger.Log($"CodePatcher_arm64: {PrintAddrs()}");
 #endif
         }
 

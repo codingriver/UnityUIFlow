@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -173,7 +173,7 @@ namespace UnityUIFlow
             rootVisualElement.Clear();
             rootVisualElement.style.flexDirection = FlexDirection.Column;
 
-            // ── Top Toolbar ──
+            // 鈹€鈹€ Top Toolbar 鈹€鈹€
             var toolbar = new VisualElement();
             toolbar.name = "test-runner-toolbar";
             toolbar.style.flexDirection = FlexDirection.Row;
@@ -213,12 +213,12 @@ namespace UnityUIFlow
 
             toolbar.Add(new VisualElement { style = { flexGrow = 1 } });
 
-            _statsLabel = new Label("分组: 0  用例: 0  通过: 0  失败: 0  错误: 0  跳过: 0") { name = "test-runner-stats" };
+            _statsLabel = new Label("鍒嗙粍: 0  鐢ㄤ緥: 0  閫氳繃: 0  澶辫触: 0  閿欒: 0  璺宠繃: 0") { name = "test-runner-stats" };
             _statsLabel.style.unityTextAlign = TextAnchor.MiddleRight;
             _statsLabel.style.color = new Color(0.7f, 0.7f, 0.7f);
             toolbar.Add(_statsLabel);
 
-            // ── Split View (Left list + Right details) ──
+            // 鈹€鈹€ Split View (Left list + Right details) 鈹€鈹€
             var splitView = new TwoPaneSplitView(0, 320, TwoPaneSplitViewOrientation.Horizontal);
             splitView.name = "test-runner-split";
             splitView.style.flexGrow = 1;
@@ -303,7 +303,7 @@ namespace UnityUIFlow
             rightPanel.style.paddingBottom = 12;
             rightPanel.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f);
 
-            // ── Debug control row (sticky header above scroll view) ──
+            // 鈹€鈹€ Debug control row (sticky header above scroll view) 鈹€鈹€
             _detailControlRow = new VisualElement();
             _detailControlRow.name = "test-runner-debug-controls";
             _detailControlRow.style.flexDirection = FlexDirection.Row;
@@ -403,7 +403,7 @@ namespace UnityUIFlow
             actionRow.Add(_detailOpenReportButton);
             splitView.Add(rightPanel);
 
-            // ── Progress Bar ──
+            // 鈹€鈹€ Progress Bar 鈹€鈹€
             var progressBar = new ProgressBar { name = "test-runner-progress" };
             progressBar.style.height = 18;
             progressBar.style.marginTop = 0;
@@ -414,7 +414,7 @@ namespace UnityUIFlow
             progressBar.value = 0;
             rootVisualElement.Add(progressBar);
 
-            // ── Bottom Status Bar ──
+            // 鈹€鈹€ Bottom Status Bar 鈹€鈹€
             var statusBar = new VisualElement();
             statusBar.name = "test-runner-status-bar";
             statusBar.style.flexDirection = FlexDirection.Row;
@@ -477,7 +477,7 @@ namespace UnityUIFlow
             return row;
         }
 
-        // ── ListView item rendering ──
+        // 鈹€鈹€ ListView item rendering 鈹€鈹€
 
         private VisualElement MakeCaseListItem()
         {
@@ -694,15 +694,15 @@ namespace UnityUIFlow
 
         private static string GetStatusIcon(TestStatus status, bool isRunning)
         {
-            if (isRunning) return "◐";
+            if (isRunning) return "鈼?;
             switch (status)
             {
-                case TestStatus.Passed: return "●";
-                case TestStatus.Failed: return "●";
-                case TestStatus.Error: return "●";
-                case TestStatus.Skipped: return "○";
-                case TestStatus.None: return "○";
-                default: return "○";
+                case TestStatus.Passed: return "鈼?;
+                case TestStatus.Failed: return "鈼?;
+                case TestStatus.Error: return "鈼?;
+                case TestStatus.Skipped: return "鈼?;
+                case TestStatus.None: return "鈼?;
+                default: return "鈼?;
             }
         }
 
@@ -808,7 +808,7 @@ namespace UnityUIFlow
             }
         }
 
-        // ── Group check state helpers ──
+        // 鈹€鈹€ Group check state helpers 鈹€鈹€
 
         private void SetGroupChecks(string yamlPath, bool value)
         {
@@ -831,7 +831,7 @@ namespace UnityUIFlow
             // No-op: flat list
         }
 
-        // ── Selection & Filtering ──
+        // 鈹€鈹€ Selection & Filtering 鈹€鈹€
 
         private List<TestRunnerCaseItem> GetFilteredCases()
         {
@@ -1012,7 +1012,7 @@ namespace UnityUIFlow
                     headerRow.style.marginBottom = 4;
                     headerRow.style.alignItems = Align.Center;
 
-                    var headerIcon = new Label("▸");
+                    var headerIcon = new Label("鈻?);
                     headerIcon.style.width = 16;
                     headerIcon.style.color = new Color(0.6f, 0.8f, 1f);
                     headerIcon.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -1071,7 +1071,7 @@ namespace UnityUIFlow
             stepRow.style.marginBottom = 2;
             stepRow.style.alignItems = Align.Center;
 
-            var icon = new Label(result != null ? GetStatusIcon(result.Status, false) : "○");
+            var icon = new Label(result != null ? GetStatusIcon(result.Status, false) : "鈼?);
             icon.style.width = 16;
             icon.style.color = result != null ? GetStatusColor(result.Status, false) : new Color(0.45f, 0.45f, 0.45f);
 
@@ -1100,7 +1100,7 @@ namespace UnityUIFlow
             }
         }
 
-        // ── Case discovery ──
+        // 鈹€鈹€ Case discovery 鈹€鈹€
 
         private void RefreshCaseList()
         {
@@ -1213,7 +1213,7 @@ namespace UnityUIFlow
             RefreshUi();
         }
 
-        // ── Selection actions ──
+        // 鈹€鈹€ Selection actions 鈹€鈹€
 
         private void SelectAll()
         {
@@ -1236,7 +1236,7 @@ namespace UnityUIFlow
             _caseListView?.Rebuild();
         }
 
-        // ── Execution ──
+        // 鈹€鈹€ Execution 鈹€鈹€
 
         private void ClearResults()
         {
@@ -1504,7 +1504,7 @@ namespace UnityUIFlow
                 }
                 catch (Exception unifiedEx)
                 {
-                    Debug.LogWarning($"[UnityUIFlow] 统一套件报告写入失败: {unifiedEx.Message}");
+                    Codingriver.Logger.LogWarning($"[UnityUIFlow] 缁熶竴濂椾欢鎶ュ憡鍐欏叆澶辫触: {unifiedEx.Message}");
                 }
 
                 _state.StatusText = _runCts.Token.IsCancellationRequested ? "Aborted"
@@ -1514,7 +1514,7 @@ namespace UnityUIFlow
             catch (Exception ex)
             {
                 _state.StatusText = "Failed";
-                Debug.LogError($"[UnityUIFlow] Test Runner batch error: {ex.Message}");
+                Codingriver.Logger.LogError($"[UnityUIFlow] Test Runner batch error: {ex.Message}");
             }
             finally
             {
@@ -1579,7 +1579,7 @@ namespace UnityUIFlow
             _statusLabel.text = $"Status: {_state.StatusText}";
             _currentCaseLabel.text = $"Current: {(_state.CurrentCaseName ?? "-")}";
             int totalCases = _state.Cases.Count;
-            _statsLabel.text = $"用例: {totalCases}  通过: {_state.Passed}  失败: {_state.Failed}  错误: {_state.Errors}  跳过: {_state.Skipped}";
+            _statsLabel.text = $"鐢ㄤ緥: {totalCases}  閫氳繃: {_state.Passed}  澶辫触: {_state.Failed}  閿欒: {_state.Errors}  璺宠繃: {_state.Skipped}";
 
             _runAllButton?.SetEnabled(!_state.IsRunning);
             _runSelectedButton?.SetEnabled(!_state.IsRunning && _state.Cases.Any(c => c.IsChecked));
@@ -1619,7 +1619,7 @@ namespace UnityUIFlow
             Repaint();
         }
 
-        // ── HeadedRunEventBus handlers ──
+        // 鈹€鈹€ HeadedRunEventBus handlers 鈹€鈹€
 
         private void OnRunAttached(RuntimeController controller, string caseName)
         {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -31,7 +31,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
-                throw new UnityUIFlowException(ErrorCodes.CliConfigFileInvalid, $"配置文件解析失败：{path}，{ex.Message}", ex);
+                throw new UnityUIFlowException(ErrorCodes.CliConfigFileInvalid, $"閰嶇疆鏂囦欢瑙ｆ瀽澶辫触锛歿path}锛寋ex.Message}", ex);
             }
         }
     }
@@ -120,13 +120,13 @@ namespace UnityUIFlow
 
                 if (index == args.Length - 1)
                 {
-                    throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, $"命令行参数非法：{current}");
+                    throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, $"鍛戒护琛屽弬鏁伴潪娉曪細{current}");
                 }
 
                 string key = current.Substring(1);
                 if (raw.ContainsKey(key))
                 {
-                    throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, $"命令行参数非法：重复参数 {key}");
+                    throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, $"鍛戒护琛屽弬鏁伴潪娉曪細閲嶅鍙傛暟 {key}");
                 }
 
                 raw[key] = args[index + 1];
@@ -166,7 +166,7 @@ namespace UnityUIFlow
 
             if (HasFlag(args, "-batchmode"))
             {
-                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, "-batchmode 模式已被禁用，请使用带窗口的编辑器模式执行测试。");
+                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, "-batchmode 妯″紡宸茶绂佺敤锛岃浣跨敤甯︾獥鍙ｇ殑缂栬緫鍣ㄦā寮忔墽琛屾祴璇曘€?);
             }
 
             if (string.IsNullOrWhiteSpace(options.ScreenshotPath))
@@ -176,17 +176,17 @@ namespace UnityUIFlow
 
             if (!string.IsNullOrWhiteSpace(options.TestFilter) && options.TestFilter.Length > 256)
             {
-                throw new UnityUIFlowException(ErrorCodes.CliFilterInvalid, "测试过滤表达式过长");
+                throw new UnityUIFlowException(ErrorCodes.CliFilterInvalid, "娴嬭瘯杩囨护琛ㄨ揪寮忚繃闀?);
             }
 
             if (!string.IsNullOrWhiteSpace(options.YamlPath) && !string.IsNullOrWhiteSpace(options.YamlDirectory))
             {
-                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, "yamlPath 与 yamlDirectory 不能同时指定");
+                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, "yamlPath 涓?yamlDirectory 涓嶈兘鍚屾椂鎸囧畾");
             }
 
             if (options.DefaultTimeoutMs < 100 || options.DefaultTimeoutMs > 600000)
             {
-                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, "defaultTimeoutMs 超出允许范围");
+                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, "defaultTimeoutMs 瓒呭嚭鍏佽鑼冨洿");
             }
 
             return options;
@@ -351,7 +351,7 @@ namespace UnityUIFlow
         {
             if (!bool.TryParse(value, out bool parsed))
             {
-                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, $"参数 {name} 的布尔值非法：{value}");
+                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, $"鍙傛暟 {name} 鐨勫竷灏斿€奸潪娉曪細{value}");
             }
 
             return parsed;
@@ -361,7 +361,7 @@ namespace UnityUIFlow
         {
             if (!int.TryParse(value, out int parsed))
             {
-                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, $"参数 {name} 的数值非法：{value}");
+                throw new UnityUIFlowException(ErrorCodes.CliArgumentInvalid, $"鍙傛暟 {name} 鐨勬暟鍊奸潪娉曪細{value}");
             }
 
             return parsed;
@@ -429,7 +429,7 @@ namespace UnityUIFlow
             string fullRoot = Path.GetFullPath(reportRootPath);
             if (!Directory.Exists(fullRoot))
             {
-                throw new UnityUIFlowException(ErrorCodes.CliReportPathInvalid, $"报告目录不可写：{reportRootPath}");
+                throw new UnityUIFlowException(ErrorCodes.CliReportPathInvalid, $"鎶ュ憡鐩綍涓嶅彲鍐欙細{reportRootPath}");
             }
 
             var paths = new List<string>();
@@ -465,8 +465,8 @@ namespace UnityUIFlow
         internal static async Task<int> RunAllAsync(string[] args = null)
         {
             int exitCode = 2;
-            string configSource = args != null ? "命令行参数" : "默认配置";
-            UnityEngine.Debug.Log($"[UnityUIFlow] CLI 批量执行开始 配置来源={configSource}");
+            string configSource = args != null ? "鍛戒护琛屽弬鏁? : "榛樿閰嶇疆";
+            Codingriver.Logger.Log($"[UnityUIFlow] CLI 鎵归噺鎵ц寮€濮?閰嶇疆鏉ユ簮={configSource}");
             try
             {
                 var parser = new CommandLineOptionsParser();
@@ -495,18 +495,18 @@ namespace UnityUIFlow
                     new CiArtifactManifestWriter().Write(testOptions.ReportOutputPath);
                     exitCode = result.ExitCode;
                 }
-                UnityEngine.Debug.Log($"[UnityUIFlow] CLI 执行完成 退出码={exitCode}");
+                Codingriver.Logger.Log($"[UnityUIFlow] CLI 鎵ц瀹屾垚 閫€鍑虹爜={exitCode}");
             }
             catch (UnityUIFlowException ex)
             {
                 exitCode = ex.ErrorCode == ErrorCodes.CliTestsFailed ? 1 : 2;
-                UnityEngine.Debug.LogError($"[UnityUIFlow] CLI 执行异常 退出码={exitCode} 错误码={ex.ErrorCode}: {ex.Message}");
+                Codingriver.Logger.LogError($"[UnityUIFlow] CLI 鎵ц寮傚父 閫€鍑虹爜={exitCode} 閿欒鐮?{ex.ErrorCode}: {ex.Message}");
             }
             catch (Exception ex)
             {
                 exitCode = 2;
-                UnityEngine.Debug.LogError($"[UnityUIFlow] CLI 执行异常 退出码={exitCode}: {ex.Message}");
-                UnityEngine.Debug.LogException(ex);
+                Codingriver.Logger.LogError($"[UnityUIFlow] CLI 鎵ц寮傚父 閫€鍑虹爜={exitCode}: {ex.Message}");
+                Codingriver.Logger.LogException(ex);
             }
             return exitCode;
         }

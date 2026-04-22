@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -245,7 +245,7 @@ namespace UnityUIFlow
                 if (step.Condition != null && !context.Finder.Exists(step.Condition.SelectorExpression, context.Root, true))
                 {
                     if (verboseLog)
-                        Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] \"{step.DisplayName}\" 条件不满足，跳过");
+                        Codingriver.Logger.Log($"[UnityUIFlow][{context.CaseName}] 姝ラ[{stepIndex}] \"{step.DisplayName}\" 鏉′欢涓嶆弧瓒筹紝璺宠繃");
                     result.Status = TestStatus.Skipped;
                     result.EndedAtUtc = DateTimeOffset.UtcNow.ToString("O");
                     result.DurationMs = UnityUIFlowUtility.DurationMs(startedAt, DateTimeOffset.UtcNow);
@@ -253,9 +253,9 @@ namespace UnityUIFlow
                     return result;
                 }
 
-                string selectorInfo = step.Selector != null ? $" 选择器={step.Selector.Raw}" : "";
+                string selectorInfo = step.Selector != null ? $" 閫夋嫨鍣?{step.Selector.Raw}" : "";
                 if (verboseLog)
-                    Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] 开始 \"{step.DisplayName}\" 动作={step.ActionName}{selectorInfo} 超时={step.TimeoutMs}ms");
+                    Codingriver.Logger.Log($"[UnityUIFlow][{context.CaseName}] 姝ラ[{stepIndex}] 寮€濮?\"{step.DisplayName}\" 鍔ㄤ綔={step.ActionName}{selectorInfo} 瓒呮椂={step.TimeoutMs}ms");
 
                 HeadedRunEventBus.PublishStepStarted(step);
                 if (step.Selector != null)
@@ -271,7 +271,7 @@ namespace UnityUIFlow
                 {
                     if (verboseLog)
                     {
-                        Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] 调试延迟 {context.Options.PreStepDelayMs}ms");
+                        Codingriver.Logger.Log($"[UnityUIFlow][{context.CaseName}] 姝ラ[{stepIndex}] 璋冭瘯寤惰繜 {context.Options.PreStepDelayMs}ms");
                     }
 
                     await EditorAsyncUtility.DelayAsync(context.Options.PreStepDelayMs, context.CancellationToken);
@@ -309,7 +309,7 @@ namespace UnityUIFlow
                     if (step.Kind == ExecutableStepKind.Loop)
                     {
                         if (verboseLog)
-                            Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] 进入循环，最大迭代 {step.Loop.MaxIterations}");
+                            Codingriver.Logger.Log($"[UnityUIFlow][{context.CaseName}] 姝ラ[{stepIndex}] 杩涘叆寰幆锛屾渶澶ц凯浠?{step.Loop.MaxIterations}");
                         await ExecuteLoopAsync(step, context, stepIndex, timeoutController.Token);
                     }
                     else
@@ -352,7 +352,7 @@ namespace UnityUIFlow
                 }
                 catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
                 {
-                    throw new UnityUIFlowException(ErrorCodes.StepTimeout, $"步骤 {step.DisplayName} 执行超时：{step.TimeoutMs}ms");
+                    throw new UnityUIFlowException(ErrorCodes.StepTimeout, $"姝ラ {step.DisplayName} 鎵ц瓒呮椂锛歿step.TimeoutMs}ms");
                 }
                 finally
                 {
@@ -365,7 +365,7 @@ namespace UnityUIFlow
             {
                 result.Status = TestStatus.Error;
                 result.ErrorCode = ErrorCodes.TestRunAborted;
-                result.ErrorMessage = "测试运行已停止";
+                result.ErrorMessage = "娴嬭瘯杩愯宸插仠姝?;
             }
             catch (UnityUIFlowException ex)
             {
@@ -418,11 +418,11 @@ namespace UnityUIFlow
 
             if (verboseLog)
             {
-                string statusText = result.Status == TestStatus.Passed ? "通过" : result.Status == TestStatus.Skipped ? "跳过" : "失败";
+                string statusText = result.Status == TestStatus.Passed ? "閫氳繃" : result.Status == TestStatus.Skipped ? "璺宠繃" : "澶辫触";
                 string errorDetail = string.IsNullOrWhiteSpace(result.ErrorMessage) ? string.Empty : $" | {result.ErrorCode}: {result.ErrorMessage}";
-                string screenshotDetail = string.IsNullOrWhiteSpace(result.ScreenshotPath) ? string.Empty : $" | 截图={result.ScreenshotPath}";
-                string driverDetail = string.IsNullOrWhiteSpace(result.DriverDetails) ? string.Empty : $" | 驱动={result.DriverDetails}";
-                Debug.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] {statusText} \"{step.DisplayName}\" {result.DurationMs}ms{errorDetail}{screenshotDetail}{driverDetail}");
+                string screenshotDetail = string.IsNullOrWhiteSpace(result.ScreenshotPath) ? string.Empty : $" | 鎴浘={result.ScreenshotPath}";
+                string driverDetail = string.IsNullOrWhiteSpace(result.DriverDetails) ? string.Empty : $" | 椹卞姩={result.DriverDetails}";
+                Codingriver.Logger.Log($"[UnityUIFlow][{context.CaseName}] 姝ラ[{stepIndex}] {statusText} \"{step.DisplayName}\" {result.DurationMs}ms{errorDetail}{screenshotDetail}{driverDetail}");
             }
 
             VisualElement completedElement = step.Selector != null ? context.Finder.Find(step.Selector, context.Root, false).Element : null;
@@ -444,7 +444,7 @@ namespace UnityUIFlow
                 iterations++;
                 if (iterations > step.Loop.MaxIterations)
                 {
-                    throw new UnityUIFlowException(ErrorCodes.TestLoopLimitExceeded, $"步骤 {step.DisplayName} 超过最大循环次数 {step.Loop.MaxIterations}");
+                    throw new UnityUIFlowException(ErrorCodes.TestLoopLimitExceeded, $"姝ラ {step.DisplayName} 瓒呰繃鏈€澶у惊鐜鏁?{step.Loop.MaxIterations}");
                 }
 
                 foreach (ExecutableStep loopStep in step.Loop.Steps)
@@ -452,7 +452,7 @@ namespace UnityUIFlow
                     StepResult nested = await new StepExecutor().ExecuteStepAsync(loopStep, context, stepIndex);
                     if (nested.Status == TestStatus.Failed || nested.Status == TestStatus.Error)
                     {
-                        throw new UnityUIFlowException(nested.ErrorCode ?? ErrorCodes.ActionExecutionFailed, nested.ErrorMessage ?? $"循环步骤 {loopStep.DisplayName} 执行失败");
+                        throw new UnityUIFlowException(nested.ErrorCode ?? ErrorCodes.ActionExecutionFailed, nested.ErrorMessage ?? $"寰幆姝ラ {loopStep.DisplayName} 鎵ц澶辫触");
                     }
                 }
             }
@@ -476,7 +476,7 @@ namespace UnityUIFlow
         {
             if (string.IsNullOrWhiteSpace(yamlPath))
             {
-                throw new UnityUIFlowException(ErrorCodes.TestCasePathInvalid, "测试用例路径非法");
+                throw new UnityUIFlowException(ErrorCodes.TestCasePathInvalid, "娴嬭瘯鐢ㄤ緥璺緞闈炴硶");
             }
 
             TestCaseDefinition definition = _parser.ParseFile(yamlPath);
@@ -495,7 +495,7 @@ namespace UnityUIFlow
             }
             catch (Exception unifiedEx)
             {
-                Debug.LogWarning($"[UnityUIFlow] 追加统一报告失败: {unifiedEx.Message}");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] 杩藉姞缁熶竴鎶ュ憡澶辫触: {unifiedEx.Message}");
             }
 
             return result;
@@ -521,7 +521,7 @@ namespace UnityUIFlow
         {
             if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
             {
-                throw new UnityUIFlowException(ErrorCodes.TestSuiteDirectoryNotFound, $"测试目录不存在：{directory}");
+                throw new UnityUIFlowException(ErrorCodes.TestSuiteDirectoryNotFound, $"娴嬭瘯鐩綍涓嶅瓨鍦細{directory}");
             }
 
             options ??= new TestOptions();
@@ -544,14 +544,14 @@ namespace UnityUIFlow
             }
 
             if (options.EnableVerboseLog)
-                Debug.Log($"[UnityUIFlow] 开始执行测试套件 目录={directory} 文件数={yamlFiles.Length}");
+                Codingriver.Logger.Log($"[UnityUIFlow] 寮€濮嬫墽琛屾祴璇曞浠?鐩綍={directory} 鏂囦欢鏁?{yamlFiles.Length}");
 
             int fileIndex = 0;
             foreach (string yamlFile in yamlFiles)
             {
                 fileIndex++;
                 if (options.EnableVerboseLog)
-                    Debug.Log($"[UnityUIFlow] 进度 [{fileIndex}/{yamlFiles.Length}] {yamlFile}");
+                    Codingriver.Logger.Log($"[UnityUIFlow] 杩涘害 [{fileIndex}/{yamlFiles.Length}] {yamlFile}");
                 TestResult testResult;
                 try
                 {
@@ -607,7 +607,7 @@ namespace UnityUIFlow
             suiteResult.EndedAtUtc = DateTimeOffset.UtcNow.ToString("O");
             suiteResult.ExitCode = ExitCodeResolver.Resolve(suiteResult);
             if (options.EnableVerboseLog)
-                Debug.Log($"[UnityUIFlow] 套件完成 通过={suiteResult.Passed} 失败={suiteResult.Failed} 错误={suiteResult.Errors} 跳过={suiteResult.Skipped} 总计={suiteResult.Total}");
+                Codingriver.Logger.Log($"[UnityUIFlow] 濂椾欢瀹屾垚 閫氳繃={suiteResult.Passed} 澶辫触={suiteResult.Failed} 閿欒={suiteResult.Errors} 璺宠繃={suiteResult.Skipped} 鎬昏={suiteResult.Total}");
             var reporter = new MarkdownReporter(new ReporterOptions
             {
                 ReportRootPath = options.ReportOutputPath,
@@ -618,11 +618,11 @@ namespace UnityUIFlow
             {
                 reporter.WriteSuiteReport(suiteResult);
                 if (options.EnableVerboseLog)
-                    Debug.Log($"[UnityUIFlow] 套件报告已生成 {options.ReportOutputPath}");
+                    Codingriver.Logger.Log($"[UnityUIFlow] 濂椾欢鎶ュ憡宸茬敓鎴?{options.ReportOutputPath}");
             }
             catch (Exception reportException)
             {
-                Debug.LogError($"[UnityUIFlow] {ErrorCodes.ReportWriteFailed}: {reportException.Message} 路径={options.ReportOutputPath}");
+                Codingriver.Logger.LogError($"[UnityUIFlow] {ErrorCodes.ReportWriteFailed}: {reportException.Message} 璺緞={options.ReportOutputPath}");
             }
 
             // Overwrite unified suite report with batch results
@@ -632,7 +632,7 @@ namespace UnityUIFlow
             }
             catch (Exception unifiedEx)
             {
-                Debug.LogWarning($"[UnityUIFlow] 写入统一套件报告失败: {unifiedEx.Message}");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] 鍐欏叆缁熶竴濂椾欢鎶ュ憡澶辫触: {unifiedEx.Message}");
             }
 
             return suiteResult;
@@ -644,11 +644,11 @@ namespace UnityUIFlow
             options.Validate();
             if (options.RetryCount.HasValue)
             {
-                Debug.LogWarning($"[UnityUIFlow] RetryCount={options.RetryCount.Value} 在 V1 中不支持，已忽略。如需重试请在调用方实现。");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] RetryCount={options.RetryCount.Value} 鍦?V1 涓笉鏀寔锛屽凡蹇界暐銆傚闇€閲嶈瘯璇峰湪璋冪敤鏂瑰疄鐜般€?);
             }
 
             if (options.EnableVerboseLog)
-                Debug.Log($"[UnityUIFlow] 解析用例 \"{definition.Name}\" YAML={definition.SourceFile ?? "inline"}");
+                Codingriver.Logger.Log($"[UnityUIFlow] 瑙ｆ瀽鐢ㄤ緥 \"{definition.Name}\" YAML={definition.SourceFile ?? "inline"}");
 
             VisualElement root = rootOverride;
             EditorWindow managedWindow = null;
@@ -658,7 +658,7 @@ namespace UnityUIFlow
             }
             if (root == null)
             {
-                throw new UnityUIFlowException(ErrorCodes.RootElementMissing, "未找到可执行的根节点");
+                throw new UnityUIFlowException(ErrorCodes.RootElementMissing, "鏈壘鍒板彲鎵ц鐨勬牴鑺傜偣");
             }
 
             var reportOptions = new ReporterOptions
@@ -680,7 +680,7 @@ namespace UnityUIFlow
             {
                 throw new UnityUIFlowException(
                     ErrorCodes.FixtureWindowCreateFailed,
-                    $"正式验收模式下未能创建官方测试宿主：{definition.Fixture?.HostWindow?.Type ?? definition.Name}");
+                    $"姝ｅ紡楠屾敹妯″紡涓嬫湭鑳藉垱寤哄畼鏂规祴璇曞涓伙細{definition.Fixture?.HostWindow?.Type ?? definition.Name}");
             }
 
             var finder = new ElementFinder();
@@ -702,7 +702,7 @@ namespace UnityUIFlow
             if (options.EnableVerboseLog)
             {
                 string driverSummary = simulationSession.DescribeDrivers() ?? "unavailable";
-                Debug.Log($"[UnityUIFlow] 绑定驱动 {driverSummary}");
+                Codingriver.Logger.Log($"[UnityUIFlow] 缁戝畾椹卞姩 {driverSummary}");
             }
             context.CancellationToken = context.RuntimeController.CancellationToken;
             onContextReady?.Invoke(context);
@@ -714,7 +714,7 @@ namespace UnityUIFlow
 
             if (options.EnableVerboseLog)
             {
-                Debug.Log($"[UnityUIFlow] 开始执行用例 \"{definition.Name}\"");
+                Codingriver.Logger.Log($"[UnityUIFlow] 寮€濮嬫墽琛岀敤渚?\"{definition.Name}\"");
             }
 
             DateTimeOffset startedAt = DateTimeOffset.UtcNow;
@@ -729,7 +729,7 @@ namespace UnityUIFlow
                 var planBuilder = new ExecutionPlanBuilder(_selectorCompiler, _actionRegistry);
                 ExecutionPlan plan = planBuilder.Build(definition, options);
                 if (options.EnableVerboseLog)
-                    Debug.Log($"[UnityUIFlow] 构建执行计划 步骤数={plan.Steps.Count}");
+                    Codingriver.Logger.Log($"[UnityUIFlow] 鏋勫缓鎵ц璁″垝 姝ラ鏁?{plan.Steps.Count}");
                 bool abortMainFlow = false;
 
                 for (int index = 0; index < plan.Steps.Count; index++)
@@ -780,7 +780,7 @@ namespace UnityUIFlow
             catch (OperationCanceledException)
             {
                 result.ErrorCode = ErrorCodes.TestRunAborted;
-                result.ErrorMessage = "测试运行已停止";
+                result.ErrorMessage = "娴嬭瘯杩愯宸插仠姝?;
                 result.Status = TestStatus.Error;
             }
             catch (UnityUIFlowException ex)
@@ -814,11 +814,11 @@ namespace UnityUIFlow
                     var reportPaths = new ReportPathBuilder();
                     result.ReportMarkdownPath = reportPaths.BuildCaseMarkdownPath(options.ReportOutputPath, result.CaseName);
                     if (options.EnableVerboseLog)
-                        Debug.Log($"[UnityUIFlow] 用例报告已生成 {options.ReportOutputPath}");
+                        Codingriver.Logger.Log($"[UnityUIFlow] 鐢ㄤ緥鎶ュ憡宸茬敓鎴?{options.ReportOutputPath}");
                 }
                 catch (Exception reportException)
                 {
-                    Debug.LogError($"[UnityUIFlow] {ErrorCodes.ReportWriteFailed}: {reportException.Message} 路径={options.ReportOutputPath}");
+                    Codingriver.Logger.LogError($"[UnityUIFlow] {ErrorCodes.ReportWriteFailed}: {reportException.Message} 璺緞={options.ReportOutputPath}");
                 }
 
                 context.Dispose();
@@ -826,8 +826,8 @@ namespace UnityUIFlow
 
                 if (options.EnableVerboseLog)
                 {
-                    string stepSummary = $"通过={result.StepResults.Count(s => s.Status == TestStatus.Passed)} 失败={result.StepResults.Count(s => s.Status == TestStatus.Failed)} 错误={result.StepResults.Count(s => s.Status == TestStatus.Error)} 跳过={result.StepResults.Count(s => s.Status == TestStatus.Skipped)}";
-                    Debug.LogWarning($"[UnityUIFlow] 用例 \"{definition.Name}\" 完成 状态={result.Status} 耗时={result.DurationMs}ms | {stepSummary}");
+                    string stepSummary = $"閫氳繃={result.StepResults.Count(s => s.Status == TestStatus.Passed)} 澶辫触={result.StepResults.Count(s => s.Status == TestStatus.Failed)} 閿欒={result.StepResults.Count(s => s.Status == TestStatus.Error)} 璺宠繃={result.StepResults.Count(s => s.Status == TestStatus.Skipped)}";
+                    Codingriver.Logger.LogWarning($"[UnityUIFlow] 鐢ㄤ緥 \"{definition.Name}\" 瀹屾垚 鐘舵€?{result.Status} 鑰楁椂={result.DurationMs}ms | {stepSummary}");
                 }
             }
 

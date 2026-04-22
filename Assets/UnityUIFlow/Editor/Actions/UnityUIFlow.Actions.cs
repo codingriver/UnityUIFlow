@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -67,7 +67,7 @@ namespace UnityUIFlow
 
             if (CurrentAttachments.Count >= 10)
             {
-                Debug.LogWarning($"[UnityUIFlow] {ErrorCodes.AttachmentLimitExceeded}: step {CurrentStepId} already has 10 attachments.");
+                Codingriver.Logger.LogWarning($"[UnityUIFlow] {ErrorCodes.AttachmentLimitExceeded}: step {CurrentStepId} already has 10 attachments.");
                 return;
             }
 
@@ -81,7 +81,7 @@ namespace UnityUIFlow
         {
             if (Options?.EnableVerboseLog == true)
             {
-                Debug.Log($"[UnityUIFlow][{CurrentCaseName}][{CurrentStepId}] {message}");
+                Codingriver.Logger.Log($"[UnityUIFlow][{CurrentCaseName}][{CurrentStepId}] {message}");
             }
         }
 
@@ -162,7 +162,7 @@ namespace UnityUIFlow
         {
             if (!_actions.TryGetValue(actionName, out Type actionType))
             {
-                Debug.LogError($"[UnityUIFlow] 未找到动作 \"{actionName}\"，已注册动作数={_actions.Count}。可用动作：{string.Join(", ", _actions.Keys.Take(20))}");
+                Codingriver.Logger.LogError($"[UnityUIFlow] 鏈壘鍒板姩浣?\"{actionName}\"锛屽凡娉ㄥ唽鍔ㄤ綔鏁?{_actions.Count}銆傚彲鐢ㄥ姩浣滐細{string.Join(", ", _actions.Keys.Take(20))}");
                 throw new UnityUIFlowException(ErrorCodes.ActionNotFound, $"Action not found: {actionName}");
             }
 
@@ -172,7 +172,7 @@ namespace UnityUIFlow
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[UnityUIFlow] 构造动作 \"{actionName}\" 失败: {ex.Message}");
+                Codingriver.Logger.LogError($"[UnityUIFlow] 鏋勯€犲姩浣?\"{actionName}\" 澶辫触: {ex.Message}");
                 throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"Failed to construct action {actionName}: {ex.Message}", ex);
             }
         }
@@ -480,7 +480,7 @@ namespace UnityUIFlow
 
             throw new UnityUIFlowException(
                 ErrorCodes.OfficialUiTestFrameworkUnavailable,
-                $"com.unity.test-framework UI 测试子系统不可用，动作 {actionName} 无法执行");
+                $"com.unity.test-framework UI 娴嬭瘯瀛愮郴缁熶笉鍙敤锛屽姩浣?{actionName} 鏃犳硶鎵ц");
         }
 
         public static MouseButton ParseMouseButton(Dictionary<string, string> parameters, string actionName, string key = "button", MouseButton defaultValue = MouseButton.LeftMouse)
@@ -568,7 +568,7 @@ namespace UnityUIFlow
                 throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, "Click target is unavailable.");
             }
 
-            // worldPos is in panel/screen coordinates — required for correct hit-testing when the
+            // worldPos is in panel/screen coordinates 鈥?required for correct hit-testing when the
             // panel dispatches the event. We intentionally dispatch through the panel visual tree so
             // UI Toolkit can perform normal picking/compatibility-event generation.
             Vector2 worldPos = element.worldBound.center;
@@ -633,20 +633,20 @@ namespace UnityUIFlow
                 if (context != null)
                 {
                     string pointerStatus = pointerDownReceived && pointerUpReceived
-                        ? "PointerDown+Up 均已接收"
+                        ? "PointerDown+Up 鍧囧凡鎺ユ敹"
                         : pointerDownReceived
-                            ? "PointerDown 已接收，PointerUp 未接收"
-                            : "PointerDown 未接收（元素未响应指针事件）";
+                            ? "PointerDown 宸叉帴鏀讹紝PointerUp 鏈帴鏀?
+                            : "PointerDown 鏈帴鏀讹紙鍏冪礌鏈搷搴旀寚閽堜簨浠讹級";
                     string mouseStatus = mouseDownReceived && mouseUpReceived
-                        ? "MouseDown+Up 均已接收"
+                        ? "MouseDown+Up 鍧囧凡鎺ユ敹"
                         : mouseDownReceived
-                            ? "MouseDown 已接收，MouseUp 未接收"
-                            : "MouseDown 未接收（未生成兼容鼠标事件）";
+                            ? "MouseDown 宸叉帴鏀讹紝MouseUp 鏈帴鏀?
+                            : "MouseDown 鏈帴鏀讹紙鏈敓鎴愬吋瀹归紶鏍囦簨浠讹級";
                     string clickStatus = clickEventReceived
                         ? clickPropagationStopped
-                            ? "ClickEvent 已触发（传播已停止，处理器已响应）"
-                            : "ClickEvent 已触发（传播继续，无处理器消费）"
-                        : "ClickEvent 未触发（Clickable 未响应）";
+                            ? "ClickEvent 宸茶Е鍙戯紙浼犳挱宸插仠姝紝澶勭悊鍣ㄥ凡鍝嶅簲锛?
+                            : "ClickEvent 宸茶Е鍙戯紙浼犳挱缁х画锛屾棤澶勭悊鍣ㄦ秷璐癸級"
+                        : "ClickEvent 鏈Е鍙戯紙Clickable 鏈搷搴旓級";
                     context.Log($"click[{currentClickCount}/{clickCount}]: {pointerStatus}  |  {mouseStatus}  |  {clickStatus}");
                 }
 
@@ -1242,7 +1242,7 @@ namespace UnityUIFlow
                     {
                         throw new UnityUIFlowException(
                             ErrorCodes.ActionExecutionFailed,
-                            "动作 type_text 在高保真模式下禁止回退到直接写值实现");
+                            "鍔ㄤ綔 type_text 鍦ㄩ珮淇濈湡妯″紡涓嬬姝㈠洖閫€鍒扮洿鎺ュ啓鍊煎疄鐜?);
                     }
 
                     if (!ActionHelpers.TryAssignFieldValue(element, expected))
@@ -1310,7 +1310,7 @@ namespace UnityUIFlow
             {
                 throw new UnityUIFlowException(
                     ErrorCodes.InputSystemTestFrameworkUnavailable,
-                    $"缺少 InputSystem 测试输入能力，动作 press_key 无法执行");
+                    $"缂哄皯 InputSystem 娴嬭瘯杈撳叆鑳藉姏锛屽姩浣?press_key 鏃犳硶鎵ц");
             }
 
             if (!usedInputSystem)

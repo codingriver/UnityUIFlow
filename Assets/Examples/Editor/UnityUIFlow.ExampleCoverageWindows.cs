@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -361,7 +361,7 @@ namespace UnityUIFlow.Examples
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[ExampleCoverageCollectionsWindow] Failed to set {propertyName} on {targetType.Name}: {ex.Message}");
+                Codingriver.Logger.LogWarning($"[ExampleCoverageCollectionsWindow] Failed to set {propertyName} on {targetType.Name}: {ex.Message}");
             }
         }
 

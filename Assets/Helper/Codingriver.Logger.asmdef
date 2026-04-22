@@ -1,13 +1,8 @@
 {
-    "name": "UnityUIFlow.Examples",
-    "rootNamespace": "UnityUIFlow.Examples",
-    "references": [
-        "UnityUIFlow",
-        "Codingriver.Logger"
-    ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "name": "Codingriver.Logger",
+    "rootNamespace": "Codingriver",
+    "references": [],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

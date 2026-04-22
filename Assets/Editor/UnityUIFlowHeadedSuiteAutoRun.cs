@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text;
 using UnityEditor;
@@ -54,7 +54,7 @@ namespace UnityUIFlow.EditorAutomation
                 Directory.CreateDirectory(reportRoot);
                 Directory.CreateDirectory(screenshotRoot);
 
-                Debug.Log("[UnityUIFlow][HeadedAutoRun] Starting headed suite for Assets/Examples/Yaml");
+                Codingriver.Logger.Log("[UnityUIFlow][HeadedAutoRun] Starting headed suite for Assets/Examples/Yaml");
 
                 var runner = new TestRunner();
                 TestSuiteResult suite = await runner.RunSuiteAsync(
@@ -77,13 +77,13 @@ namespace UnityUIFlow.EditorAutomation
                     File.Delete(errorPath);
                 }
 
-                Debug.Log($"[UnityUIFlow][HeadedAutoRun] Completed headed suite. total={suite.Total} passed={suite.Passed} failed={suite.Failed} errors={suite.Errors} skipped={suite.Skipped}");
+                Codingriver.Logger.Log($"[UnityUIFlow][HeadedAutoRun] Completed headed suite. total={suite.Total} passed={suite.Passed} failed={suite.Failed} errors={suite.Errors} skipped={suite.Skipped}");
             }
             catch (Exception ex)
             {
                 Directory.CreateDirectory(reportRoot);
                 File.WriteAllText(errorPath, ex.ToString(), Encoding.UTF8);
-                Debug.LogException(ex);
+                Codingriver.Logger.LogException(ex);
             }
             finally
             {

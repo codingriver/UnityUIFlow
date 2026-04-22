@@ -8,7 +8,8 @@
         "Unity.InputSystem.TestFramework",
         "Unity.UI.TestFramework.Runtime",
         "Unity.UI.TestFramework.Editor",
-        "MonoHook"
+        "MonoHook",
+        "Codingriver.Logger"
     ],
     "includePlatforms": [
         "Editor"

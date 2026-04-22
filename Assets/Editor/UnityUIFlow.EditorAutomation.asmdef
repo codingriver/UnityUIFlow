@@ -2,7 +2,8 @@
     "name": "UnityUIFlow.EditorAutomation",
     "rootNamespace": "UnityUIFlow.EditorAutomation",
     "references": [
-        "UnityUIFlow"
+        "UnityUIFlow",
+        "Codingriver.Logger"
     ],
     "includePlatforms": [
         "Editor"

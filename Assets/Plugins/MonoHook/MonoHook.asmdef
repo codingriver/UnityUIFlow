@@ -1,7 +1,10 @@
-{
+﻿{
     "name": "MonoHook",
     "rootNamespace": "MonoHook",
-    "references": [],
+    "references": [
+        "UnityUIFlow",
+        "Codingriver.Logger"
+    ],
     "includePlatforms": [
         "Editor"
     ],
