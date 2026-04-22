@@ -827,7 +827,7 @@ namespace UnityUIFlow
                 if (options.EnableVerboseLog)
                 {
                     string stepSummary = $"通过={result.StepResults.Count(s => s.Status == TestStatus.Passed)} 失败={result.StepResults.Count(s => s.Status == TestStatus.Failed)} 错误={result.StepResults.Count(s => s.Status == TestStatus.Error)} 跳过={result.StepResults.Count(s => s.Status == TestStatus.Skipped)}";
-                    Debug.Log($"[UnityUIFlow] 用例 \"{definition.Name}\" 完成 状态={result.Status} 耗时={result.DurationMs}ms | {stepSummary}");
+                    Debug.LogWarning($"[UnityUIFlow] 用例 \"{definition.Name}\" 完成 状态={result.Status} 耗时={result.DurationMs}ms | {stepSummary}");
                 }
             }
 
