@@ -1,4 +1,4 @@
-name: Example Basic Login
+name: "01-basic-login"
 description: Covers type_text, click, assert_text_contains and screenshot.
 fixture:
   host_window:

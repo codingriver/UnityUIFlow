@@ -1,4 +1,4 @@
-name: Color And Hash Formats
+name: "100-color-hash-formats"
 description: Covers ColorField with multiple formats and Hash128Field with different lengths.
 fixture:
   host_window:

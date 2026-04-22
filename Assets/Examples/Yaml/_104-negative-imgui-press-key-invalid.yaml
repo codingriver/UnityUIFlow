@@ -1,4 +1,4 @@
-name: Negative IMGUI Press Key Invalid
+name: "_104-negative-imgui-press-key-invalid"
 description: Expects failure when imgui_press_key key parameter is invalid.
 fixture:
   host_window:

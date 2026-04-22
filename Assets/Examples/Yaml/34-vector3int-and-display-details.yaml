@@ -1,4 +1,4 @@
-name: Coverage Vector3Int And Display Details
+name: "34-vector3int-and-display-details"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

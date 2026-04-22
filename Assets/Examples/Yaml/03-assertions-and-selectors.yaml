@@ -1,4 +1,4 @@
-name: Assertions And Selectors
+name: "03-assertions-and-selectors"
 fixture:
   host_window:
     type: UnityUIFlow.SampleLoginWindow

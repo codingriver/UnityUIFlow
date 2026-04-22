@@ -1,4 +1,4 @@
-name: Example Type Text
+name: "12-type-text"
 description: Covers the type_text action and property assertion.
 fixture:
   host_window:

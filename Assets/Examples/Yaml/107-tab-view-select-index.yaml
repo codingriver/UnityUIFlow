@@ -1,4 +1,4 @@
-name: Tab View Select Index
+name: "107-tab-view-select-index"
 description: Covers select_tab action using index parameter on TabView.
 fixture:
   host_window:

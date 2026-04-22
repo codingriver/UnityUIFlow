@@ -1,4 +1,4 @@
-name: Negative Menu Item Disabled Fail
+name: "_95-negative-menu-item-disabled-fail"
 description: Expects failure when asserting menu item is disabled but it is enabled.
 fixture:
   host_window:

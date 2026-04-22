@@ -1,4 +1,4 @@
-name: Negative IMGUI Assert Value Mismatch
+name: "_103-negative-imgui-assert-value-mismatch"
 description: Expects failure when imgui_assert_value expected does not match actual toggle value.
 fixture:
   host_window:

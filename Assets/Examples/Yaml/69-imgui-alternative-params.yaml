@@ -1,4 +1,4 @@
-name: IMGUI Alternative Parameters
+name: "69-imgui-alternative-params"
 description: |
   Tests alternative parameters for IMGUI actions:
   imgui_select_option with option text, imgui_press_key with selector,

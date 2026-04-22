@@ -1,4 +1,4 @@
-name: Inline Data Rows
+name: "56-inline-data-rows"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleBasicLoginWindow

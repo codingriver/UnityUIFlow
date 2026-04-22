@@ -1,4 +1,4 @@
-name: Min Max Slider
+name: "98-min-max-slider"
 description: Covers set_value and set_slider on MinMaxSlider control.
 fixture:
   host_window:

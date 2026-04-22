@@ -1,4 +1,4 @@
-name: Data Attribute Selector
+name: "86-data-attribute-selector"
 description: |
   Tests CSS-like data attribute selector [data-key=value] on elements
   that have userData set with Dictionary<string, string>.

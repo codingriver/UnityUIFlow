@@ -1,4 +1,4 @@
-name: Coverage Custom Sort
+name: "43-custom-sort"
 description: Covers ColumnSortingMode.Custom for MultiColumnListView via sort_column action.
 fixture:
   host_window:

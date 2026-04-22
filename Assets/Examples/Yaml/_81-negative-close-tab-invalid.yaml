@@ -1,4 +1,4 @@
-name: Negative Close Tab Invalid Label
+name: "_81-negative-close-tab-invalid"
 description: |
   Verifies that close_tab fails when given an invalid tab label.
   This test is expected to FAIL.

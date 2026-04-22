@@ -1,4 +1,4 @@
-name: Loop Max Iterations Boundary
+name: "75-loop-max-iterations-boundary"
 description: |
   Tests repeat_while with a small max_iterations boundary to ensure
   the loop exits correctly without running indefinitely.

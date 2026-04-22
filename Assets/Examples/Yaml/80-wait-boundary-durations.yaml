@@ -1,4 +1,4 @@
-name: Wait Boundary Durations
+name: "80-wait-boundary-durations"
 description: |
   Tests wait action with boundary duration values including zero and normal values.
 

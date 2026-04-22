@@ -1,4 +1,4 @@
-name: Negative Set Slider Invalid Value
+name: "_88-negative-set-slider-invalid"
 description: |
   Verifies that set_slider fails when given an invalid non-numeric value.
   This test is expected to FAIL.

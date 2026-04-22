@@ -1,4 +1,4 @@
-name: CSV Driven Login
+name: "02-data-driven-csv"
 fixture:
   host_window:
     type: UnityUIFlow.SampleLoginWindow

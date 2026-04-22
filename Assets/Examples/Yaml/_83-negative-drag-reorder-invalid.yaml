@@ -1,4 +1,4 @@
-name: Negative Drag Reorder Invalid Index
+name: "_83-negative-drag-reorder-invalid"
 description: |
   Verifies that drag_reorder fails when given an invalid index.
   This test is expected to FAIL.

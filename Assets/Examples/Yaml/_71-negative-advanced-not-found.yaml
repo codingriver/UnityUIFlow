@@ -1,4 +1,4 @@
-name: Negative Advanced Control Not Found
+name: "_71-negative-advanced-not-found"
 description: |
   Verifies that select_tree_item fails when given an invalid id.
   This test is expected to FAIL.

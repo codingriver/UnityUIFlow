@@ -1,4 +1,4 @@
-name: Negative Step Timeout
+name: "_73-negative-step-timeout"
 description: |
   Verifies that a step fails with timeout when action duration exceeds step timeout.
   This test is expected to FAIL.

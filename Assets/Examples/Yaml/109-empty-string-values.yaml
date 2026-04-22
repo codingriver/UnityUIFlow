@@ -1,4 +1,4 @@
-name: Empty String Values
+name: "109-empty-string-values"
 description: Covers set_value, type_text, assert_value and assert_text with empty strings.
 fixture:
   host_window:

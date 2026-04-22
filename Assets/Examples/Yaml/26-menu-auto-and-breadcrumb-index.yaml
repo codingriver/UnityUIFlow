@@ -1,4 +1,4 @@
-name: Coverage Menu Auto And Breadcrumb Index
+name: "26-menu-auto-and-breadcrumb-index"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

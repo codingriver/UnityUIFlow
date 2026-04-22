@@ -1,4 +1,4 @@
-name: Scroll to Element
+name: "55-scroll-to-element"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageCollectionsWindow

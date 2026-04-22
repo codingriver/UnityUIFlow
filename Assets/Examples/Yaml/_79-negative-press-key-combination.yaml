@@ -1,4 +1,4 @@
-name: Negative Press Key Combination Invalid
+name: "_79-negative-press-key-combination"
 description: |
   Verifies that press_key_combination fails with only modifiers and no non-modifier key.
   This test is expected to FAIL.

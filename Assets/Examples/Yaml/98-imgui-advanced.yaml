@@ -1,4 +1,4 @@
-name: IMGUI Advanced Scenarios
+name: "98-imgui-advanced"
 description: |
   Advanced IMGUI automation tests covering wait with timeout,
   scroll with custom delta, focus-then-type workflow, and

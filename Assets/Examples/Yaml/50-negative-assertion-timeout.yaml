@@ -1,4 +1,4 @@
-name: Negative Assertion and Timeout
+name: "50-negative-assertion-timeout"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleBasicLoginWindow

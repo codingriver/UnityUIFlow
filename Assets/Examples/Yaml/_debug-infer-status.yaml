@@ -1,4 +1,4 @@
-name: Debug Infer Status
+name: "_debug-infer-status"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleBoundInferenceWindow

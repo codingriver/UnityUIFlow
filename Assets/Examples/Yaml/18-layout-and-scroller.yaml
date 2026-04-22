@@ -1,4 +1,4 @@
-name: Coverage Layout And Scroller
+name: "18-layout-and-scroller"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageCollectionsWindow

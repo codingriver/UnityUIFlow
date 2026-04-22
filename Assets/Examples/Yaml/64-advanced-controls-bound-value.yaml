@@ -1,4 +1,4 @@
-name: Advanced Controls Bound Value
+name: "64-advanced-controls-bound-value"
 fixture:
   host_window:
     type: UnityUIFlow.AdvancedControlsWindow

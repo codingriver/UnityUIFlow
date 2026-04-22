@@ -1,4 +1,4 @@
-name: Set Value Complex Formats
+name: "79-set-value-complex-formats"
 description: |
   Tests set_value with complex type DSLs on Color, Gradient, Curve, and Hash128 fields.
 

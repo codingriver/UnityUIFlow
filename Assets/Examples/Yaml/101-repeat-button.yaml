@@ -1,4 +1,4 @@
-name: Repeat Button
+name: "101-repeat-button"
 description: Covers click action on RepeatButton control.
 fixture:
   host_window:

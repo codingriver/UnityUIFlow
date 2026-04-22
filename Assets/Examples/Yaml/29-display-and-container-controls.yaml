@@ -1,4 +1,4 @@
-name: Coverage Display And Container Controls
+name: "29-display-and-container-controls"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

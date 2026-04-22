@@ -1,4 +1,4 @@
-name: Coverage Fields Basic
+name: "14-fields-basic"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

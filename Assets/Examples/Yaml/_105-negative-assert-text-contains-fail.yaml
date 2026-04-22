@@ -1,4 +1,4 @@
-name: Negative Assert Text Contains Fail
+name: "_105-negative-assert-text-contains-fail"
 description: Expects failure when assert_text_contains expected substring is not present.
 fixture:
   host_window:

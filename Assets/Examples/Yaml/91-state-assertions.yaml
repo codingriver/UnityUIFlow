@@ -1,4 +1,4 @@
-name: State Assertions Comprehensive Test
+name: "91-state-assertions"
 description: |
   Covers assert_enabled, assert_disabled, assert_property,
   and assert_bound_value actions on various control states.

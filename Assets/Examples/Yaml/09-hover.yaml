@@ -1,4 +1,4 @@
-name: Example Hover
+name: "09-hover"
 description: Covers the hover action.
 fixture:
   host_window:

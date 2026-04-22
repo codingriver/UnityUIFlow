@@ -1,4 +1,4 @@
-name: Edge Conditionals and Loop Boundaries
+name: "52-edge-conditionals"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleBasicLoginWindow

@@ -1,4 +1,4 @@
-name: Negative IMGUI Assert Text Mismatch
+name: "_102-negative-imgui-type-non-input"
 description: Expects failure when imgui_assert_text expected does not match actual button text.
 fixture:
   host_window:

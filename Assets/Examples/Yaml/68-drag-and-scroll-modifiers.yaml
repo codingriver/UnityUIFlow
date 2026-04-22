@@ -1,4 +1,4 @@
-name: Drag And Scroll Modifiers
+name: "68-drag-and-scroll-modifiers"
 description: |
   Tests modifier and alternate button parameters for drag and scroll actions:
   double_click with modifiers, drag with button and modifiers,

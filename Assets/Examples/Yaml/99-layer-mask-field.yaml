@@ -1,4 +1,4 @@
-name: Layer Mask Field
+name: "99-layer-mask-field"
 description: Covers set_value and select_option on LayerMaskField control.
 fixture:
   host_window:

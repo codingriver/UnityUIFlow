@@ -1,4 +1,4 @@
-name: Toggle Foldout
+name: "103-toggle-foldout"
 description: Covers toggle_foldout action and assert_property on Foldout value.
 fixture:
   host_window:

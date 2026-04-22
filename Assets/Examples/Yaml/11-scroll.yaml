@@ -1,4 +1,4 @@
-name: Example Scroll
+name: "11-scroll"
 description: Covers the scroll action.
 fixture:
   host_window:

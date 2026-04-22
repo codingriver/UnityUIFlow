@@ -1,4 +1,4 @@
-name: Negative Select Tab Invalid
+name: "_96-negative-select-tab-invalid"
 description: Expects failure when selecting tab with invalid label.
 fixture:
   host_window:

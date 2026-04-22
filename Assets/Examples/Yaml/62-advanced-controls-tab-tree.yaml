@@ -1,4 +1,4 @@
-name: Advanced Controls Tab And Tree
+name: "62-advanced-controls-tab-tree"
 fixture:
   host_window:
     type: UnityUIFlow.AdvancedControlsWindow

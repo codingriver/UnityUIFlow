@@ -1,4 +1,4 @@
-name: Two Pane Split View Panes
+name: "108-two-pane-split-view-panes"
 description: Covers set_split_view_size on both pane indices.
 fixture:
   host_window:

@@ -1,4 +1,4 @@
-name: Hover Duration
+name: "106-hover-duration"
 description: Covers hover action with explicit duration parameter.
 fixture:
   host_window:

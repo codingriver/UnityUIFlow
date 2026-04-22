@@ -1,4 +1,4 @@
-name: Coverage Repeat Button And Toolbar Popup Search
+name: "31-repeat-and-toolbar-popup-search"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

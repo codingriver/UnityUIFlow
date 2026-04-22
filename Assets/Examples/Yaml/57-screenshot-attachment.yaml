@@ -1,4 +1,4 @@
-name: Screenshot Attachment
+name: "57-screenshot-attachment"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleBasicLoginWindow

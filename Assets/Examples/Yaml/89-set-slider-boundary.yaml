@@ -1,4 +1,4 @@
-name: Set Slider Boundary
+name: "89-set-slider-boundary"
 description: |
   Tests set_slider at min and max boundary values for both Slider and SliderInt.
 

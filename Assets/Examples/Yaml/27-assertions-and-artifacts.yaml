@@ -1,4 +1,4 @@
-name: Coverage Assertions And Artifacts
+name: "27-assertions-and-artifacts"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

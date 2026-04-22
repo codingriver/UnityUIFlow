@@ -1,4 +1,4 @@
-name: Full Action Regression Smoke Test
+name: "94-full-action-regression"
 description: |
   Quick smoke test covering the most commonly used UIToolkit actions
   in a single flow. Designed for fast CI validation of core automation

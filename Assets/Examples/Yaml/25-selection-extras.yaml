@@ -1,4 +1,4 @@
-name: Coverage Selection Extras
+name: "25-selection-extras"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

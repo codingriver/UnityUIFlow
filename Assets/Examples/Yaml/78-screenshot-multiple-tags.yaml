@@ -1,4 +1,4 @@
-name: Screenshot Multiple Tags
+name: "78-screenshot-multiple-tags"
 description: |
   Tests taking multiple screenshots with different tags in a single test case.
 

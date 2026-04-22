@@ -1,4 +1,4 @@
-name: Negative Missing Element and Invalid Parameter
+name: "51-negative-missing-element"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleBasicLoginWindow

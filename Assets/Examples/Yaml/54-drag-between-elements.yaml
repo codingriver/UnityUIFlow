@@ -1,4 +1,4 @@
-name: Drag Between Elements
+name: "54-drag-between-elements"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

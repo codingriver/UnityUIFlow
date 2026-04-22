@@ -1,4 +1,4 @@
-name: Example Selectors And Assertions
+name: "02-selectors-and-assertions"
 description: Covers selector forms, assert_visible, assert_property and assert_text.
 fixture:
   host_window:

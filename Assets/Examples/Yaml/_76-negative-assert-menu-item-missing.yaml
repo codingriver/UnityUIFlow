@@ -1,4 +1,4 @@
-name: Negative Assert Menu Item Missing
+name: "_76-negative-assert-menu-item-missing"
 description: |
   Verifies that assert_menu_item fails when the menu item does not exist.
   This test is expected to FAIL.

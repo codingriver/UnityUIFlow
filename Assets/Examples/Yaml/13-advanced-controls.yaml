@@ -1,4 +1,4 @@
-name: Example Advanced Controls
+name: "13-advanced-controls"
 description: Covers advanced value fields, tree selection, tab switching, and list/dropdown/foldout actions.
 fixture:
   host_window:

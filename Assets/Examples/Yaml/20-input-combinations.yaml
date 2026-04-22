@@ -1,4 +1,4 @@
-name: Coverage Input Combinations
+name: "20-input-combinations"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

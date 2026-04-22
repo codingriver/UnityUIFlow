@@ -1,4 +1,4 @@
-name: Coverage Double Click And Object Search
+name: "23-double-click-and-object-search"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

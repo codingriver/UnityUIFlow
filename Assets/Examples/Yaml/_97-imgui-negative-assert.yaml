@@ -1,4 +1,4 @@
-name: IMGUI Negative - Assert Text Mismatch
+name: "_97-imgui-negative-assert"
 description: |
   Negative test: verifies that imgui_assert_text fails gracefully
   when the expected text does not match the actual text.

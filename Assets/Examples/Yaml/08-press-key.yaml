@@ -1,4 +1,4 @@
-name: Example Press Key
+name: "08-press-key"
 description: Covers the press_key action.
 fixture:
   host_window:

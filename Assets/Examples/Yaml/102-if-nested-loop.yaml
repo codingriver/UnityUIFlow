@@ -1,4 +1,4 @@
-name: If Nested Loop
+name: "102-if-nested-loop"
 description: Covers if block containing repeat_while with wait steps.
 fixture:
   host_window:

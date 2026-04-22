@@ -1,4 +1,4 @@
-name: Negative Assert Disabled Wrong
+name: "_108-negative-assert-disabled-wrong"
 description: Expects failure when assert_disabled targets an enabled element.
 fixture:
   host_window:

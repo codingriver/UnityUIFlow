@@ -1,4 +1,4 @@
-name: Engine Reliability Combo
+name: "58-engine-reliability"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCsvLoginWindow

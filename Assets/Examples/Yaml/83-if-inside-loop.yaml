@@ -1,4 +1,4 @@
-name: If Inside Loop
+name: "83-if-inside-loop"
 description: |
   Tests if condition combined with repeat_while, where conditional steps
   execute inside a loop body.

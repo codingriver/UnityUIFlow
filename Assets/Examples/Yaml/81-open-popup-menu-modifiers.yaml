@@ -1,4 +1,4 @@
-name: Open Popup Menu With Modifiers
+name: "81-open-popup-menu-modifiers"
 description: |
   Tests open_popup_menu with modifiers parameter on ToolbarMenu.
 

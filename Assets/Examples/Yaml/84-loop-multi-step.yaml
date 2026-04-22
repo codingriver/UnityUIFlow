@@ -1,4 +1,4 @@
-name: Loop Multi Step
+name: "84-loop-multi-step"
 description: |
   Tests repeat_while with multiple steps per iteration and max_iterations exit.
 

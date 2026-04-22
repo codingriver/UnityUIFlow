@@ -1,4 +1,4 @@
-name: Negative Type Text On Non Input Element
+name: "_78-negative-type-text-non-input"
 description: |
   Verifies that type_text fails when applied to a non-editable element.
   This test is expected to FAIL.

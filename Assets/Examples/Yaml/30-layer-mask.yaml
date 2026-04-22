@@ -1,4 +1,4 @@
-name: Coverage Layer Mask
+name: "30-layer-mask"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

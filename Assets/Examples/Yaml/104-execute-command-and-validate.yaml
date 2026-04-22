@@ -1,4 +1,4 @@
-name: Execute Command And Validate
+name: "104-execute-command-and-validate"
 description: Covers execute_command and validate_command actions on a TextField.
 fixture:
   host_window:

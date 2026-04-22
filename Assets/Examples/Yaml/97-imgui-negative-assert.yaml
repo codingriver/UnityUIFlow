@@ -1,4 +1,4 @@
-name: IMGUI Negative Test - Assert Failure
+name: "97-imgui-negative-assert"
 description: |
   Verifies that imgui_assert_text correctly fails when the actual
   text does not match the expected value. This test is expected to FAIL.

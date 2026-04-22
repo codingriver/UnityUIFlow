@@ -1,4 +1,4 @@
-name: IMGUI Press Key
+name: "112-imgui-press-key"
 description: Covers imgui_press_key by sending Return key to an IMGUI TextField and verifying UI stability.
 fixture:
   host_window:

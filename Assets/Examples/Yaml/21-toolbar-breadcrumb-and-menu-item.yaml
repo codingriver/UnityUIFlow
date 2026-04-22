@@ -1,4 +1,4 @@
-name: Coverage Toolbar Breadcrumb And Menu Item
+name: "21-toolbar-breadcrumb-and-menu-item"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

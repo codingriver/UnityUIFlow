@@ -1,4 +1,4 @@
-name: Negative Execute Command Missing
+name: "_99-negative-execute-command-invalid"
 description: Expects failure when execute_command is missing the command parameter.
 fixture:
   host_window:

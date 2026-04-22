@@ -1,4 +1,4 @@
-name: Negative Assert Text Empty
+name: "_101-negative-assert-text-empty"
 description: Expects failure when assert_text expected is empty but actual is not.
 fixture:
   host_window:

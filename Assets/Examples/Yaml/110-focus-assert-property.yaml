@@ -1,4 +1,4 @@
-name: Focus Assert Property
+name: "110-focus-assert-property"
 description: Covers focus action followed by assert_property on focusable trait.
 fixture:
   host_window:

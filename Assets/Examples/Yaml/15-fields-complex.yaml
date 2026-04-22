@@ -1,4 +1,4 @@
-name: Coverage Fields Complex
+name: "15-fields-complex"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

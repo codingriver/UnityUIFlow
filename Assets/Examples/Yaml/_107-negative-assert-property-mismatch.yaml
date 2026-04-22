@@ -1,4 +1,4 @@
-name: Negative Assert Property Mismatch
+name: "_107-negative-assert-property-mismatch"
 description: Expects failure when assert_property expected value does not match actual.
 fixture:
   host_window:

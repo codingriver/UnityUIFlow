@@ -1,4 +1,4 @@
-name: Host Window Switch A
+name: "60-host-window-switch"
 fixture:
   host_window:
     type: UnityUIFlow.SampleLoginWindow

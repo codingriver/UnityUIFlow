@@ -1,4 +1,4 @@
-name: IMGUI Empty String
+name: "111-imgui-empty-string"
 description: Covers imgui_type and imgui_assert_text with empty string on IMGUI TextField.
 fixture:
   host_window:

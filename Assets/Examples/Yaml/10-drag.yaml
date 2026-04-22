@@ -1,4 +1,4 @@
-name: Example Drag
+name: "10-drag"
 description: Covers the drag action.
 fixture:
   host_window:

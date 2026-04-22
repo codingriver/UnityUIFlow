@@ -1,4 +1,4 @@
-name: Assert Property Comprehensive
+name: "77-assert-property-comprehensive"
 description: |
   Tests assert_property across multiple control types and properties:
   value, text, title, scaleMode, and other typed properties.

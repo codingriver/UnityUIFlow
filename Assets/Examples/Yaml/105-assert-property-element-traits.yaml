@@ -1,4 +1,4 @@
-name: Assert Property Element Traits
+name: "105-assert-property-element-traits"
 description: Covers assert_property on focusable, pickingMode and tabIndex.
 fixture:
   host_window:

@@ -1,4 +1,4 @@
-name: Menu Item Alias Parameters
+name: "67-menu-item-aliases"
 description: |
   Tests alias parameters for menu actions:
   menu_item with menu (alias for mode) and value (alias for item),

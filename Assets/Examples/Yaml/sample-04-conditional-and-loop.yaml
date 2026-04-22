@@ -1,4 +1,4 @@
-name: Conditional And Loop
+name: "sample-04-conditional-and-loop"
 fixture:
   host_window:
     type: UnityUIFlow.SampleLoginWindow

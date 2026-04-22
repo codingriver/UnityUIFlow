@@ -1,4 +1,4 @@
-name: Negative Click Popup Item Invalid Value
+name: "_87-negative-click-popup-item-invalid"
 description: |
   Verifies that click_popup_item fails when given an invalid value.
   This test is expected to FAIL.

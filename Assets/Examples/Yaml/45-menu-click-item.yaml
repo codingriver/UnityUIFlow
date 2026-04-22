@@ -1,4 +1,4 @@
-name: Menu Click Item via Generic Click
+name: "45-menu-click-item"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

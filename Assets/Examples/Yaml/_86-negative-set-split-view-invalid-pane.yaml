@@ -1,4 +1,4 @@
-name: Negative Set Split View Invalid Pane
+name: "_86-negative-set-split-view-invalid-pane"
 description: |
   Verifies that set_split_view_size fails with an invalid pane index.
   This test is expected to FAIL.

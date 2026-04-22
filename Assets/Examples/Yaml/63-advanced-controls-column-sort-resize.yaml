@@ -1,4 +1,4 @@
-name: Advanced Controls Column Sort And Resize
+name: "63-advanced-controls-column-sort-resize"
 fixture:
   host_window:
     type: UnityUIFlow.AdvancedControlsWindow

@@ -1,4 +1,4 @@
-name: Assert Property Style And Meta
+name: "85-assert-property-style"
 description: |
   Tests assert_property on element metadata and visibility properties
   across different control types.

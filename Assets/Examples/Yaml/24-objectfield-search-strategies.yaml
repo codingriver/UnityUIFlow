@@ -1,4 +1,4 @@
-name: Coverage ObjectField Search Strategies
+name: "24-objectfield-search-strategies"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

@@ -1,4 +1,4 @@
-name: Type Text Vs Fast
+name: "87-type-text-vs-fast"
 description: |
   Compares type_text and type_text_fast final results on different fields,
   verifying both paths produce correct values.

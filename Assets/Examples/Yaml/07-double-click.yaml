@@ -1,4 +1,4 @@
-name: Example Double Click
+name: "07-double-click"
 description: Covers the double_click action.
 fixture:
   host_window:

@@ -1,4 +1,4 @@
-name: Set Value Numeric Variants
+name: "97-set-value-numeric-variants"
 description: Covers set_value and assert_value on unsigned integer/long, VectorInt, RectInt, BoundsInt and Bounds fields.
 fixture:
   host_window:

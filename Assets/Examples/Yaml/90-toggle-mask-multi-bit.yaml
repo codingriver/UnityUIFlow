@@ -1,4 +1,4 @@
-name: Toggle Mask Multi Bit
+name: "90-toggle-mask-multi-bit"
 description: |
   Tests toggle_mask_option on multiple bits across MaskField and EnumFlagsField.
 

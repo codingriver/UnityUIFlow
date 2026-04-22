@@ -1,4 +1,4 @@
-name: Negative Page Scroller Invalid Direction
+name: "_80-negative-page-scroller"
 description: |
   Verifies that page_scroller fails with an invalid direction parameter.
   This test is expected to FAIL.

@@ -1,4 +1,4 @@
-name: Coverage Container And Visual Elements
+name: "32-container-and-visual-elements"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

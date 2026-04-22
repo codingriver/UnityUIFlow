@@ -1,4 +1,4 @@
-name: Nested Loops Case
+name: "59-nested-loops"
 fixture:
   host_window:
     type: UnityUIFlow.SampleLoginWindow

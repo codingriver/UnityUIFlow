@@ -1,4 +1,4 @@
-name: Popup Item Click via click_popup_item
+name: "46-popup-item-click"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

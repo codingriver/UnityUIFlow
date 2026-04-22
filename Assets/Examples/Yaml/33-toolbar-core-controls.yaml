@@ -1,4 +1,4 @@
-name: Coverage Toolbar Core Controls
+name: "33-toolbar-core-controls"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

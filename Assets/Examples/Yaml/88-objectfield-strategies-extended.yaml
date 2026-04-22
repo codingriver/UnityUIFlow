@@ -1,4 +1,4 @@
-name: ObjectField Strategies Extended
+name: "88-objectfield-strategies-extended"
 description: |
   Tests additional set_value search strategies on ObjectField:
   path, asset-name, and guid variants.

@@ -1,4 +1,4 @@
-name: Strict Mode Options
+name: "53-strict-mode-options"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleBasicLoginWindow

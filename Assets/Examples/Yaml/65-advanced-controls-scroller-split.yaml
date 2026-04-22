@@ -1,4 +1,4 @@
-name: Advanced Controls Scroller And Split
+name: "65-advanced-controls-scroller-split"
 fixture:
   host_window:
     type: UnityUIFlow.AdvancedControlsWindow

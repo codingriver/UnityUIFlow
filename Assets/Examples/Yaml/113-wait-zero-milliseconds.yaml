@@ -1,4 +1,4 @@
-name: Wait Zero Milliseconds
+name: "113-wait-zero-milliseconds"
 description: Covers wait action with 0ms duration boundary.
 fixture:
   host_window:

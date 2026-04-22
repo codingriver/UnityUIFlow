@@ -1,4 +1,4 @@
-name: Data Driven Test with Inline Rows
+name: "92-data-driven-json"
 description: |
   Demonstrates data-driven testing using inline data rows.
   Each row provides different input values for the same test flow.

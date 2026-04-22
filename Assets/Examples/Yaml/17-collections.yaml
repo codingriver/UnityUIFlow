@@ -1,4 +1,4 @@
-name: Coverage Collections
+name: "17-collections"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageCollectionsWindow

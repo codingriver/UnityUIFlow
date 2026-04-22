@@ -1,4 +1,4 @@
-name: Coverage Focus And Enabled
+name: "22-focus-and-enabled"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

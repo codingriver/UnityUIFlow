@@ -1,4 +1,4 @@
-name: Validate And Execute Command Advanced
+name: "76-validate-command-advanced"
 description: |
   Tests validate_command and execute_command with multiple command names
   on a TextField that registers ValidateCommandEvent and ExecuteCommandEvent.

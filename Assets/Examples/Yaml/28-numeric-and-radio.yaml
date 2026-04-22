@@ -1,4 +1,4 @@
-name: Coverage Numeric And Radio
+name: "28-numeric-and-radio"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageFieldsWindow

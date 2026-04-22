@@ -1,4 +1,4 @@
-name: Host Window Advanced Switching
+name: "93-host-window-advanced"
 description: |
   Tests host window reopen behavior and data persistence
   via reopen_if_open within a single window.

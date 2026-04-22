@@ -1,4 +1,4 @@
-name: Example Wait For Element
+name: "03-wait-for-element"
 description: Covers delayed appearance and wait_for_element.
 fixture:
   host_window:

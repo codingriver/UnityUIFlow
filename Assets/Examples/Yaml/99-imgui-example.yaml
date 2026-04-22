@@ -1,4 +1,4 @@
-name: IMGUI Example Window Smoke Test
+name: "99-imgui-example"
 description: |
   Demonstrates IMGUI automation capabilities using imgui_* actions.
   Tests a simple IMGUI editor window with buttons, text fields,

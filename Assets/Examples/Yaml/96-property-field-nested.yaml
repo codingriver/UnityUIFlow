@@ -1,4 +1,4 @@
-name: Property Field Nested
+name: "96-property-field-nested"
 description: Covers set_bound_value and assert_bound_value on PropertyField and InspectorElement with nested binding paths.
 fixture:
   host_window:

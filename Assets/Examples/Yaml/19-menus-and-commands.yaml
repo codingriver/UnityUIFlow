@@ -1,4 +1,4 @@
-name: Coverage Menus And Commands
+name: "19-menus-and-commands"
 fixture:
   host_window:
     type: UnityUIFlow.Examples.ExampleCoverageInputWindow

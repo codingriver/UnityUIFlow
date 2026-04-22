@@ -1,4 +1,4 @@
-name: IMGUI Negative - Wait Timeout
+name: "_96-imgui-negative-wait"
 description: |
   Negative test: verifies that imgui_wait times out correctly
   when the target element does not exist.

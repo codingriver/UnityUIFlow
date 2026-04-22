@@ -1,4 +1,4 @@
-name: Example Conditional And Loop
+name: "04-conditional-and-loop"
 description: Covers if.exists, repeat_while, wait and assert_not_visible.
 fixture:
   host_window:

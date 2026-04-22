@@ -1,4 +1,4 @@
-name: Negative Bound Value On Non Bound Element
+name: "_72-negative-fields-and-bound"
 description: |
   Verifies that set_bound_value fails when applied to a non-bound element.
   This test is expected to FAIL.

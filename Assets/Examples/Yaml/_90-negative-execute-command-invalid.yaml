@@ -1,4 +1,4 @@
-name: Negative Execute Command Invalid
+name: "_90-negative-execute-command-invalid"
 description: |
   Verifies that execute_command fails with an invalid command name.
   This test is expected to FAIL.

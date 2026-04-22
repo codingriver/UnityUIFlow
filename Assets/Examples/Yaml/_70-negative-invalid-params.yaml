@@ -1,4 +1,4 @@
-name: Negative Invalid Menu Item Mode
+name: "_70-negative-invalid-params"
 description: |
   Verifies that menu_item rejects an invalid mode parameter.
   This test is expected to FAIL.

@@ -1,4 +1,4 @@
-name: Custom Action Login
+name: "05-custom-action-and-json"
 fixture:
   host_window:
     type: UnityUIFlow.SampleLoginWindow

@@ -1,4 +1,4 @@
-name: Negative Assert Property Invalid
+name: "_92-negative-assert-property-invalid"
 description: |
   Verifies that assert_property fails when the property does not exist on the element.
   This test is expected to FAIL.

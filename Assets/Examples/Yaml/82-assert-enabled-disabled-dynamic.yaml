@@ -1,4 +1,4 @@
-name: Assert Enabled Disabled Dynamic
+name: "82-assert-enabled-disabled-dynamic"
 description: |
   Tests assert_enabled and assert_disabled on elements whose enabled state
   can change dynamically.

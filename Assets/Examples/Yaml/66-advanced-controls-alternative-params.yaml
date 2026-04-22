@@ -1,4 +1,4 @@
-name: Advanced Controls Alternative Parameters
+name: "66-advanced-controls-alternative-params"
 description: |
   Tests alternative parameter names for advanced control actions:
   select_tree_item by index, select_tab by index, close_tab by index,
