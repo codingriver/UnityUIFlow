@@ -67,3 +67,5 @@ Desktop.ini
 log/mcp-server.log
 log/unitypilot-operations.log
 log/unitypilot.log
+log/.session
+log/UnityUIFlow.log
