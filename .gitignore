@@ -72,3 +72,5 @@ log/.session
 log/UnityUIFlow.log
 log/log.log
 /tools/__pycache__/
+log/log.log
+tools/__pycache__/batch_yaml_runner.cpython-311.pyc
