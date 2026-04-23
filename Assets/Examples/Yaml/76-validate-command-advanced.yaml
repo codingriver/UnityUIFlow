@@ -12,7 +12,7 @@ steps:
   - name: Type text into command input
     action: type_text
     selector: "#command-input"
-    text: "HelloWorld"
+    value: "HelloWorld"
 
   - name: Validate SelectAll command
     action: validate_command

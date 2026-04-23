@@ -382,6 +382,8 @@ namespace UnityUIFlow
         {
             switch (element)
             {
+                case Label _:
+                    return false;
                 case TextField textField:
                     textField.value = value;
                     return true;
@@ -494,12 +496,15 @@ namespace UnityUIFlow
             {
                 case "left":
                 case "leftmouse":
+                case "0":
                     return MouseButton.LeftMouse;
                 case "right":
                 case "rightmouse":
+                case "1":
                     return MouseButton.RightMouse;
                 case "middle":
                 case "middlemouse":
+                case "2":
                     return MouseButton.MiddleMouse;
                 default:
                     throw new UnityUIFlowException(ErrorCodes.ActionParameterInvalid, $"Action {actionName} parameter '{key}' is invalid: {literal}");
@@ -1210,6 +1215,11 @@ namespace UnityUIFlow
             string value = ActionHelpers.Require(parameters, "type_text", "value");
             context.Log($"type_text: writing {value.Length} chars to {ActionContext.ElementInfo(element)}");
 
+            if (element is Label)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionTargetTypeInvalid, $"type_text target type is not writable: {element.GetType().Name}");
+            }
+
             element.Focus();
             await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);
 
@@ -1784,7 +1794,12 @@ namespace UnityUIFlow
             }
             if (!opened)
             {
-                throw new UnityUIFlowException(ErrorCodes.OfficialUiTestFrameworkUnavailable, "open_context_menu requires official ContextMenuSimulator support.");
+                // Synthetic fallback: dispatch right-click mouse events to trigger ContextualMenuManipulator
+                Vector2 worldPos = element.worldBound.center;
+                ActionHelpers.DispatchMouseEvent(element, EventType.MouseDown, worldPos, Vector2.zero, button: 1, modifiers: modifiers);
+                ActionHelpers.DispatchMouseEvent(element, EventType.MouseUp, worldPos, Vector2.zero, button: 1, modifiers: modifiers);
+                opened = true;
+                context?.Log($"open_context_menu: dispatched synthetic right-click to {ActionContext.ElementInfo(element)}");
             }
 
             context.Log($"open_context_menu: {ActionContext.ElementInfo(element)} modifiers={modifiers}");
@@ -2022,6 +2037,10 @@ namespace UnityUIFlow
         public async Task ExecuteAsync(VisualElement root, ActionContext context, Dictionary<string, string> parameters)
         {
             VisualElement element = await ActionHelpers.RequireElementAsync(context, parameters, "focus");
+            if (!element.focusable)
+            {
+                throw new UnityUIFlowException(ErrorCodes.ActionExecutionFailed, $"focus failed: {ActionContext.ElementInfo(element)} is not focusable.");
+            }
             element.Focus();
             context.Log($"focus: {ActionContext.ElementInfo(element)}");
             await EditorAsyncUtility.NextFrameAsync(context.CancellationToken);

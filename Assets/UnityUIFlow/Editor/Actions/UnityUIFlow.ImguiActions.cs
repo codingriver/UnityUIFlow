@@ -444,6 +444,12 @@ namespace UnityUIFlow
                     bridge.Enqueue(new ImguiNoOpCommand());
                     await Task.Delay(100, cts.Token);
                 }
+
+                // If we exited the loop because the token was cancelled but Task.Delay
+                // happened to complete normally (race condition), we still need to treat
+                // this as a timeout.
+                throw new UnityUIFlowException(ErrorCodes.StepTimeout,
+                    $"imgui_wait timed out after {timeoutMs}ms for selector: {selectorText}");
             }
             catch (TaskCanceledException)
             {

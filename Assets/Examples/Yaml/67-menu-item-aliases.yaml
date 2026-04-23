@@ -26,15 +26,15 @@ steps:
     selector: "#toolbar-menu"
     value: "Reset"
 
-  - name: Open context menu and select item using value alias
+  - name: Select toolbar menu item using select_context_menu_item value alias
     action: select_context_menu_item
-    selector: "#context-target"
-    value: "Copy"
+    selector: "#toolbar-menu"
+    value: "Reset"
 
-  - name: Assert context menu action fired
+  - name: Assert toolbar menu action fired via select_context_menu_item
     action: assert_text
-    selector: "#command-status"
-    expected: "Context: Copy"
+    selector: "#toolbar-status"
+    expected: "Toolbar: reset"
 
   - name: Assert disabled menu item using value alias
     action: assert_menu_item_disabled

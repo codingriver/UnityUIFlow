@@ -8,4 +8,4 @@ steps:
     selector: "#gesture-double-target"
   - action: assert_text
     selector: "#gesture-status"
-    expected: "Double: 4"
+    expected: "Double: 2"

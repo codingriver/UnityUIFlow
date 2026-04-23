@@ -23,7 +23,7 @@ steps:
   - name: Type after wait
     action: type_text
     selector: "#username-input"
-    text: "boundary_test"
+    value: "boundary_test"
 
   - name: Assert text entered
     action: assert_text_contains

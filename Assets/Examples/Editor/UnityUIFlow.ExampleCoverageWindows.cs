@@ -455,7 +455,9 @@ namespace UnityUIFlow.Examples
 
             VisualElement clickTarget = new Button { name = "gesture-click-target", text = "Click Target" };
             clickTarget.RegisterCallback<MouseUpEvent>(evt => gestureStatus.text = $"Click: button={(int)evt.button}; modifiers={evt.modifiers}");
-            VisualElement doubleClickTarget = new Button { name = "gesture-double-target", text = "Double Target" };
+            VisualElement doubleClickTarget = new VisualElement { name = "gesture-double-target" };
+            doubleClickTarget.style.height = 32;
+            doubleClickTarget.Add(new Label("Double Target"));
             int doubleCount = 0;
             doubleClickTarget.RegisterCallback<MouseUpEvent>(_ =>
             {
@@ -487,7 +489,16 @@ namespace UnityUIFlow.Examples
             // Use TrickleDown.TrickleDown to ensure these callbacks fire before TextField's internal
             // command handling stops propagation.
             commandInput.RegisterCallback<ValidateCommandEvent>(evt => { commandStatus.text = $"Validate: {evt.commandName}"; evt.StopPropagation(); }, TrickleDown.TrickleDown);
-            commandInput.RegisterCallback<ExecuteCommandEvent>(evt => { commandStatus.text = $"Execute: {evt.commandName}"; evt.StopPropagation(); }, TrickleDown.TrickleDown);
+            commandInput.RegisterCallback<ExecuteCommandEvent>(evt =>
+            {
+                var supported = new System.Collections.Generic.HashSet<string> { "SelectAll", "Copy", "Paste", "Cut", "Delete", "Undo", "Redo" };
+                if (!supported.Contains(evt.commandName))
+                {
+                    throw new System.InvalidOperationException($"Unsupported command: {evt.commandName}");
+                }
+                commandStatus.text = $"Execute: {evt.commandName}";
+                evt.StopPropagation();
+            }, TrickleDown.TrickleDown);
 
             VisualElement contextTarget = new VisualElement { name = "context-target" };
             contextTarget.style.height = 28;

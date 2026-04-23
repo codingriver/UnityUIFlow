@@ -28,7 +28,7 @@
 | `com.unity.ui` | `2.0.0` | UIToolkit 核心 |
 | YAML 解析 | `YamlDotNet.dll` | 内嵌预编译 DLL |
 | 单元测试 | NUnit + Unity Test Framework | 仅 Editor Mode，无 PlayMode 测试 |
-| MCP 服务器 | `unitypilot` | WebSocket / HTTP / stdio 多协议支持 |
+| MCP 服务器 | `unityuiflow` | WebSocket / HTTP / stdio 多协议支持 |
 
 **关键约束**：
 - 所有生产代码均在 `Assets/UnityUIFlow/Editor/` 下，编译目标为 **Editor only**。
@@ -182,7 +182,7 @@ Reporting（ScreenshotManager + MarkdownReporter + JsonResultWriter）
 判定 MCP 服务器不可用之前，必须按顺序完成以下探测步骤：
 
 1. **读取配置文件**：检查 `.vscode/mcp.json`、`.kimi/mcp.json`、`.cursor/mcp.json`、`.opencode/` 等目录中的 MCP 服务器配置，确认 server URL、端口、命令。
-2. **网络探测**：使用 `Get-NetTCPConnection` / `netstat` / `curl` 等工具检查配置的端口（如 `8011`、`8767`）是否处于 `Listen` 状态。
+2. **网络探测**：使用 `Get-NetTCPConnection` / `netstat` / `curl` 等工具检查配置的端口（如 `8011`、`8765`）是否处于 `Listen` 状态。
 3. **协议握手**：实际发送请求调用 `tools/list` 或 `unity_mcp_status`，验证 server 是否响应、Unity Editor 是否已连接（`connected: true`）。
 4. **结论**：只有当上述步骤**全部失败**后，才能判定 MCP 服务器不可用，并明确记录每一步的失败原因。
 
@@ -371,8 +371,8 @@ Reports/
 **规则**：
 - `RunFileAsync`（单文件）→ 生成 `single_reports.md` + `Cases/{caseName}.md+json`
 - `RunSuiteAsync`（Suite）→ 生成 `full_reports.md` + `Cases/` 下各用例报告
-- MCP `unityuiflow.run` 单文件 → `single_reports.md`
-- MCP `unityuiflow.run` 多文件 → `full_reports.md`
+- MCP `unity_editor_e2e_run`（单文件）→ `single_reports.md`
+- MCP `unity_uiflow_run_batch`（多文件）→ `full_reports.md`
 - 旧的 `suite-report.md` 已更名为 `full_reports.md`，旧的 `{caseName}.md` 已移至 `Cases/` 子目录
 
 | 子目录 | 来源 |
@@ -389,7 +389,7 @@ Reports/
 
 ### 为什么
 
-- Unity Editor 通过 WebSocket 桥 `UnityPilotBridge` 连接到 `unitypilot-mcp` 服务器（端口 `8767` / HTTP `8011`）。
+- Unity Editor 通过 WebSocket 桥 `UnityPilotBridge` 连接到 `unityuiflow-mcp` 服务器（WS 端口 `8765` / HTTP `8011`）。
 - `SendKeys` 不可靠（需要窗口焦点、存在竞态条件、超时不可控）。
 - 删除 DLL 不会通知 AssetDatabase；Unity 可能忽略缺失的程序集，直到显式刷新。
 

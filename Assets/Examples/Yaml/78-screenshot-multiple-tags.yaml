@@ -15,7 +15,7 @@ steps:
   - name: Type username
     action: type_text
     selector: "#username-input"
-    text: "screenshot_user"
+    value: "screenshot_user"
 
   - name: After input screenshot
     action: screenshot

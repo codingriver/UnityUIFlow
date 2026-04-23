@@ -12,4 +12,4 @@ steps:
   - name: type_text on a Label element should fail
     action: type_text
     selector: "#gesture-status"
-    text: "should fail"
+    value: "should fail"

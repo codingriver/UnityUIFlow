@@ -104,6 +104,10 @@ namespace UnityUIFlow
 
             value = valueProperty.GetValue(element);
             valueType = valueProperty.PropertyType;
+            if (valueType == typeof(Enum) && value != null)
+            {
+                valueType = value.GetType();
+            }
             return true;
         }
 
@@ -1544,6 +1548,15 @@ namespace UnityUIFlow
                     if (TryBuildSelectionArgument(method.GetParameters()[0].ParameterType, itemId, out object argument))
                     {
                         method.Invoke(control, new[] { argument });
+                        PropertyInfo selectedIndexProp = control.GetType().GetProperty("selectedIndex", PublicInstance);
+                        if (selectedIndexProp != null)
+                        {
+                            int selectedIndex = Convert.ToInt32(selectedIndexProp.GetValue(control));
+                            if (selectedIndex < 0)
+                            {
+                                return false;
+                            }
+                        }
                         return true;
                     }
                 }

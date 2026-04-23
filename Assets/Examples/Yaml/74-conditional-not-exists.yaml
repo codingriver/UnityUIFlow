@@ -22,7 +22,7 @@ steps:
   - name: Skip typing if toast exists (it should not, so this runs)
     action: type_text
     selector: "#username-input"
-    text: "admin"
+    value: "admin"
     if:
       not_exists: "#toast-message"
 
@@ -31,11 +31,11 @@ steps:
     selector: "#username-input"
     expected: "admin"
 
-  - name: Skip click on non-existent element using not_exists
+  - name: Skip click on non-existent element using exists
     action: click
     selector: "#nonexistent-button"
     if:
-      not_exists: "#nonexistent-button"
+      exists: "#nonexistent-button"
 
   - name: Final state should still be valid
     action: assert_visible

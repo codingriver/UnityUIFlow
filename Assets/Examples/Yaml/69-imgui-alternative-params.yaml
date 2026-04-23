@@ -19,7 +19,7 @@ steps:
   - name: Assert quality selected
     action: imgui_assert_text
     selector: 'gui(label, control_name="status-label")'
-    expected: "Status: Ready"
+    text: "Status: Ready"
 
   - name: Focus text field via selector then press Delete key
     action: imgui_press_key

@@ -144,6 +144,7 @@ namespace UnityUIFlow
     public enum ConditionType
     {
         Exists,
+        NotExists,
     }
 
     /// <summary>
@@ -384,12 +385,14 @@ namespace UnityUIFlow
     public sealed class ConditionDefinition
     {
         public string Exists;
+        public string NotExists;
 
         public ConditionDefinition Clone()
         {
             return new ConditionDefinition
             {
                 Exists = Exists,
+                NotExists = NotExists,
             };
         }
     }

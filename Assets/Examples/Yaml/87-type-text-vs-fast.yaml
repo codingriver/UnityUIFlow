@@ -12,7 +12,7 @@ steps:
   - name: Type slow text via type_text
     action: type_text
     selector: "#username-input"
-    text: "slow_typed"
+    value: "slow_typed"
 
   - name: Assert slow text result
     action: assert_value
@@ -22,7 +22,7 @@ steps:
   - name: Type fast text via type_text_fast
     action: type_text_fast
     selector: "#password-input"
-    text: "fast_typed"
+    value: "fast_typed"
 
   - name: Assert fast text result
     action: assert_value
@@ -32,7 +32,7 @@ steps:
   - name: Type empty string via type_text_fast
     action: type_text_fast
     selector: "#username-input"
-    text: ""
+    value: ""
 
   - name: Assert empty string result
     action: assert_value

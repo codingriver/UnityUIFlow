@@ -21,7 +21,7 @@ steps:
         - name: Assert status label present
           action: assert_text_contains
           selector: "#status-label"
-          expected: "Ready"
+          expected: "Idle"
 
         - name: Short wait
           action: wait

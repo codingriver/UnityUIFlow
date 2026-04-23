@@ -49,7 +49,7 @@ steps:
   - name: Assert column sorted by index
     action: assert_text_contains
     selector: "#collection-status"
-    expected: "Planet:Descending"
+    expected: "planet:Descending"
 
   - name: Resize column by column name instead of index
     action: resize_column

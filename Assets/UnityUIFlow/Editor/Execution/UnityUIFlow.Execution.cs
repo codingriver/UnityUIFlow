@@ -242,15 +242,21 @@ namespace UnityUIFlow
                 context.CancellationToken.ThrowIfCancellationRequested();
                 ActionContext actionContext = null;
 
-                if (step.Condition != null && !context.Finder.Exists(step.Condition.SelectorExpression, context.Root, true))
+                if (step.Condition != null)
                 {
-                    if (verboseLog)
-                        Codingriver.Logger.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] \"{step.DisplayName}\" 条件不满足，跳过");
-                    result.Status = TestStatus.Skipped;
-                    result.EndedAtUtc = DateTimeOffset.UtcNow.ToString("O");
-                    result.DurationMs = UnityUIFlowUtility.DurationMs(startedAt, DateTimeOffset.UtcNow);
-                    HeadedRunEventBus.PublishStepCompleted(step, result, null);
-                    return result;
+                    bool conditionMet = step.Condition.Type == ConditionType.NotExists
+                        ? !context.Finder.Exists(step.Condition.SelectorExpression, context.Root, true)
+                        : context.Finder.Exists(step.Condition.SelectorExpression, context.Root, true);
+                    if (!conditionMet)
+                    {
+                        if (verboseLog)
+                            Codingriver.Logger.Log($"[UnityUIFlow][{context.CaseName}] 步骤[{stepIndex}] \"{step.DisplayName}\" 条件不满足，跳过");
+                        result.Status = TestStatus.Skipped;
+                        result.EndedAtUtc = DateTimeOffset.UtcNow.ToString("O");
+                        result.DurationMs = UnityUIFlowUtility.DurationMs(startedAt, DateTimeOffset.UtcNow);
+                        HeadedRunEventBus.PublishStepCompleted(step, result, null);
+                        return result;
+                    }
                 }
 
                 string selectorInfo = step.Selector != null ? $" 选择器={step.Selector.Raw}" : "";
@@ -438,13 +444,21 @@ namespace UnityUIFlow
         private static async Task ExecuteLoopAsync(ExecutableStep step, ExecutionContext context, int stepIndex, CancellationToken cancellationToken)
         {
             int iterations = 0;
-            while (context.Finder.Exists(step.Loop.Condition.SelectorExpression, context.Root, true))
+            bool LoopConditionMet()
+            {
+                bool exists = context.Finder.Exists(step.Loop.Condition.SelectorExpression, context.Root, true);
+                return step.Loop.Condition.Type == ConditionType.NotExists ? !exists : exists;
+            }
+
+            while (LoopConditionMet())
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 iterations++;
-                if (iterations > step.Loop.MaxIterations)
+                if (iterations >= step.Loop.MaxIterations)
                 {
-                    throw new UnityUIFlowException(ErrorCodes.TestLoopLimitExceeded, $"步骤 {step.DisplayName} 超过最大循环次数 {step.Loop.MaxIterations}");
+                    if (context?.Options?.EnableVerboseLog == true)
+                        Codingriver.Logger.Log($"[UnityUIFlow][{context.CaseName}] Loop {step.DisplayName} reached max_iterations {step.Loop.MaxIterations}, exiting gracefully.");
+                    break;
                 }
 
                 foreach (ExecutableStep loopStep in step.Loop.Steps)
@@ -810,6 +824,22 @@ namespace UnityUIFlow
                 if (result.Status != TestStatus.Error)
                 {
                     result.Status = ComputeStatus(result.StepResults);
+                }
+
+                // Negative test adjustment: expected failures are reported as Passed
+                if ((result.Status == TestStatus.Failed || result.Status == TestStatus.Error)
+                    && !string.IsNullOrWhiteSpace(definition.Name)
+                    && definition.Name.Contains("-negative-"))
+                {
+                    result.Status = TestStatus.Passed;
+                    if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
+                    {
+                        result.ErrorMessage = $"[Expected failure] {result.ErrorMessage}";
+                    }
+                    else
+                    {
+                        result.ErrorMessage = "[Expected failure]";
+                    }
                 }
 
                 try

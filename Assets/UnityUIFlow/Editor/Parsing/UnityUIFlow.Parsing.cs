@@ -210,9 +210,17 @@ namespace UnityUIFlow
                 return null;
             }
 
+            string exists = YamlObjectReader.GetString(map, "exists", false);
+            string notExists = YamlObjectReader.GetString(map, "not_exists", false);
+            if (string.IsNullOrWhiteSpace(exists) && string.IsNullOrWhiteSpace(notExists))
+            {
+                throw new UnityUIFlowException(ErrorCodes.TestCaseSchemaInvalid, "Condition must specify either 'exists' or 'not_exists'.");
+            }
+
             return new ConditionDefinition
             {
-                Exists = YamlObjectReader.GetString(map, "exists", true),
+                Exists = exists,
+                NotExists = notExists,
             };
         }
 
@@ -316,24 +324,27 @@ namespace UnityUIFlow
                 throw new UnityUIFlowException(ErrorCodes.TestCaseSchemaInvalid, $"姝ラ {stepName} 鐨?repeat_while 缁撴瀯闈炴硶锛氫笉鑳藉悓鏃跺０鏄?action");
             }
 
-            if (!string.IsNullOrWhiteSpace(step.Timeout))
-            {
-                DurationParser.ParseToMilliseconds(step.Timeout, stepName);
-            }
+            // Duration validation is intentionally deferred to execution phase so that
+            // negative tests with out-of-bound values (e.g. 601s) fail as step-level
+            // errors rather than crashing the whole case during parsing.
+            // All actions that consume duration/timeout call DurationParser themselves.
+            // if (!string.IsNullOrWhiteSpace(step.Timeout))
+            // {
+            //     DurationParser.ParseToMilliseconds(step.Timeout, stepName);
+            // }
+            // if (!string.IsNullOrWhiteSpace(step.Duration))
+            // {
+            //     DurationParser.ParseToMilliseconds(step.Duration, stepName);
+            // }
 
-            if (!string.IsNullOrWhiteSpace(step.Duration))
+            if (step.If != null && string.IsNullOrWhiteSpace(step.If.Exists) && string.IsNullOrWhiteSpace(step.If.NotExists))
             {
-                DurationParser.ParseToMilliseconds(step.Duration, stepName);
-            }
-
-            if (step.If != null && string.IsNullOrWhiteSpace(step.If.Exists))
-            {
-                throw new UnityUIFlowException(ErrorCodes.TestCaseSchemaInvalid, $"姝ラ {stepName} 鐨?if.exists 涓嶈兘涓虹┖");
+                throw new UnityUIFlowException(ErrorCodes.TestCaseSchemaInvalid, $"Step {stepName} if condition must specify either 'exists' or 'not_exists'.");
             }
 
             if (step.RepeatWhile != null)
             {
-                if (step.RepeatWhile.Condition == null || string.IsNullOrWhiteSpace(step.RepeatWhile.Condition.Exists))
+                if (step.RepeatWhile.Condition == null || (string.IsNullOrWhiteSpace(step.RepeatWhile.Condition.Exists) && string.IsNullOrWhiteSpace(step.RepeatWhile.Condition.NotExists)))
                 {
                     throw new UnityUIFlowException(ErrorCodes.TestCaseSchemaInvalid, $"Loop condition in step {stepName} cannot be empty.");
                 }
@@ -856,11 +867,7 @@ namespace UnityUIFlow
                     Kind = ExecutableStepKind.Loop,
                     Loop = new LoopExpression
                     {
-                        Condition = new ConditionExpression
-                        {
-                            Type = ConditionType.Exists,
-                            SelectorExpression = _selectorCompiler.Compile(TemplateRenderer.Render(step.RepeatWhile.Condition.Exists, data, displayName)),
-                        },
+                        Condition = CompileCondition(step.RepeatWhile.Condition, data, displayName),
                         MaxIterations = step.RepeatWhile.MaxIterations,
                     },
                 };
@@ -933,11 +940,21 @@ namespace UnityUIFlow
                 return null;
             }
 
-            string selector = TemplateRenderer.Render(condition.Exists, data, stepName);
+            if (!string.IsNullOrWhiteSpace(condition.NotExists))
+            {
+                string selector = TemplateRenderer.Render(condition.NotExists, data, stepName);
+                return new ConditionExpression
+                {
+                    Type = ConditionType.NotExists,
+                    SelectorExpression = _selectorCompiler.Compile(selector),
+                };
+            }
+
+            string existsSelector = TemplateRenderer.Render(condition.Exists, data, stepName);
             return new ConditionExpression
             {
                 Type = ConditionType.Exists,
-                SelectorExpression = _selectorCompiler.Compile(selector),
+                SelectorExpression = _selectorCompiler.Compile(existsSelector),
             };
         }
     }

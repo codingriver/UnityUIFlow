@@ -286,11 +286,14 @@ def parse_batch_result(result: dict, yaml_paths: list[str]) -> dict[str, Any]:
         # Direct result from run_batch_with_polling
         result_data = result.get("raw", {})
 
-    # Reconcile negative tests: case-level Failed is expected
-    negative_paths = {yp for yp in yaml_paths if is_negative_test(yp)}
+    # Reconcile negative tests: case-level Failed/Error is expected.
+    # When Unity side converts negative tests to Passed (with [Expected failure] marker),
+    # we treat them as passed. Recompute totals directly from cases for accuracy.
     raw_cases = result_data.get("cases", []) or result_data.get("raw", {}).get("cases", [])
-    adjusted_passed = result_data.get("passed", 0)
-    adjusted_failed = result_data.get("failed", 0)
+    passed = 0
+    failed = 0
+    errors = 0
+    skipped = 0
     negative_expected_failures = 0
 
     for case in raw_cases:
@@ -302,25 +305,42 @@ def parse_batch_result(result: dict, yaml_paths: list[str]) -> dict[str, Any]:
             if case_name.replace(" ", "-").lower() in yp.lower() or Path(yp).stem.replace("-", " ").lower() in case_name.lower():
                 matched_yaml = yp
                 break
-        if matched_yaml and is_negative_test(matched_yaml):
-            if case_status == "Failed":
-                # Expected failure -> count as pass
-                adjusted_passed += 1
-                adjusted_failed = max(0, adjusted_failed - 1)
+
+        is_neg = matched_yaml and is_negative_test(matched_yaml)
+        if is_neg:
+            error_msg = case.get("errorMessage", "")
+            if case_status in ("Failed", "Error") or (case_status == "Passed" and "[Expected failure]" in error_msg):
+                # Expected failure (either raw or converted by Unity side)
+                passed += 1
                 negative_expected_failures += 1
             elif case_status == "Passed":
                 # Negative test unexpectedly passed -> count as fail
-                adjusted_passed = max(0, adjusted_passed - 1)
-                adjusted_failed += 1
+                failed += 1
+            elif case_status == "Skipped":
+                skipped += 1
+            else:
+                passed += 1
+        else:
+            if case_status == "Passed":
+                passed += 1
+            elif case_status == "Failed":
+                failed += 1
+            elif case_status == "Error":
+                errors += 1
+            elif case_status == "Skipped":
+                skipped += 1
+
+    total = len(raw_cases)
+    status = "completed" if (failed == 0 and errors == 0) else "failed"
 
     return {
         "ok": True,
-        "status": result_data.get("status"),
-        "total": result_data.get("total", 0),
-        "passed": adjusted_passed,
-        "failed": adjusted_failed,
-        "errors": result_data.get("errors", 0),
-        "skipped": result_data.get("skipped", 0),
+        "status": status,
+        "total": total,
+        "passed": passed,
+        "failed": failed,
+        "errors": errors,
+        "skipped": skipped,
         "negativeExpectedFailures": negative_expected_failures,
         "reportPath": result_data.get("reportPath", result_data.get("reportOutputPath", "")),
         "screenshotPath": result_data.get("screenshotPath", ""),
