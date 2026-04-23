@@ -4,6 +4,27 @@
 
 ---
 
+## 0. MCP 服务器连接配置
+
+> **修改端口 / 地址时只需改本节，文档其余位置均引用此处定义。**
+
+```ini
+MCP_HTTP  = http://127.0.0.1:8011/mcp   # HTTP 端点（Streamable HTTP，POST /mcp）
+MCP_WS    = ws://127.0.0.1:8765         # WebSocket 端点（UnityPilotBridge）
+MCP_PROTO = 2024-11-05                  # MCP 协议版本
+```
+
+**最小探测请求（curl，使用上方 `MCP_HTTP`）：**
+
+```bash
+curl -s -X POST http://127.0.0.1:8011/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"agent","version":"1.0"}}}'
+```
+
+---
+
 ## 1. 项目概览
 
 **UnityUIFlow** 是一个基于 Unity Editor + UIToolkit 的 YAML 驱动 UI 自动化测试框架。它让开发者和自动化工具能够通过编写 YAML 用例，对 `EditorWindow` 中的 `VisualElement` 树执行点击、输入、拖拽、断言、截图等操作，而无需手写大量 C# 测试代码。
@@ -177,16 +198,22 @@ Reporting（ScreenshotManager + MarkdownReporter + JsonResultWriter）
 
 ### 6.1.1 MCP 服务器可用性探测规则（强制）
 
-> **在任何情况下，Agent 不得在未完成探测的情况下断言“MCP 服务器不可用”或“没有 MCP 服务器”。**
+> **在任何情况下，Agent 不得在未完成探测的情况下断言”MCP 服务器不可用”或”没有 MCP 服务器”。**
 
 判定 MCP 服务器不可用之前，必须按顺序完成以下探测步骤：
 
-1. **读取配置文件**：检查 `.vscode/mcp.json`、`.kimi/mcp.json`、`.cursor/mcp.json`、`.opencode/` 等目录中的 MCP 服务器配置，确认 server URL、端口、命令。
-2. **网络探测**：使用 `Get-NetTCPConnection` / `netstat` / `curl` 等工具检查配置的端口（如 `8011`、`8765`）是否处于 `Listen` 状态。
-3. **协议握手**：实际发送请求调用 `tools/list` 或 `unity_mcp_status`，验证 server 是否响应、Unity Editor 是否已连接（`connected: true`）。
-4. **结论**：只有当上述步骤**全部失败**后，才能判定 MCP 服务器不可用，并明确记录每一步的失败原因。
+1. **协议握手**：直接 `POST $MCP_HTTP`（见§0）（3s 超时），发送 `initialize` 请求：
 
-**违规示例**：在未检查端口、未调用 `unity_mcp_status` 的情况下，仅凭“代码中看不到 MCP server 定义”就声称 MCP 不可用。
+   ```json
+   {“jsonrpc”:”2.0”,”id”:1,”method”:”initialize”,”params”:{“protocolVersion”:”2024-11-05”,”capabilities”:{},”clientInfo”:{“name”:”agent”,”version”:”1.0”}}}
+   ```
+
+2. **确认 Unity 已连接**：若 `initialize` 成功，调用 `unity_mcp_status` 确认 Unity Editor 已连接（`connected: true`）。
+3. **结论**：只有当上述步骤**全部失败**后，才能判定 MCP 服务器不可用，并记录失败原因。
+
+> 连接拒绝或超时本身即说明端口不通，无需提前用 `netstat` / `Get-NetTCPConnection` 检查端口状态。
+
+**违规示例**：在未发送 `initialize` 请求的情况下，仅凭”代码中看不到 MCP server 定义”或”端口未 Listen”就声称 MCP 不可用。
 
 ### 6.2 Headed 模式检查
 
@@ -389,13 +416,13 @@ Reports/
 
 ### 为什么
 
-- Unity Editor 通过 WebSocket 桥 `UnityPilotBridge` 连接到 `unityuiflow-mcp` 服务器（WS 端口 `8765` / HTTP `8011`）。
+- Unity Editor 通过 WebSocket 桥 `UnityPilotBridge` 连接到 `unityuiflow-mcp` 服务器（`$MCP_WS` / `$MCP_HTTP`，见§0）。
 - `SendKeys` 不可靠（需要窗口焦点、存在竞态条件、超时不可控）。
 - 删除 DLL 不会通知 AssetDatabase；Unity 可能忽略缺失的程序集，直到显式刷新。
 
 ### 正确流程
 
-1. 确认 MCP 端点可达（如 `http://127.0.0.1:8011/mcp`）。
+1. 确认 MCP 端点可达（`$MCP_HTTP`，见§0）。
 2. 通过 MCP 调用 `unity_compile` 工具。
 3. 轮询目标程序集 `Library/ScriptAssemblies/<AssemblyName>.dll` 的 `LastWriteTime`，确保其晚于源文件修改时间（或使用 `unity_compile_status` / `unity_compile_errors`）。
 4. 确认编译成功后，再继续后续操作。
@@ -409,7 +436,7 @@ from mcp.client.streamable_http import streamablehttp_client
 
 async def compile_unity():
     async with streamable_http_client(
-        'http://127.0.0.1:8011/mcp',
+        'http://127.0.0.1:8011/mcp',  # $MCP_HTTP（见§0）
         timeout=10,
         sse_read_timeout=1800,
         terminate_on_close=True,
