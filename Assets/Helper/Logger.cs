@@ -1,10 +1,4 @@
-// -----------------------------------------------------------------------
-// UnityPilot Editor — https://github.com/codingriver
-// SPDX-License-Identifier: MIT
-// -----------------------------------------------------------------------
-
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -48,7 +42,7 @@ namespace Codingriver
         {
             MainThreadId = Thread.CurrentThread.ManagedThreadId;
 
-            var process = Process.GetCurrentProcess();
+            var process = System.Diagnostics.Process.GetCurrentProcess();
             CurrentProcessId = process.Id;
             CurrentProcessStartTime = process.StartTime;
             var dir = Path.GetDirectoryName(LogFilePath);
