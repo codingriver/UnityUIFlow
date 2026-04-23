@@ -182,8 +182,11 @@ namespace codingriver.unity.pilot
                 _entries.Add(entry);
             }
 
-            var logDetail = detail != null ? $"{description} | {detail}" : description;
-            WriteLogLine("INFO", "SYSTEM", $"SYSTEM {eventName} id={entry.CommandId} | {logDetail}");
+            if (UnityPilotBridge.Instance.VerboseLogsEnabled)
+            {
+                var logDetail = detail != null ? $"{description} | {detail}" : description;
+                WriteLogLine("INFO", "SYSTEM", $"SYSTEM {eventName} id={entry.CommandId} | {logDetail}");
+            }
         }
 
         // ── Begin / Get / End ────────────────────────────────────────────────
@@ -212,7 +215,8 @@ namespace codingriver.unity.pilot
             var ctx = new OperationContext(entry, this);
             _activeContexts[commandId] = ctx;
 
-            if (!string.Equals(commandName, "unityuiflow.results", StringComparison.OrdinalIgnoreCase))
+            if (UnityPilotBridge.Instance.VerboseLogsEnabled &&
+                !string.Equals(commandName, "unityuiflow.results", StringComparison.OrdinalIgnoreCase))
             {
                 WriteLogLine("INFO", "COMMAND", $"RECV {commandName} id={commandId} | ({desc})");
             }

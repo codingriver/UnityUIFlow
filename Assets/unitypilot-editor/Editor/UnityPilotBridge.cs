@@ -163,10 +163,10 @@ namespace codingriver.unity.pilot
 
         private static string WsHostPrefsKey => $"UnityPilot.WsHost.{ProjectPathHashSuffix}";
         private static string WsPortPrefsKey => $"UnityPilot.WsPort.{ProjectPathHashSuffix}";
-        private const int    ReconnectMs      = 2000;
         private const int    HeartbeatIntervalMs = 2000;
         private const int    MaxLogEntries    = 1000;
         private const string DebugLogPrefsKey = "UnityPilot.DebugWireLogs";
+        private const string VerboseLogPrefsKey = "UnityPilot.VerboseLogs";
         private const string AutoRestartPrefsKey = "UnityPilot.AutoRestartOnStuck";
 
         private static readonly Lazy<UnityPilotBridge> Lazy = new(() => new UnityPilotBridge());
@@ -230,12 +230,14 @@ namespace codingriver.unity.pilot
         private string               _wsHost = DefaultWsHost;
         private int                  _wsPort = DefaultWsPort;
         private bool                 _debugWireLogsEnabled;
+        private bool                 _verboseLogsEnabled;
         private bool                 _autoRestartOnCriticalStuck;
 
         private UnityPilotBridge()
         {
             LoadWsEndpointFromEditorPrefs();
             _debugWireLogsEnabled = EditorPrefs.GetBool(DebugLogPrefsKey, false);
+            _verboseLogsEnabled = EditorPrefs.GetBool(VerboseLogPrefsKey, false);
             _autoRestartOnCriticalStuck = EditorPrefs.GetBool(AutoRestartPrefsKey, false);
             RegisterLegacyCommands();
             RegisterModuleServices();
@@ -288,6 +290,18 @@ namespace codingriver.unity.pilot
                 _debugWireLogsEnabled = value;
                 EditorPrefs.SetBool(DebugLogPrefsKey, value);
                 Logger.Log("SYSTEM", value ? "调试日志已开启（通信命令收发可见）" : "调试日志已关闭");
+            }
+        }
+
+        public bool VerboseLogsEnabled
+        {
+            get => _verboseLogsEnabled;
+            set
+            {
+                if (_verboseLogsEnabled == value) return;
+                _verboseLogsEnabled = value;
+                EditorPrefs.SetBool(VerboseLogPrefsKey, value);
+                Logger.Log("SYSTEM", value ? "详细日志已开启（心跳、连接、请求状态）" : "详细日志已关闭");
             }
         }
 
@@ -404,8 +418,6 @@ namespace codingriver.unity.pilot
                 _isAuthenticated = false;
                 _lastHeartbeatSentAt = 0;
                 _connectFailureStreak = 0;
-                _reconnectTcs = null;
-                _nextReconnectTime = 0;
                 ClearMcpServerDisplayState();
                 UnityPilotOperationTracker.Instance.RecordSystemEvent(
                     "sys.bridge.stop", "Bridge停止",
@@ -415,9 +427,7 @@ namespace codingriver.unity.pilot
         }
 
         private double _lastWatchdogCheck;
-        private double _nextReconnectTime;
-        private TaskCompletionSource<bool> _reconnectTcs;
-        private int _connectFailureStreak;
+        private uint _connectFailureStreak;
 
         private void ProcessMainThreadQueue()
         {
@@ -427,12 +437,6 @@ namespace codingriver.unity.pilot
             {
                 try { action(); }
                 catch (Exception ex) { Debug.LogError($"[UnityPilotBridge] main thread error: {ex}"); }
-            }
-
-            if (_reconnectTcs != null && EditorApplication.timeSinceStartup >= _nextReconnectTime)
-            {
-                _reconnectTcs.TrySetResult(true);
-                _reconnectTcs = null;
             }
 
             if (EditorApplication.timeSinceStartup - _lastWatchdogCheck > 2.0)
@@ -480,87 +484,102 @@ namespace codingriver.unity.pilot
                 }
             });
         }
+        private const int ConnectTimeoutMs = 3000;  // 连接超时 3s
+        private const int ReconnectDelayMs  = 1000;  // 失败后等待 1s 再重连
 
         private async Task ConnectLoopAsync(CancellationToken token)
         {
             var tracker = UnityPilotOperationTracker.Instance;
             while (!token.IsCancellationRequested)
             {
+                var wasAuthenticated = _isAuthenticated;
+                _isAuthenticated = false;
+                ClearMcpServerDisplayState();
+
+                Task recvTask = Task.CompletedTask;
+                Task hbTask   = Task.CompletedTask;
+                using var cycleCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+
                 try
                 {
-                    var wasAuthenticated = _isAuthenticated;
-                    _isAuthenticated = false;
-                    ClearMcpServerDisplayState();
                     _ws = new ClientWebSocket();
                     var serverUrl = GetServerUrl();
-                    if (_connectFailureStreak == 0)
-                        Logger.Log("NETWORK", $"WS connecting to {serverUrl}");
+                    if (_verboseLogsEnabled)
+                        Logger.Log("NETWORK", $"WS connecting to {serverUrl} (attempt={_connectFailureStreak + 1})");
+
                     using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                    connectCts.CancelAfter(5000); // 5s hard cap to avoid Windows TCP stall
+                    connectCts.CancelAfter(ConnectTimeoutMs);
                     try
                     {
-                        await _ws.ConnectAsync(new Uri(serverUrl), connectCts.Token);
+                        await _ws.ConnectAsync(new Uri(serverUrl), connectCts.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (!token.IsCancellationRequested)
                     {
-                        // Connect timeout (5s) — translate to a regular failure so we retry quickly
-                        throw new Exception("Connection timeout (5s) — server may be restarting");
+                        throw new Exception($"连接超时 ({ConnectTimeoutMs / 1000}s)");
                     }
 
-                    // 连接成功 → 重置失败计数并记录
                     if (_connectFailureStreak > 0)
                     {
-                        Logger.Log("NETWORK", $"WS reconnected after {_connectFailureStreak} failed attempt(s)");
+                        Logger.Log("NETWORK", $"WS 重连成功（曾失败 {_connectFailureStreak} 次）");
                         _connectFailureStreak = 0;
                     }
-
-                    // 连接成功 → 写入操作日志
-                    tracker.RecordSystemEvent(
-                        "sys.ws.connected", "WS连接成功",
-                        $"endpoint={serverUrl} sessionId={_sessionId}");
-
-                    await SendHelloAsync(token);
-
-                    var recvTask = ReceiveLoopAsync(token);
-                    var hbTask = HeartbeatLoopAsync(token);
-                    var completedTask = await Task.WhenAny(recvTask, hbTask);
-
-                    // 分析断开原因
-                    var disconnectReason = AnalyzeDisconnectReason(recvTask, hbTask, completedTask, token);
-
-                    if (wasAuthenticated || _isAuthenticated)
+                    else if (_verboseLogsEnabled)
                     {
-                        tracker.RecordSystemEvent(
-                            "sys.auth.lost", "认证丢失",
-                            $"原因=连接断开 详情={disconnectReason}",
-                            "disconnected");
+                        Logger.Log("NETWORK", "WS connected");
                     }
 
-                    tracker.RecordSystemEvent(
-                        "sys.ws.disconnected", "WS连接断开",
-                        $"原因={disconnectReason} endpoint={serverUrl} wsState={_ws?.State}",
-                        "disconnected");
+                    tracker.RecordSystemEvent("sys.ws.connected", "WS连接成功",
+                        $"endpoint={serverUrl} sessionId={_sessionId}");
+
+                    await SendHelloAsync(cycleCts.Token);
+
+                    recvTask = ReceiveLoopAsync(cycleCts.Token);
+                    hbTask   = HeartbeatLoopAsync(cycleCts.Token);
+
+                    var completedTask = await Task.WhenAny(recvTask, hbTask);
+                    var disconnectReason = AnalyzeDisconnectReason(recvTask, hbTask, completedTask, cycleCts.Token);
+
+                    if (wasAuthenticated || _isAuthenticated)
+                        tracker.RecordSystemEvent("sys.auth.lost", "认证丢失",
+                            $"原因=连接断开 详情={disconnectReason}", "disconnected");
+
+                    tracker.RecordSystemEvent("sys.ws.disconnected", "WS连接断开",
+                        $"原因={disconnectReason} endpoint={serverUrl} wsState={_ws?.State}", "disconnected");
 
                     _isAuthenticated = false;
                 }
-                catch (OperationCanceledException) { break; }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    break;
+                }
                 catch (Exception ex)
                 {
-                    // 重连失败采样记录，避免日志爆炸
                     _connectFailureStreak++;
-                    if (_connectFailureStreak == 1 || _connectFailureStreak % 5 == 0)
+                    if (_verboseLogsEnabled)
+                        Logger.LogWarning("NETWORK", $"WS 连接失败（第 {_connectFailureStreak} 次）: {ex.Message}");
+
+                    if (wasAuthenticated)
+                        tracker.RecordSystemEvent("sys.auth.lost", "连接失败导致认证丢失",
+                            $"原因={ex.Message}", "disconnected");
+                }
+                finally
+                {
+                    cycleCts.Cancel();
+                    try { await Task.WhenAll(recvTask, hbTask); } catch { }
+
+                    var wsToClose = _ws;
+                    _ws = null;
+                    if (wsToClose != null)
                     {
-                        Logger.LogWarning("NETWORK",
-                            $"WS connect failed ({_connectFailureStreak} attempt(s)): {ex.Message}");
+                        try { wsToClose.Abort(); } catch { }
+                        _ = Task.Run(() => { try { wsToClose.Dispose(); } catch { } });
                     }
                 }
 
                 if (!token.IsCancellationRequested)
                 {
-                    _nextReconnectTime = EditorApplication.timeSinceStartup + ReconnectMs / 1000.0;
-                    _reconnectTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    try { await _reconnectTcs.Task.ConfigureAwait(false); }
-                    catch { /* ignored */ }
+                    try { await Task.Delay(ReconnectDelayMs, token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { break; }
                 }
             }
         }
@@ -629,6 +648,8 @@ namespace codingriver.unity.pilot
 
         private async Task HeartbeatLoopAsync(CancellationToken token)
         {
+            int consecutiveFailures = 0;
+            int heartbeatCount = 0;
             while (!token.IsCancellationRequested && _ws?.State == WebSocketState.Open)
             {
                 try
@@ -644,10 +665,26 @@ namespace codingriver.unity.pilot
                     };
                     await SendJsonAsync(JsonUtility.ToJson(hb), token);
                     _lastHeartbeatSentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    consecutiveFailures = 0;
+                    heartbeatCount++;
+                    if (_verboseLogsEnabled && (heartbeatCount == 1 || heartbeatCount % 5 == 0))
+                    {
+                        Logger.Log("NETWORK", $"Heartbeat OK (count={heartbeatCount})");
+                    }
                 }
-                catch (Exception ex) when (!(ex is OperationCanceledException))
+                catch (OperationCanceledException)
                 {
-                    Logger.LogWarning("NETWORK", $"Heartbeat send failed: {ex.Message}");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    consecutiveFailures++;
+                    if (_verboseLogsEnabled)
+                        Logger.LogWarning("NETWORK", $"Heartbeat send failed ({consecutiveFailures}): {ex.Message}");
+                    if (consecutiveFailures >= 3)
+                    {
+                        throw new Exception($"Heartbeat failed {consecutiveFailures} times consecutively, forcing reconnect");
+                    }
                 }
                 await Task.Delay(HeartbeatIntervalMs, token).ConfigureAwait(false);
             }
@@ -728,6 +765,7 @@ namespace codingriver.unity.pilot
                         UnityPilotOperationTracker.Instance.RecordSystemEvent(
                             "sys.auth.rejected", "认证被拒绝",
                             $"sessionId={_sessionId}", "error");
+                        try { _ws?.Abort(); } catch { /* ignored */ }
                         return;
                     }
                     _mcpLabelFromServer = ack.payload.mcpLabel ?? "";

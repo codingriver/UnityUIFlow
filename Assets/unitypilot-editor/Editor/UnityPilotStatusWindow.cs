@@ -644,6 +644,12 @@ namespace codingriver.unity.pilot
                 var newDebugWire = EditorGUILayout.ToggleLeft("调试通信日志（收发命令）", debugWire);
                 if (newDebugWire != debugWire)
                     bridge.DebugWireLogsEnabled = newDebugWire;
+
+                EditorGUILayout.Space(2);
+                var verboseLogs = bridge.VerboseLogsEnabled;
+                var newVerboseLogs = EditorGUILayout.ToggleLeft("输出详细日志（心跳、连接、请求状态）", verboseLogs);
+                if (newVerboseLogs != verboseLogs)
+                    bridge.VerboseLogsEnabled = newVerboseLogs;
             }
         }
 
