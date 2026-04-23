@@ -1,0 +1,14 @@
+{
+  "name": "UnityPilot.Editor.Tests",
+  "rootNamespace": "codingriver.unity.pilot.tests",
+  "references": [
+    "UnityPilot.Editor",
+    "UnityUIFlow"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

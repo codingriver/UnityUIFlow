@@ -62,7 +62,6 @@ Desktop.ini
 !/.github/
 !/.github/**
 !/.unityuiflow.json
-/Assets/unitypilot-editor
 /Reports
 /artifacts
 log/mcp-server.log

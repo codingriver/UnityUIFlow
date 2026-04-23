@@ -12,5 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95a892471010ad942a8362ebbee9aba4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityUIFlow::UnityUIFlow.UnityUIFlowProjectSettings
-  _alwaysEnableVerboseLog: 1
+  _alwaysEnableVerboseLog: 0
   _preStepDelayMs: 1000
+  _requireOfficialHostByDefault: 0
+  _requireOfficialPointerDriverByDefault: 0
+  _requireInputSystemKeyboardDriverByDefault: 0

@@ -1,0 +1,22 @@
+{
+    "name": "UnityPilot.Editor",
+    "rootNamespace": "codingriver.unity.pilot",
+    "references": [
+        "UnityUIFlow",
+        "MonoHook"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
