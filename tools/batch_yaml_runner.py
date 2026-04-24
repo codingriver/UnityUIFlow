@@ -149,6 +149,8 @@ def run_batch_with_polling(
     poll_interval_s: float = 2.0,
     max_total_timeout_s: float = 600.0,
     event_timeout_s: float = 30.0,
+    total_all: int = 0,
+    batch_offset: int = 0,
 ) -> dict[str, Any]:
     """Async batch execution with per-case progress via polling.
 
@@ -175,7 +177,7 @@ def run_batch_with_polling(
         {
             "yamlPaths": yaml_paths,
             "batchSize": len(yaml_paths),
-            "batchOffset": 0,
+            "batchOffset": batch_offset,
             "headed": headed,
             "reportOutputPath": report_dir,
             "screenshotOnFailure": True,
@@ -184,6 +186,7 @@ def run_batch_with_polling(
             "defaultTimeoutMs": default_timeout_ms,
             "enableVerboseLog": True,
             "debugOnFailure": False,
+            "totalAll": total_all if total_all > 0 else len(yaml_paths),
         },
     )
 
@@ -418,6 +421,8 @@ def main() -> int:
             headed=args.headed,
             stop_on_first_failure=args.stop_on_first_failure,
             default_timeout_ms=args.timeout_ms,
+            total_all=len(all_files),
+            batch_offset=offset,
         )
         if "raw" in mcp_result and mcp_result.get("ok"):
             parsed = parse_batch_result(mcp_result, batch_files)

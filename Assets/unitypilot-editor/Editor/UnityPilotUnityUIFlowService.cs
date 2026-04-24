@@ -37,6 +37,7 @@ namespace codingriver.unity.pilot
         public string reportPath = "Reports/UnityUIFlowMcp";
         public int batchSize = 10;
         public int batchOffset = 0;
+        public int totalAll = 0;
     }
 
     [Serializable]
@@ -177,7 +178,7 @@ namespace codingriver.unity.pilot
             // Apply batching: slice the resolved list according to batchOffset/batchSize
             int batchSize = Math.Max(1, payload.batchSize);
             int batchOffset = Math.Max(0, payload.batchOffset);
-            int totalAll = yamlPaths.Count;
+            int totalAll = payload.totalAll > 0 ? payload.totalAll : yamlPaths.Count;
             var batchedPaths = new List<string>();
             for (int i = batchOffset; i < batchOffset + batchSize && i < yamlPaths.Count; i++)
             {
