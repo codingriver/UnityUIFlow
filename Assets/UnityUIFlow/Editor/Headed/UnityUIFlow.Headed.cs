@@ -128,10 +128,9 @@ namespace UnityUIFlow
 
             _marker.style.left = localTopLeft.x;
             _marker.style.top = localTopLeft.y;
-            // In UIToolkit default box model borders are drawn outside the content box.
-            // Shrink content size so the total visual rect matches the target exactly.
-            _marker.style.width = Mathf.Max(0f, worldBound.width - 4f);
-            _marker.style.height = Mathf.Max(0f, worldBound.height - 4f);
+            // Use exact target size; border is drawn outside content box in UIToolkit default box model.
+            _marker.style.width = worldBound.width;
+            _marker.style.height = worldBound.height;
             _marker.style.display = DisplayStyle.Flex;
 
             if (!string.IsNullOrEmpty(labelText) && _label != null)
@@ -176,8 +175,8 @@ namespace UnityUIFlow
 
             _marker.style.left = localTopLeft.x;
             _marker.style.top = localTopLeft.y;
-            _marker.style.width = Mathf.Max(0f, windowLocalRect.width - 4f);
-            _marker.style.height = Mathf.Max(0f, windowLocalRect.height - 4f);
+            _marker.style.width = windowLocalRect.width;
+            _marker.style.height = windowLocalRect.height;
             _marker.style.display = DisplayStyle.Flex;
 
             if (!string.IsNullOrEmpty(labelText) && _label != null)
