@@ -182,10 +182,14 @@ namespace UnityUIFlow
             _state.IsRunning = true;
             _state.StatusText = $"MCP run in progress…";
             _state.Total = total;
-            _state.Passed = 0;
-            _state.Failed = 0;
-            _state.Errors = 0;
-            _state.Skipped = 0;
+            // Preserve existing counters when resuming (window reopened mid-run)
+            if (_state.Cases.Count == 0)
+            {
+                _state.Passed = 0;
+                _state.Failed = 0;
+                _state.Errors = 0;
+                _state.Skipped = 0;
+            }
             _state.CurrentYamlPath = null;
             _state.CurrentCaseName = null;
             _state.BatchIndex = batchIndex;
@@ -193,9 +197,10 @@ namespace UnityUIFlow
             _state.BatchSize = batchSize;
 
             // Build case items from the yaml path list
+            // Note: yamlPaths may be a subset (one batch), so preserve existing cases
             var existing = _state.Cases.ToDictionary(
                 c => c.YamlPath, c => c, StringComparer.OrdinalIgnoreCase);
-            _state.Cases.Clear();
+            
             foreach (string raw in yamlPaths)
             {
                 string rel = TestRunnerPathUtility.MakeProjectRelative(raw);
@@ -208,14 +213,9 @@ namespace UnityUIFlow
                         IsGroupHeader = true,
                         IsChecked = true,
                     };
+                    _state.Cases.Add(item);
                 }
-                else
-                {
-                    item.Status = TestStatus.None;
-                    item.IsRunning = false;
-                    item.StepResults = new List<StepResult>();
-                }
-                _state.Cases.Add(item);
+                // Don't reset status of existing cases - preserve previous batch results
             }
             RefreshUi();
         }

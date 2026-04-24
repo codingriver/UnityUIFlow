@@ -171,13 +171,13 @@ def run_batch_with_polling(
     has_negative = any(is_negative_test(yp) for yp in yaml_paths)
     continue_on_step_failure = has_negative
 
-    # ── 1. Start batch via unity_uiflow_run_async ──
+    # ── 1. Start batch via unity_uiflow_run_batch ──
     start_result = client.call_tool(
-        "unity_uiflow_run_async",
+        "unity_uiflow_run_batch",
         {
             "yamlPaths": yaml_paths,
             "batchSize": len(yaml_paths),
-            "batchOffset": batch_offset,
+            "batchOffset": 0,
             "headed": headed,
             "reportOutputPath": report_dir,
             "screenshotOnFailure": True,
@@ -196,10 +196,49 @@ def run_batch_with_polling(
     if not execution_id:
         error_msg = start_payload.get("error", {}).get("message", "")
         if error_msg and ("Unknown command" in error_msg or "not found" in error_msg.lower()):
-            print("[Batch] unity_uiflow_run_async not available, falling back to legacy unity_uiflow_run_batch")
-            return run_batch(client, yaml_paths, report_dir, headed, stop_on_first_failure, default_timeout_ms)
-        print(f"[Batch] Failed to start batch: {start_payload}")
-        return {"ok": False, "error": "Failed to obtain executionId", "raw": start_payload}
+            print("[Batch] unity_uiflow_run_batch not available, falling back to legacy unity_uiflow_run_batch")
+            legacy_result = run_batch(client, yaml_paths, report_dir, headed, stop_on_first_failure, default_timeout_ms)
+            # Convert legacy result to parsed format
+            return parse_batch_result(legacy_result, yaml_paths)
+        # Handle EDITOR_BUSY: retry after waiting
+        if error_msg and "EDITOR_BUSY" in error_msg:
+            print(f"[Batch] EDITOR_BUSY detected, waiting before retry...")
+            for retry in range(30):
+                time.sleep(2.0)
+                start_result = client.call_tool(
+                    "unity_uiflow_run_batch",
+                    {
+                        "yamlPaths": yaml_paths,
+                        "batchSize": len(yaml_paths),
+                        "batchOffset": 0,
+                        "headed": headed,
+                        "reportOutputPath": report_dir,
+                        "screenshotOnFailure": True,
+                        "stopOnFirstFailure": stop_on_first_failure,
+                        "continueOnStepFailure": continue_on_step_failure,
+                        "defaultTimeoutMs": default_timeout_ms,
+                        "enableVerboseLog": True,
+                        "debugOnFailure": False,
+                        "totalAll": total_all if total_all > 0 else len(yaml_paths),
+                    },
+                )
+                start_payload = _extract_execution_payload(start_result)
+                execution_id = start_payload.get("executionId", "")
+                if execution_id:
+                    print(f"[Batch] Retry succeeded, executionId={execution_id}")
+                    break
+                error_msg = start_payload.get("error", {}).get("message", "")
+                if error_msg and "EDITOR_BUSY" in error_msg:
+                    print(f"[Batch] EDITOR_BUSY retry {retry + 1}/30...")
+                    continue
+                # Other error
+                break
+            if not execution_id:
+                print(f"[Batch] Failed to start batch after retries: {start_payload}")
+                return {"ok": False, "error": "Failed to obtain executionId after EDITOR_BUSY retries", "raw": start_payload}
+        else:
+            print(f"[Batch] Failed to start batch: {start_payload}")
+            return {"ok": False, "error": "Failed to obtain executionId", "raw": start_payload}
 
     print(f"[Batch] Started executionId={execution_id}")
 
