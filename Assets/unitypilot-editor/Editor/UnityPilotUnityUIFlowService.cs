@@ -113,6 +113,8 @@ namespace codingriver.unity.pilot
         public bool hasMore;
         public int nextOffset;
         public int totalAll;
+        // Full list of all yaml paths across all batches (set at run start, never changes).
+        public List<string> allYamlPaths = new List<string>();
         public List<UnityUIFlowCaseResultPayload> cases = new List<UnityUIFlowCaseResultPayload>();
     }
 
@@ -198,6 +200,8 @@ namespace codingriver.unity.pilot
                 hasMore = batchOffset + batchSize < totalAll,
                 nextOffset = batchOffset + batchSize < totalAll ? batchOffset + batchSize : totalAll,
             };
+            // Store the full resolved yaml list so SyncWindowOnOpen can restore all paths
+            execution.allYamlPaths.AddRange(yamlPaths);
 
             _executions[executionId] = execution;
             bool claimedExecutionSlot = false;
@@ -412,12 +416,20 @@ namespace codingriver.unity.pilot
             int batchTotal = 1;
             int batchSize = payload.batchSize > 0 ? payload.batchSize : yamlPaths.Count;
             int batchOffset = payload.batchOffset;
-            if (_executions.TryGetValue(executionId, out var execForBatch) && batchSize > 0 && execForBatch.totalAll > 0)
+            int overallTotal = yamlPaths.Count;
+            IEnumerable<string> allPathsForWindow = yamlPaths;
+            if (_executions.TryGetValue(executionId, out var execForBatch))
             {
-                batchIdx = batchOffset / batchSize + 1;
-                batchTotal = (execForBatch.totalAll + batchSize - 1) / batchSize;
+                if (execForBatch.allYamlPaths.Count > 0)
+                    allPathsForWindow = execForBatch.allYamlPaths;
+                if (batchSize > 0 && execForBatch.totalAll > 0)
+                {
+                    overallTotal = execForBatch.totalAll;
+                    batchIdx = batchOffset / batchSize + 1;
+                    batchTotal = (execForBatch.totalAll + batchSize - 1) / batchSize;
+                }
             }
-            UnityUIFlow.TestRunnerWindow.ExternalRunStarted(executionId, yamlPaths, yamlPaths.Count, batchIdx, batchTotal, batchSize);
+            UnityUIFlow.TestRunnerWindow.ExternalRunStarted(executionId, allPathsForWindow, overallTotal, batchIdx, batchTotal, batchSize);
 
             try
             {
@@ -667,13 +679,35 @@ namespace codingriver.unity.pilot
                 snap = CloneExecution(snap);
             }
 
-            var allYamlPaths = snap.cases
-                .Select(c => c.yamlPath)
-                .Concat(string.IsNullOrEmpty(snap.currentYamlPath)
-                    ? Enumerable.Empty<string>()
-                    : new[] { snap.currentYamlPath })
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            // Prefer the stored full list; fall back to completed+current paths
+            List<string> allYamlPaths;
+            if (snap.allYamlPaths.Count > 0)
+            {
+                allYamlPaths = snap.allYamlPaths;
+            }
+            else
+            {
+                allYamlPaths = snap.cases
+                    .Select(c => c.yamlPath)
+                    .Concat(string.IsNullOrEmpty(snap.currentYamlPath)
+                        ? Enumerable.Empty<string>()
+                        : new[] { snap.currentYamlPath })
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            // Compute batch info from the snapshot
+            int batchSizeForSync = snap.total > 0 ? snap.total : 1;
+            int batchIdxForSync = 1;
+            int batchTotalForSync = 1;
+            int totalAll = snap.totalAll > 0 ? snap.totalAll : allYamlPaths.Count;
+            if (batchSizeForSync > 0 && totalAll > 0)
+            {
+                // batchIdx is derived from how many cases are already done vs batch size
+                int completedCaseCount = snap.cases.Count;
+                batchIdxForSync = completedCaseCount / batchSizeForSync + 1;
+                batchTotalForSync = (totalAll + batchSizeForSync - 1) / batchSizeForSync;
+            }
 
             var completedCases = snap.cases.Select(c =>
             {
@@ -694,10 +728,11 @@ namespace codingriver.unity.pilot
             UnityUIFlow.TestRunnerWindow.TrySyncActiveRun(
                 activeId,
                 allYamlPaths,
-                snap.total,
+                totalAll,
                 snap.currentYamlPath,
                 snap.passed, snap.failed, snap.errors, snap.skipped,
-                completedCases);
+                completedCases,
+                batchIdxForSync, batchTotalForSync, batchSizeForSync);
         }
 
         private void GenerateSuiteReport(string executionId, ReportPathBuilder reportPaths)        {
@@ -944,6 +979,8 @@ namespace codingriver.unity.pilot
                     nextOffset = source.nextOffset,
                     totalAll = source.totalAll,
                 };
+
+                clone.allYamlPaths.AddRange(source.allYamlPaths);
 
                 foreach (UnityUIFlowCaseResultPayload caseResult in source.cases)
                 {

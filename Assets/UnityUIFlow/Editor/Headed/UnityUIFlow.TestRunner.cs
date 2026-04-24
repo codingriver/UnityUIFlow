@@ -55,6 +55,7 @@ namespace UnityUIFlow
         public string StatusText = "Idle";
         public string CurrentYamlPath;
         public string CurrentCaseName;
+        // Current-batch counters
         public int Total;
         public int Passed;
         public int Failed;
@@ -67,6 +68,13 @@ namespace UnityUIFlow
         public int BatchIndex;
         public int BatchTotal;
         public int BatchSize;
+
+        // Overall (cross-batch) counters — set when totalAll is known
+        public int OverallTotal;
+        public int OverallPassed;
+        public int OverallFailed;
+        public int OverallErrors;
+        public int OverallSkipped;
     }
 
     public sealed class TestRunnerWindow : EditorWindow
@@ -147,12 +155,13 @@ namespace UnityUIFlow
             string currentYamlPath, int passed, int failed, int errors, int skipped,
             IEnumerable<(string yamlPath, string caseName, TestStatus status, int durationMs,
                 string errorCode, string errorMessage, List<StepResult> stepResults,
-                string reportMarkdownPath, string reportJsonPath)> completedCases)
+                string reportMarkdownPath, string reportJsonPath)> completedCases,
+            int batchIndex = 0, int batchTotal = 0, int batchSize = 0)
         {
             var win = FindOpenWindow();
             if (win == null) return false;
 
-            win.OnExternalRunStarted(executionId, allYamlPaths, total);
+            win.OnExternalRunStarted(executionId, allYamlPaths, total, batchIndex, batchTotal, batchSize);
 
             // Replay already-completed cases
             foreach (var c in completedCases)
@@ -181,14 +190,33 @@ namespace UnityUIFlow
             _externalExecutionId = executionId;
             _state.IsRunning = true;
             _state.StatusText = $"MCP run in progress…";
+            // total here is the overall total (totalAll), set per batch
             _state.Total = total;
-            // Preserve existing counters when resuming (window reopened mid-run)
+            _state.OverallTotal = total; // always sync — totalAll is authoritative
             if (_state.Cases.Count == 0)
             {
+                // Fresh start — reset all counters
                 _state.Passed = 0;
                 _state.Failed = 0;
                 _state.Errors = 0;
                 _state.Skipped = 0;
+                _state.OverallPassed = 0;
+                _state.OverallFailed = 0;
+                _state.OverallErrors = 0;
+                _state.OverallSkipped = 0;
+            }
+            else
+            {
+                // New batch within an ongoing multi-batch run — reset per-batch counters only
+                _state.Passed = 0;
+                _state.Failed = 0;
+                _state.Errors = 0;
+                _state.Skipped = 0;
+                // Overall counters accumulate from previous batches — recompute from case list
+                _state.OverallPassed = _state.Cases.Count(c => c.Status == TestStatus.Passed);
+                _state.OverallFailed = _state.Cases.Count(c => c.Status == TestStatus.Failed);
+                _state.OverallErrors = _state.Cases.Count(c => c.Status == TestStatus.Error);
+                _state.OverallSkipped = _state.Cases.Count(c => c.Status == TestStatus.Skipped);
             }
             _state.CurrentYamlPath = null;
             _state.CurrentCaseName = null;
@@ -197,10 +225,11 @@ namespace UnityUIFlow
             _state.BatchSize = batchSize;
 
             // Build case items from the yaml path list
-            // Note: yamlPaths may be a subset (one batch), so preserve existing cases
+            // yamlPaths is now the full list across all batches (passed from allYamlPaths).
+            // Preserve existing case results — only add new entries.
             var existing = _state.Cases.ToDictionary(
                 c => c.YamlPath, c => c, StringComparer.OrdinalIgnoreCase);
-            
+
             foreach (string raw in yamlPaths)
             {
                 string rel = TestRunnerPathUtility.MakeProjectRelative(raw);
@@ -261,10 +290,10 @@ namespace UnityUIFlow
             // Update counters
             switch (status)
             {
-                case TestStatus.Passed:  _state.Passed++;  break;
-                case TestStatus.Failed:  _state.Failed++;  break;
-                case TestStatus.Error:   _state.Errors++;  break;
-                case TestStatus.Skipped: _state.Skipped++; break;
+                case TestStatus.Passed:  _state.Passed++;  _state.OverallPassed++;  break;
+                case TestStatus.Failed:  _state.Failed++;  _state.OverallFailed++;  break;
+                case TestStatus.Error:   _state.Errors++;  _state.OverallErrors++;  break;
+                case TestStatus.Skipped: _state.Skipped++; _state.OverallSkipped++; break;
             }
 
             if (StringComparer.OrdinalIgnoreCase.Equals(_state.CurrentYamlPath, rel))
@@ -286,6 +315,11 @@ namespace UnityUIFlow
             _state.Failed = failed;
             _state.Errors = errors;
             _state.Skipped = skipped;
+            // Sync overall counters with whatever the batch reported as final
+            _state.OverallPassed = _state.Cases.Count(c => c.Status == TestStatus.Passed);
+            _state.OverallFailed = _state.Cases.Count(c => c.Status == TestStatus.Failed);
+            _state.OverallErrors = _state.Cases.Count(c => c.Status == TestStatus.Error);
+            _state.OverallSkipped = _state.Cases.Count(c => c.Status == TestStatus.Skipped);
             _state.StatusText = finalStatus switch
             {
                 "completed" => failed > 0 || errors > 0 ? "Failed" : "Completed",
@@ -1506,6 +1540,13 @@ namespace UnityUIFlow
             _state.Failed = 0;
             _state.Errors = 0;
             _state.Skipped = 0;
+            _state.OverallTotal = 0;
+            _state.OverallPassed = 0;
+            _state.OverallFailed = 0;
+            _state.OverallErrors = 0;
+            _state.OverallSkipped = 0;
+            _state.BatchIndex = 0;
+            _state.BatchTotal = 0;
             _state.StatusText = "Idle";
 
             RefreshUi();
@@ -1827,7 +1868,19 @@ namespace UnityUIFlow
             _statusLabel.text = $"Status: {_state.StatusText}";
             _currentCaseLabel.text = $"Current: {(_state.CurrentCaseName ?? "-")}";
             int totalCases = _state.Cases.Count;
-            _statsLabel.text = $"用例: {totalCases}  通过: {_state.Passed}  失败: {_state.Failed}  错误: {_state.Errors}  跳过: {_state.Skipped}";
+
+            // Show overall cross-batch stats when a multi-batch run is active or completed
+            bool hasOverall = _state.OverallTotal > 0 && _state.BatchTotal > 1;
+            if (hasOverall)
+            {
+                int overallDone = _state.OverallPassed + _state.OverallFailed + _state.OverallErrors + _state.OverallSkipped;
+                _statsLabel.text = $"用例: {totalCases}  [总体 {overallDone}/{_state.OverallTotal}] " +
+                    $"通过: {_state.OverallPassed}  失败: {_state.OverallFailed}  错误: {_state.OverallErrors}  跳过: {_state.OverallSkipped}";
+            }
+            else
+            {
+                _statsLabel.text = $"用例: {totalCases}  通过: {_state.Passed}  失败: {_state.Failed}  错误: {_state.Errors}  跳过: {_state.Skipped}";
+            }
 
             _runAllButton?.SetEnabled(!_state.IsRunning);
             _runSelectedButton?.SetEnabled(!_state.IsRunning && _state.Cases.Any(c => c.IsChecked));
@@ -1846,22 +1899,41 @@ namespace UnityUIFlow
             _resumeButton?.SetEnabled(isRunning && isPaused);
             _failurePolicyField?.SetEnabled(!isRunning);
 
-            // Update progress bar
+            // Update progress bar — use overall totals for multi-batch, per-batch otherwise
             var progressBar = rootVisualElement.Q<ProgressBar>("test-runner-progress");
             if (progressBar != null)
             {
-                if (_state.IsRunning && _state.Total > 0)
+                if (_state.IsRunning)
                 {
-                    int completed = _state.Passed + _state.Failed + _state.Errors + _state.Skipped;
-                    progressBar.value = (float)completed / _state.Total * 100f;
-                    if (_state.BatchTotal > 0)
+                    if (hasOverall)
                     {
-                        progressBar.title = $"Batch {_state.BatchIndex}/{_state.BatchTotal}: {completed}/{_state.Total}";
+                        // Multi-batch: progress against overall total
+                        int overallDone = _state.OverallPassed + _state.OverallFailed + _state.OverallErrors + _state.OverallSkipped;
+                        progressBar.value = (float)overallDone / _state.OverallTotal * 100f;
+                        int batchCompleted = _state.Passed + _state.Failed + _state.Errors + _state.Skipped;
+                        progressBar.title = $"批次 {_state.BatchIndex}/{_state.BatchTotal}  本批 {batchCompleted}/{_state.Total}  总体 {overallDone}/{_state.OverallTotal}";
+                    }
+                    else if (_state.Total > 0)
+                    {
+                        int completed = _state.Passed + _state.Failed + _state.Errors + _state.Skipped;
+                        progressBar.value = (float)completed / _state.Total * 100f;
+                        if (_state.BatchTotal > 1)
+                            progressBar.title = $"Batch {_state.BatchIndex}/{_state.BatchTotal}: {completed}/{_state.Total}";
+                        else
+                            progressBar.title = $"{completed} / {_state.Total}";
                     }
                     else
                     {
-                        progressBar.title = $"{completed} / {_state.Total}";
+                        progressBar.value = 0;
+                        progressBar.title = string.Empty;
                     }
+                }
+                else if (_state.OverallTotal > 0 && totalCases > 0)
+                {
+                    // Run finished — show final overall result
+                    int overallDone = _state.OverallPassed + _state.OverallFailed + _state.OverallErrors + _state.OverallSkipped;
+                    progressBar.value = _state.OverallTotal > 0 ? (float)overallDone / _state.OverallTotal * 100f : 0f;
+                    progressBar.title = $"总体 {overallDone}/{_state.OverallTotal}  通过: {_state.OverallPassed}  失败: {_state.OverallFailed}";
                 }
                 else
                 {
