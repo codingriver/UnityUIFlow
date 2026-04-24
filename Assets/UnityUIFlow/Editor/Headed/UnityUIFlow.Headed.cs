@@ -84,8 +84,8 @@ namespace UnityUIFlow
                 pickingMode = PickingMode.Ignore,
             };
             _label.style.position = Position.Absolute;
-            _label.style.backgroundColor = new Color(1f, 0.65f, 0f, 0.9f);
-            _label.style.color = Color.black;
+            _label.style.backgroundColor = new Color(0.9f, 0.25f, 0.1f, 0.95f);
+            _label.style.color = Color.white;
             _label.style.fontSize = 11;
             _label.style.paddingLeft = 4;
             _label.style.paddingRight = 4;
