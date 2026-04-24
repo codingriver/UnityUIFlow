@@ -7,6 +7,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
@@ -131,6 +132,9 @@ namespace codingriver.unity.pilot
         {
             _bridge = bridge;
             Logger.Log("[UnityUIFlow] UnityUIFlowService 初始化");
+            // Register the supplier that feeds a freshly-opened TestRunnerWindow
+            // with the current execution snapshot.
+            UnityUIFlow.TestRunnerWindow.OnWindowOpened = SyncWindowOnOpen;
         }
 
         public void RegisterCommands()
@@ -401,6 +405,19 @@ namespace codingriver.unity.pilot
                 return;
             }
 
+            // Notify TestRunnerWindow (if open) that a new run is starting.
+            // Calculate batch info for progress display
+            int batchIdx = 1;
+            int batchTotal = 1;
+            int batchSize = payload.batchSize > 0 ? payload.batchSize : yamlPaths.Count;
+            int batchOffset = payload.batchOffset;
+            if (_executions.TryGetValue(executionId, out var execForBatch) && batchSize > 0 && execForBatch.totalAll > 0)
+            {
+                batchIdx = batchOffset / batchSize + 1;
+                batchTotal = (execForBatch.totalAll + batchSize - 1) / batchSize;
+            }
+            UnityUIFlow.TestRunnerWindow.ExternalRunStarted(executionId, yamlPaths, yamlPaths.Count, batchIdx, batchTotal, batchSize);
+
             try
             {
                 var runner = new UnityUIFlow.TestRunner();
@@ -418,6 +435,9 @@ namespace codingriver.unity.pilot
                         execution.currentYamlPath = MakeProjectRelative(yamlPath);
                         execution.currentCaseName = null;
                     });
+
+                    // Notify window that this case is now executing.
+                    UnityUIFlow.TestRunnerWindow.ExternalCaseStarted(executionId, yamlPath);
 
                     var testOptions = BuildTestOptions(payload, executionId);
                     testOptions.GenerateSingleReport = yamlPaths.Count == 1;
@@ -496,6 +516,19 @@ namespace codingriver.unity.pilot
                         ApplyCaseCounters(execution, caseResult.Status);
                     });
 
+                    // Notify TestRunnerWindow that this case finished.
+                    UnityUIFlow.TestRunnerWindow.ExternalCaseFinished(
+                        executionId,
+                        yamlPath,
+                        caseResult.CaseName,
+                        caseResult.Status,
+                        caseResult.DurationMs,
+                        caseResult.ErrorCode,
+                        caseResult.ErrorMessage,
+                        caseResult.StepResults,
+                        casePayload.reportMarkdownPath,
+                        casePayload.reportJsonPath);
+
                     // Push per-case completion event to Bridge (forwarded to MCP clients if supported)
                     int caseCountAfter = 0;
                     if (_executions.TryGetValue(executionId, out UnityUIFlowExecutionResultPayload executionAfterCase))
@@ -540,6 +573,15 @@ namespace codingriver.unity.pilot
                     execution.currentYamlPath = null;
                 });
 
+                // Notify TestRunnerWindow that the entire run finished.
+                if (_executions.TryGetValue(executionId, out var execForWindow))
+                {
+                    UnityUIFlow.TestRunnerWindow.ExternalRunFinished(
+                        executionId, execForWindow.status,
+                        execForWindow.passed, execForWindow.failed,
+                        execForWindow.errors, execForWindow.skipped);
+                }
+
                 try
                 {
                     if (_executions.TryGetValue(executionId, out var finalExecution))
@@ -572,6 +614,9 @@ namespace codingriver.unity.pilot
                     execution.currentCaseName = null;
                     execution.currentYamlPath = null;
                 });
+                if (_executions.TryGetValue(executionId, out var abortedExec))
+                    UnityUIFlow.TestRunnerWindow.ExternalRunFinished(executionId, "aborted",
+                        abortedExec.passed, abortedExec.failed, abortedExec.errors, abortedExec.skipped);
             }
             catch (Exception ex)
             {
@@ -584,6 +629,9 @@ namespace codingriver.unity.pilot
                     execution.currentCaseName = null;
                     execution.currentYamlPath = null;
                 });
+                if (_executions.TryGetValue(executionId, out var failedExec))
+                    UnityUIFlow.TestRunnerWindow.ExternalRunFinished(executionId, "failed",
+                        failedExec.passed, failedExec.failed, failedExec.errors, failedExec.skipped);
             }
             finally
             {
@@ -601,8 +649,57 @@ namespace codingriver.unity.pilot
             }
         }
 
-        private void GenerateSuiteReport(string executionId, ReportPathBuilder reportPaths)
+        /// <summary>
+        /// Called when TestRunnerWindow opens while an MCP run may be in progress.
+        /// Reconstructs a snapshot from _executions so the window can show partial results.
+        /// </summary>
+        private void SyncWindowOnOpen(UnityUIFlow.TestRunnerWindow _)
         {
+            string activeId;
+            UnityUIFlowExecutionResultPayload snap;
+            lock (_stateLock)
+            {
+                if (!_isRunning || string.IsNullOrEmpty(_activeExecutionId)) return;
+                activeId = _activeExecutionId;
+                if (!_executions.TryGetValue(activeId, out snap)) return;
+                // shallow clone under lock to avoid mutation during iteration
+                snap = CloneExecution(snap);
+            }
+
+            var allYamlPaths = snap.cases
+                .Select(c => c.yamlPath)
+                .Concat(string.IsNullOrEmpty(snap.currentYamlPath)
+                    ? Enumerable.Empty<string>()
+                    : new[] { snap.currentYamlPath })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var completedCases = snap.cases.Select(c =>
+            {
+                Enum.TryParse<UnityUIFlow.TestStatus>(c.status, out var st);
+                return (
+                    yamlPath: c.yamlPath,
+                    caseName: c.caseName,
+                    status: st,
+                    durationMs: c.durationMs,
+                    errorCode: c.errorCode,
+                    errorMessage: c.errorMessage,
+                    stepResults: (List<UnityUIFlow.StepResult>)null,  // not available in snapshot
+                    reportMarkdownPath: c.reportMarkdownPath,
+                    reportJsonPath: c.reportJsonPath
+                );
+            });
+
+            UnityUIFlow.TestRunnerWindow.TrySyncActiveRun(
+                activeId,
+                allYamlPaths,
+                snap.total,
+                snap.currentYamlPath,
+                snap.passed, snap.failed, snap.errors, snap.skipped,
+                completedCases);
+        }
+
+        private void GenerateSuiteReport(string executionId, ReportPathBuilder reportPaths)        {
             if (!_executions.TryGetValue(executionId, out UnityUIFlowExecutionResultPayload execution))
             {
                 return;

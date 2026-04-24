@@ -62,10 +62,243 @@ namespace UnityUIFlow
         public int Skipped;
         public HeadedFailurePolicy FailurePolicy;
         public List<TestRunnerCaseItem> Cases = new List<TestRunnerCaseItem>();
+
+        // Batch progress info (set by external runner)
+        public int BatchIndex;
+        public int BatchTotal;
+        public int BatchSize;
     }
 
     public sealed class TestRunnerWindow : EditorWindow
     {
+        // ── External run sync (MCP-triggered runs) ────────────────────────────
+        // All methods are safe to call from any context; they silently no-op when
+        // the window is not open.  All UI mutations run on the main thread via
+        // EditorApplication.delayCall so callers need not worry about threading.
+
+        /// <summary>
+        /// Notify the window (if open) that an external run is starting.
+        /// Populates the case list and switches the window into "watching" mode.
+        /// </summary>
+        public static void ExternalRunStarted(string executionId, IEnumerable<string> yamlPaths, int total, int batchIndex = 0, int batchTotal = 0, int batchSize = 0)
+        {
+            EditorApplication.delayCall += () =>
+            {
+                var win = FindOpenWindow();
+                if (win == null) return;
+                win.OnExternalRunStarted(executionId, yamlPaths, total, batchIndex, batchTotal, batchSize);
+            };
+        }
+
+        /// <summary>
+        /// Notify the window that a single YAML case is about to start executing.
+        /// </summary>
+        public static void ExternalCaseStarted(string executionId, string yamlPath)
+        {
+            EditorApplication.delayCall += () =>
+            {
+                var win = FindOpenWindow();
+                if (win == null || win._externalExecutionId != executionId) return;
+                win.OnExternalCaseStarted(yamlPath);
+            };
+        }
+
+        /// <summary>
+        /// Notify the window that a case finished.  Mirrors how ExecuteBatchAsync
+        /// updates a caseItem after RunFileAsync returns.
+        /// </summary>
+        public static void ExternalCaseFinished(
+            string executionId, string yamlPath, string caseName,
+            TestStatus status, int durationMs,
+            string errorCode, string errorMessage,
+            List<StepResult> stepResults,
+            string reportMarkdownPath, string reportJsonPath)
+        {
+            EditorApplication.delayCall += () =>
+            {
+                var win = FindOpenWindow();
+                if (win == null || win._externalExecutionId != executionId) return;
+                win.OnExternalCaseFinished(yamlPath, caseName, status, durationMs,
+                    errorCode, errorMessage, stepResults, reportMarkdownPath, reportJsonPath);
+            };
+        }
+
+        /// <summary>
+        /// Notify the window that the entire run finished (completed / aborted / failed).
+        /// </summary>
+        public static void ExternalRunFinished(string executionId, string finalStatus,
+            int passed, int failed, int errors, int skipped)
+        {
+            EditorApplication.delayCall += () =>
+            {
+                var win = FindOpenWindow();
+                if (win == null || win._externalExecutionId != executionId) return;
+                win.OnExternalRunFinished(finalStatus, passed, failed, errors, skipped);
+            };
+        }
+
+        /// <summary>
+        /// Called from OnEnable: if an external run is currently active, let the caller
+        /// push the current snapshot so the freshly-opened window can show partial results.
+        /// Returns true when the window is open and an external run is active.
+        /// </summary>
+        public static bool TrySyncActiveRun(
+            string executionId, IEnumerable<string> allYamlPaths, int total,
+            string currentYamlPath, int passed, int failed, int errors, int skipped,
+            IEnumerable<(string yamlPath, string caseName, TestStatus status, int durationMs,
+                string errorCode, string errorMessage, List<StepResult> stepResults,
+                string reportMarkdownPath, string reportJsonPath)> completedCases)
+        {
+            var win = FindOpenWindow();
+            if (win == null) return false;
+
+            win.OnExternalRunStarted(executionId, allYamlPaths, total);
+
+            // Replay already-completed cases
+            foreach (var c in completedCases)
+            {
+                win.OnExternalCaseFinished(c.yamlPath, c.caseName, c.status, c.durationMs,
+                    c.errorCode, c.errorMessage, c.stepResults, c.reportMarkdownPath, c.reportJsonPath);
+            }
+
+            // Mark the currently-running case
+            if (!string.IsNullOrEmpty(currentYamlPath))
+                win.OnExternalCaseStarted(currentYamlPath);
+
+            return true;
+        }
+
+        private static TestRunnerWindow FindOpenWindow() =>
+            Resources.FindObjectsOfTypeAll<TestRunnerWindow>()
+                .FirstOrDefault(w => w != null);
+
+        // ── External run instance state ───────────────────────────────────────
+        private string _externalExecutionId;
+
+        private void OnExternalRunStarted(string executionId, IEnumerable<string> yamlPaths, int total, int batchIndex = 0, int batchTotal = 0, int batchSize = 0)
+        {
+            if (_state.IsRunning) return; // don't clobber an in-progress manual run
+            _externalExecutionId = executionId;
+            _state.IsRunning = true;
+            _state.StatusText = $"MCP run in progress…";
+            _state.Total = total;
+            _state.Passed = 0;
+            _state.Failed = 0;
+            _state.Errors = 0;
+            _state.Skipped = 0;
+            _state.CurrentYamlPath = null;
+            _state.CurrentCaseName = null;
+            _state.BatchIndex = batchIndex;
+            _state.BatchTotal = batchTotal;
+            _state.BatchSize = batchSize;
+
+            // Build case items from the yaml path list
+            var existing = _state.Cases.ToDictionary(
+                c => c.YamlPath, c => c, StringComparer.OrdinalIgnoreCase);
+            _state.Cases.Clear();
+            foreach (string raw in yamlPaths)
+            {
+                string rel = TestRunnerPathUtility.MakeProjectRelative(raw);
+                if (!existing.TryGetValue(rel, out var item))
+                {
+                    item = new TestRunnerCaseItem
+                    {
+                        YamlPath = rel,
+                        CaseName = Path.GetFileNameWithoutExtension(rel),
+                        IsGroupHeader = true,
+                        IsChecked = true,
+                    };
+                }
+                else
+                {
+                    item.Status = TestStatus.None;
+                    item.IsRunning = false;
+                    item.StepResults = new List<StepResult>();
+                }
+                _state.Cases.Add(item);
+            }
+            RefreshUi();
+        }
+
+        private void OnExternalCaseStarted(string yamlPath)
+        {
+            string rel = TestRunnerPathUtility.MakeProjectRelative(yamlPath);
+            _state.CurrentYamlPath = rel;
+            var item = _state.Cases.FirstOrDefault(c =>
+                StringComparer.OrdinalIgnoreCase.Equals(c.YamlPath, rel));
+            if (item != null) item.IsRunning = true;
+            _state.StatusText = $"Running: {Path.GetFileNameWithoutExtension(rel)}";
+            RefreshUi();
+        }
+
+        private void OnExternalCaseFinished(
+            string yamlPath, string caseName, TestStatus status, int durationMs,
+            string errorCode, string errorMessage,
+            List<StepResult> stepResults,
+            string reportMarkdownPath, string reportJsonPath)
+        {
+            string rel = TestRunnerPathUtility.MakeProjectRelative(yamlPath);
+            var item = _state.Cases.FirstOrDefault(c =>
+                StringComparer.OrdinalIgnoreCase.Equals(c.YamlPath, rel));
+            if (item != null)
+            {
+                item.IsRunning = false;
+                item.CaseName = string.IsNullOrWhiteSpace(caseName)
+                    ? Path.GetFileNameWithoutExtension(rel) : caseName;
+                item.Status = status;
+                item.DurationMs = durationMs;
+                item.ErrorCode = errorCode;
+                item.ErrorMessage = errorMessage;
+                item.StepResults = stepResults ?? new List<StepResult>();
+                var failedStep = item.StepResults.FirstOrDefault(
+                    s => s.Status == TestStatus.Failed || s.Status == TestStatus.Error);
+                item.FailedStepName = failedStep?.DisplayName;
+                item.FailedStepError = failedStep?.ErrorMessage;
+                item.ReportMarkdownPath = reportMarkdownPath;
+                item.ReportJsonPath = reportJsonPath;
+            }
+
+            // Update counters
+            switch (status)
+            {
+                case TestStatus.Passed:  _state.Passed++;  break;
+                case TestStatus.Failed:  _state.Failed++;  break;
+                case TestStatus.Error:   _state.Errors++;  break;
+                case TestStatus.Skipped: _state.Skipped++; break;
+            }
+
+            if (StringComparer.OrdinalIgnoreCase.Equals(_state.CurrentYamlPath, rel))
+                _state.CurrentYamlPath = null;
+
+            _state.StatusText = status == TestStatus.Passed
+                ? $"Passed: {caseName}"
+                : $"{status}: {caseName}";
+            RefreshUi();
+            RefreshDetailPanel();
+        }
+
+        private void OnExternalRunFinished(string finalStatus, int passed, int failed, int errors, int skipped)
+        {
+            _state.IsRunning = false;
+            _state.CurrentYamlPath = null;
+            _state.CurrentCaseName = null;
+            _state.Passed = passed;
+            _state.Failed = failed;
+            _state.Errors = errors;
+            _state.Skipped = skipped;
+            _state.StatusText = finalStatus switch
+            {
+                "completed" => failed > 0 || errors > 0 ? "Failed" : "Completed",
+                "aborted"   => "Aborted",
+                _           => "Failed",
+            };
+            _externalExecutionId = null;
+            RefreshUi();
+            RefreshDetailPanel();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+
         private readonly TestRunnerViewState _state = new TestRunnerViewState();
         private CancellationTokenSource _runCts;
         private ExecutionContext _activeContext;
@@ -115,6 +348,13 @@ namespace UnityUIFlow
             window.Show();
         }
 
+        /// <summary>
+        /// Optional supplier: registered by the MCP service so that when the window
+        /// opens mid-run it can immediately pull the active execution snapshot.
+        /// Signature: action(window) — implementor calls TrySyncActiveRun.
+        /// </summary>
+        public static Action<TestRunnerWindow> OnWindowOpened;
+
         private void OnEnable()
         {
             TestRunnerPreferences.Load(_state);
@@ -133,6 +373,9 @@ namespace UnityUIFlow
             BuildUi();
             RefreshCaseList();
             RefreshUi();
+
+            // If an external (MCP) run is in progress, sync its current state.
+            try { OnWindowOpened?.Invoke(this); } catch { /* never break OnEnable */ }
         }
 
         private void OnDisable()
@@ -598,8 +841,13 @@ namespace UnityUIFlow
             var filtered = GetFilteredCases();
             if (index < 0 || index >= filtered.Count)
             {
+                // Hide empty rows that are beyond the data range
+                element.style.display = DisplayStyle.None;
                 return;
             }
+
+            // Ensure visible for valid data rows
+            element.style.display = DisplayStyle.Flex;
 
             TestRunnerCaseItem item = filtered[index];
 
@@ -1201,7 +1449,7 @@ namespace UnityUIFlow
                 _state.Cases.Add(new TestRunnerCaseItem
                 {
                     YamlPath = rel,
-                    CaseName = fileName,
+                    CaseName = caseName,
                     IsGroupHeader = true,
                     IsChecked = true,
                     TotalSteps = totalSteps,
@@ -1606,7 +1854,14 @@ namespace UnityUIFlow
                 {
                     int completed = _state.Passed + _state.Failed + _state.Errors + _state.Skipped;
                     progressBar.value = (float)completed / _state.Total * 100f;
-                    progressBar.title = $"{completed} / {_state.Total}";
+                    if (_state.BatchTotal > 0)
+                    {
+                        progressBar.title = $"Batch {_state.BatchIndex}/{_state.BatchTotal}: {completed}/{_state.Total}";
+                    }
+                    else
+                    {
+                        progressBar.title = $"{completed} / {_state.Total}";
+                    }
                 }
                 else
                 {
