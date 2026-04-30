@@ -41,6 +41,7 @@ deploy/resources/*.zip
 /run_*.py
 /http_run_uiflow_suite.py
 /trigger_compile_via_mcp.py
+!run_unitypilot_mcp.py
 
 # --- Unity (UnityPilot/) ---
 UnityPilot/[Ll]ibrary/
