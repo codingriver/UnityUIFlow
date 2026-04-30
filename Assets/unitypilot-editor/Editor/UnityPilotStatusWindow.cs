@@ -786,34 +786,10 @@ namespace codingriver.unity.pilot
                         mgr.LogLevel = levels[lvlIdx];
                     }
 
-                    mgr.LaunchMode = (McpServerLaunchMode)EditorGUILayout.EnumPopup("启动模式", mgr.LaunchMode);
-
-                    using (new EditorGUILayout.HorizontalScope())
-                    {
-                        EditorGUILayout.LabelField("脚本路径", GUILayout.Width(66));
-                        mgr.ScriptPath = EditorGUILayout.TextField(mgr.ScriptPath);
-                        if (GUILayout.Button("浏览…", EditorStyles.miniButton, GUILayout.Width(48)))
-                        {
-                            string projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
-                            string path = EditorUtility.OpenFilePanelWithFilters(
-                                "选择启动脚本", projectRoot, new[] { "Batch/PowerShell", "bat,ps1" });
-                            if (!string.IsNullOrEmpty(path))
-                                mgr.ScriptPath = path;
-                        }
-                    }
-
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         EditorGUILayout.LabelField("Python 入口", GUILayout.Width(66));
-                        mgr.PythonEntryPath = EditorGUILayout.TextField(mgr.PythonEntryPath);
-                        if (GUILayout.Button("浏览…", EditorStyles.miniButton, GUILayout.Width(48)))
-                        {
-                            string projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
-                            string path = EditorUtility.OpenFilePanelWithFilters(
-                                "选择 Python 入口", projectRoot, new[] { "Python", "py" });
-                            if (!string.IsNullOrEmpty(path))
-                                mgr.PythonEntryPath = path;
-                        }
+                        EditorGUILayout.SelectableLabel(mgr.PythonEntryPath, EditorStyles.textField, GUILayout.Height(EditorGUIUtility.singleLineHeight));
                     }
                 }
 

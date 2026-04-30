@@ -17,12 +17,6 @@ using Debug = UnityEngine.Debug;
 
 namespace codingriver.unity.pilot
 {
-    internal enum McpServerLaunchMode
-    {
-        Script = 0,
-        DirectPython = 1,
-    }
-
     internal struct McpServerStatus
     {
         public bool IsRunning;
@@ -41,32 +35,25 @@ namespace codingriver.unity.pilot
 
         private const int DefaultHttpPort = 8011;
         private const int DefaultWsPort = 8765;
-        private const string DefaultScriptPath = "Start-McpServer.bat";
-        private const string DefaultPythonEntry = @"D:\unitypilot\run_unitypilot_mcp.py";
+        private const string DefaultPythonEntry = "./unitypilot/run_unitypilot_mcp.py";
         private const string DefaultLogLevel = "INFO";
 
         private static string HashSuffix => UnityPilotBridge.WsEndpointEditorPrefsKeySuffix;
 
         private static string HttpPortKey => $"UnityPilot.McpMgr.HttpPort.{HashSuffix}";
         private static string WsPortKey => $"UnityPilot.McpMgr.WsPort.{HashSuffix}";
-        private static string ScriptPathKey => $"UnityPilot.McpMgr.ScriptPath.{HashSuffix}";
         private static string PythonEntryKey => $"UnityPilot.McpMgr.PythonEntry.{HashSuffix}";
         private static string LogLevelKey => $"UnityPilot.McpMgr.LogLevel.{HashSuffix}";
-        private static string LaunchModeKey => $"UnityPilot.McpMgr.LaunchMode.{HashSuffix}";
 
         private int _httpPort = DefaultHttpPort;
         private int _wsPort = DefaultWsPort;
-        private string _scriptPath = DefaultScriptPath;
         private string _pythonEntryPath = DefaultPythonEntry;
         private string _logLevel = DefaultLogLevel;
-        private McpServerLaunchMode _launchMode = McpServerLaunchMode.Script;
 
         public int HttpPort { get => _httpPort; set { if (_httpPort != value) { _httpPort = value; SavePrefs(); } } }
         public int WsPort { get => _wsPort; set { if (_wsPort != value) { _wsPort = value; SavePrefs(); } } }
-        public string ScriptPath { get => _scriptPath; set { if (_scriptPath != value) { _scriptPath = value; SavePrefs(); } } }
-        public string PythonEntryPath { get => _pythonEntryPath; set { if (_pythonEntryPath != value) { _pythonEntryPath = value; SavePrefs(); } } }
+        public string PythonEntryPath => _pythonEntryPath;
         public string LogLevel { get => _logLevel; set { if (_logLevel != value) { _logLevel = value; SavePrefs(); } } }
-        public McpServerLaunchMode LaunchMode { get => _launchMode; set { if (_launchMode != value) { _launchMode = value; SavePrefs(); } } }
 
         // ── Cached status (background refresh) ────────────────────────────────
 
@@ -90,20 +77,16 @@ namespace codingriver.unity.pilot
         {
             _httpPort = EditorPrefs.GetInt(HttpPortKey, DefaultHttpPort);
             _wsPort = EditorPrefs.GetInt(WsPortKey, DefaultWsPort);
-            _scriptPath = EditorPrefs.GetString(ScriptPathKey, DefaultScriptPath);
             _pythonEntryPath = EditorPrefs.GetString(PythonEntryKey, DefaultPythonEntry);
             _logLevel = EditorPrefs.GetString(LogLevelKey, DefaultLogLevel);
-            _launchMode = (McpServerLaunchMode)EditorPrefs.GetInt(LaunchModeKey, (int)McpServerLaunchMode.Script);
         }
 
         private void SavePrefs()
         {
             EditorPrefs.SetInt(HttpPortKey, _httpPort);
             EditorPrefs.SetInt(WsPortKey, _wsPort);
-            EditorPrefs.SetString(ScriptPathKey, _scriptPath ?? DefaultScriptPath);
             EditorPrefs.SetString(PythonEntryKey, _pythonEntryPath ?? DefaultPythonEntry);
             EditorPrefs.SetString(LogLevelKey, _logLevel ?? DefaultLogLevel);
-            EditorPrefs.SetInt(LaunchModeKey, (int)_launchMode);
         }
 
         // ── Status ──────────────────────────────────────────────────────────
@@ -201,62 +184,12 @@ namespace codingriver.unity.pilot
 
             try
             {
-                if (_launchMode == McpServerLaunchMode.Script)
-                    StartViaScript(projectRoot);
-                else
-                    StartViaDirectPython(projectRoot);
+                StartViaDirectPython(projectRoot);
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[UnityPilotMcpServerManager] Failed to start server: {ex.Message}");
             }
-        }
-
-        private void StartViaScript(string projectRoot)
-        {
-            string scriptFullPath = Path.IsPathRooted(_scriptPath)
-                ? _scriptPath
-                : Path.Combine(projectRoot, _scriptPath);
-
-            if (!File.Exists(scriptFullPath))
-            {
-                Debug.LogError($"[UnityPilotMcpServerManager] Script not found: {scriptFullPath}");
-                return;
-            }
-
-            string ext = Path.GetExtension(scriptFullPath).ToLowerInvariant();
-            ProcessStartInfo psi;
-
-            if (ext == ".bat")
-            {
-                psi = new ProcessStartInfo
-                {
-                    FileName = "cmd.exe",
-                    Arguments = $"/c \"{scriptFullPath}\" -HttpPort {_httpPort} -WsPort {_wsPort} -LogLevel {_logLevel}",
-                    WorkingDirectory = projectRoot,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-            }
-            else if (ext == ".ps1")
-            {
-                psi = new ProcessStartInfo
-                {
-                    FileName = "powershell.exe",
-                    Arguments = $"-ExecutionPolicy Bypass -File \"{scriptFullPath}\" -HttpPort {_httpPort} -WsPort {_wsPort} -LogLevel {_logLevel}",
-                    WorkingDirectory = projectRoot,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-            }
-            else
-            {
-                Debug.LogError($"[UnityPilotMcpServerManager] Unsupported script extension: {ext}. Use .bat or .ps1");
-                return;
-            }
-
-            var proc = Process.Start(psi);
-            Debug.Log($"[UnityPilotMcpServerManager] Started script launcher PID={proc?.Id} for {_scriptPath} (HTTP={_httpPort}, WS={_wsPort})");
         }
 
         private void StartViaDirectPython(string projectRoot)
