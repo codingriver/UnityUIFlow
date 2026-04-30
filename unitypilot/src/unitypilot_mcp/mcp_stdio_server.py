@@ -102,7 +102,7 @@ _WS_START_TIMEOUT_S = 10.0
 
 
 def _log_stdio_message(direction: str, tool_name: str, payload: str) -> None:
-    stdio_logger.info("STDIO %s %s %s", direction, tool_name, payload)
+    stdio_logger.debug("STDIO %s %s %s", direction, tool_name, payload)
 
 
 def _resolve_transport() -> str:

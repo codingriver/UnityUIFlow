@@ -33,10 +33,7 @@ def _is_heartbeat_message_name(name: str | None) -> bool:
 def _log_ws_message(direction: str, raw: str, *, session_id: str | None = None, message_type: str | None = None, name: str | None = None) -> None:
     if message_type == "heartbeat" or _is_heartbeat_message_name(name):
         return
-    if name == "unityuiflow.results":
-        wire_logger.debug("WS %s [%s] %s", direction, _short_session_id(session_id), raw)
-    else:
-        wire_logger.info("WS %s [%s] %s", direction, _short_session_id(session_id), raw)
+    wire_logger.debug("WS %s [%s] %s", direction, _short_session_id(session_id), raw)
 
 
 def _env_float(name: str, default: float) -> float:
