@@ -1,0 +1,19 @@
+# M26 — opens UnityPilot status window and asserts UIToolkit tree contains title text.
+specVersion: "1"
+name: smoke_unitypilot_window
+timeoutS: 120
+defaults:
+  targetWindow: "UnityPilot"
+setup:
+  - action: menu
+    menuPath: "UnityPilot/UnityPilot"
+  - action: wait
+    ms: 500
+steps:
+  - action: uitoolkit.dump
+    maxDepth: 6
+  - assert:
+      type: uitoolkit.dump
+      textContains: "UnityPilot"
+      maxDepth: 6
+teardown: []
