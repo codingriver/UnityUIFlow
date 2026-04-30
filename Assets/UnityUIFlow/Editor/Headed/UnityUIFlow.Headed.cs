@@ -351,35 +351,12 @@ namespace UnityUIFlow
     internal static class UnityUIFlowMenuItems
     {
         private const string PrefKey = "UnityUIFlow.VerboseLog";
-        private const string MenuPath = "UnityUIFlow/Enable Verbose Log";
 
         /// <summary>
         /// Returns whether verbose logging is currently enabled.
         /// </summary>
         public static bool IsVerboseLogEnabled => UnityUIFlowProjectSettingsUtility.IsVerboseLoggingEnabled(EditorPrefs.GetBool(PrefKey, false));
-
-        [MenuItem(MenuPath, priority = 200)]
-        private static void ToggleVerboseLog()
-        {
-            if (UnityUIFlowProjectSettings.instance.AlwaysEnableVerboseLog)
-            {
-                Codingriver.Logger.Log("[UnityUIFlow] Verbose log is forced on by Project Settings/UnityUIFlow.");
-                SettingsService.OpenProjectSettings(UnityUIFlowProjectSettingsUtility.SettingsPath);
-                return;
-            }
-
-            bool next = !EditorPrefs.GetBool(PrefKey, false);
-            EditorPrefs.SetBool(PrefKey, next);
-            Menu.SetChecked(MenuPath, next);
-            Codingriver.Logger.Log($"[UnityUIFlow] Verbose log is now {(next ? "enabled" : "disabled")}.");
-        }
-
-        [MenuItem(MenuPath, validate = true)]
-        private static bool ToggleVerboseLogValidate()
-        {
-            Menu.SetChecked(MenuPath, IsVerboseLogEnabled);
-            return true;
-        }
+        
 
         [MenuItem("UnityUIFlow/Settings", priority = 201)]
         private static void OpenSettingsMenu()
