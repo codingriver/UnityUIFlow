@@ -196,11 +196,18 @@ namespace codingriver.unity.pilot
         {
             string entryFullPath = Path.IsPathRooted(_pythonEntryPath)
                 ? _pythonEntryPath
-                : Path.Combine(projectRoot, _pythonEntryPath);
+                : Path.GetFullPath(Path.Combine(projectRoot, _pythonEntryPath));
 
             if (!File.Exists(entryFullPath))
             {
                 Debug.LogError($"[UnityPilotMcpServerManager] Python entry not found: {entryFullPath}");
+                return;
+            }
+
+            string pythonExe = FindPythonExecutable();
+            if (string.IsNullOrEmpty(pythonExe))
+            {
+                Debug.LogError("[UnityPilotMcpServerManager] No Python interpreter found. Please install Python and ensure 'python', 'py', or 'python3' is available in PATH.");
                 return;
             }
 
@@ -211,7 +218,7 @@ namespace codingriver.unity.pilot
 
             var psi = new ProcessStartInfo
             {
-                FileName = "python",
+                FileName = pythonExe,
                 Arguments = $"\"{entryFullPath}\" --transport http --http-port {_httpPort} --port {_wsPort} --log-file \"{logFile}\" --log-level {_logLevel}",
                 WorkingDirectory = projectRoot,
                 UseShellExecute = false,
@@ -219,7 +226,36 @@ namespace codingriver.unity.pilot
             };
 
             var proc = Process.Start(psi);
-            Debug.Log($"[UnityPilotMcpServerManager] Started python process PID={proc?.Id} for {entryFullPath} (HTTP={_httpPort}, WS={_wsPort})");
+            Debug.Log($"[UnityPilotMcpServerManager] Started python process PID={proc?.Id} via {pythonExe} for {entryFullPath} (HTTP={_httpPort}, WS={_wsPort})");
+        }
+
+        private static string FindPythonExecutable()
+        {
+            string[] candidates = new[] { "python", "py", "python3" };
+            foreach (var name in candidates)
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "where",
+                        Arguments = name,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                    };
+                    using var proc = Process.Start(psi);
+                    if (proc == null) continue;
+                    proc.WaitForExit(2000);
+                    if (proc.ExitCode != 0) continue;
+                    string output = proc.StandardOutput.ReadLine()?.Trim();
+                    if (!string.IsNullOrEmpty(output) && File.Exists(output))
+                        return output;
+                }
+                catch { }
+            }
+            return null;
         }
 
         // ── Stop ────────────────────────────────────────────────────────────
