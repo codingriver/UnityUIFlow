@@ -6,9 +6,11 @@ using UnityUIFlow;
 
 namespace codingriver.unity.pilot.tests
 {
+    [Category("UnityPilot")]
     public sealed class UnityPilotUnityUIFlowServiceTests
     {
         [Test]
+        [Category("UnityPilot")]
         public void ResolveYamlPaths_RejectsMixedModes()
         {
             var payload = new UnityUIFlowRunPayload
@@ -24,6 +26,7 @@ namespace codingriver.unity.pilot.tests
         }
 
         [Test]
+        [Category("UnityPilot")]
         public void ResolveYamlPaths_SortsDirectoryResults()
         {
             string directory = CreateTempDirectory();
@@ -44,6 +47,7 @@ namespace codingriver.unity.pilot.tests
         }
 
         [Test]
+        [Category("UnityPilot")]
         public void ToCasePayload_NormalizesRelativeArtifactsIntoProjectRelativePaths()
         {
             string executionId = Guid.NewGuid().ToString("N");
